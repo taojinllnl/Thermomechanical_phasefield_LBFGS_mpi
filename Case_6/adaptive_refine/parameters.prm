@@ -1,0 +1,141 @@
+# Listing of Parameters
+# ---------------------
+subsection Scenario  
+  # Geometry, loading and boundary conditions scenario
+  # 1 - square tension (2D unstructured mesh)
+  # 2 - square shear   (2D unstructured mesh)
+  # 3 - square tension (2D structured mesh)
+  # 4 - square shear   (2D structured mesh)
+  # 5 - quenching test (2D structured mesh, quarter size)
+  # 6 - quenching test (2D structured mesh, half size)
+  set Scenario number = 6
+  
+  # Name of the log file
+  set Log file name = quenching_structured.log
+  
+  # Shall we write the iteration history to the log file? (yes or no)
+  set Output iteration history = yes
+  
+  # Does the heat conduciton equaiton contains the mechanical coupling term? (yes or no)
+  set Coupling on heat equation = no
+
+  # Is the thermal conductivity degraded by phasefield? (yes or no)
+  set Degrade thermal conductivity = no
+
+  # Nonlinear solver type (LBFGS)
+  set Nonlinear solver type = LBFGS
+
+  # Linear solver type for B0 (Direct or CG)
+  set Linear solver type = CG
+  
+  # If the linear solver is CG, set the CG converge tolerance of inverse K_uu
+  set CG u tolerance = 1.0e-6  
+
+  # If the linear solver is CG, set the CG converge tolerance of inverse K_dd
+  set CG d tolerance = 1.0e-9  
+
+  # If the linear solver is CG, set the CG converge tolerance of inverse K_TT
+  set CG T tolerance = 1.0e-9
+
+  # Mesh refinement strategy (pre-refine or adaptive-refine)
+  set Mesh refinement strategy = adaptive-refine
+  
+  # Number of vectors used in LBFGS
+  set LBFGS m = 20
+
+  # Global refinement times across the entire domain
+  set Global refinement times = 2
+  
+  # Local pre-refinement times along the crack path that is known a priori
+  set Local prerefinement times = 4
+  
+  # Maximum number of adaptive mesh refinement allowed in each step
+  # A large number means that we don't terminate adaptive refinement
+  set Max adaptive refinement times = 100
+  
+  # Maximum allowed cell refinement level
+  # A large number means there are no restrictions
+  set Max allowed refinement level = 100
+  
+  # Phasefield-based refinement threshold value 
+  # (when nodal phasefield value is larger than threshold, elmt needs to be refined)
+  set Phasefield refine threshold = 0.4
+  
+  # Allowed maximum ratio between mesh size h and phasefield length scale l
+  # insdie the crack zone (nodal phasefield value larger than threshold)
+  set Allowed max hl ratio = 0.251
+  
+  # Total number of material regions
+  set Material regions = 1
+  
+  # Material data file name
+  set Material data file = materialDataFile
+  
+  # Reaction forces face ID (negative number means not to find reaction force)
+  set Reaction force face ID = 0
+end
+
+subsection Finite element system
+  # Displacement system polynomial order
+  set Polynomial degree = 1
+
+  # Gauss quadrature order
+  set Quadrature order  = 2
+end
+
+subsection Body force
+  # Body force in the reference configuration, unit: N/m^3
+  # If the body force is gravity, then the body force = (0, 0, rho_0*g)
+  # x component
+  set Body force x component = 0.0
+
+  # y component
+  set Body force y component = 0.0
+
+  # z component
+  set Body force z component = 0.0
+end
+
+subsection Heat supply
+  # Heat supply, unit: Watt/m^3
+  set Heat supply = 0.0
+  
+  # Reference temperature, unit: K
+  set Reference temperature = 573.15
+end  
+
+subsection Nonlinear solver  
+  # Number of LBFGS iterations allowed
+  set Max iterations LBFGS = 10000
+
+  # Relative residual (yes|no)
+  # yes - relative residual
+  # no  - absolute residual
+  set Relative residual = no
+
+  # Displacement residual tolerance
+  set Tolerance displacement residual       = 1.0e-6
+
+  # Phasefield residual tolerance
+  set Tolerance phasefield residual         = 1.0e-6
+  
+  # Temperature residual tolerance
+  set Tolerance temperature residual        = 1.0e-6
+  
+  # Displacement increment tolerance
+  set Tolerance displacement increment      = 1.0e-6
+  
+  # Phasefield increment tolerance
+  set Tolerance phasefield increment        = 1.0e-6
+  
+  # Temperature increment tolerance
+  set Tolerance temperature increment       = 1.0e-6
+end
+
+subsection Time
+  # End time
+  set End time       = 200.0e-3
+  
+  # Time data groups
+  set Time data file = timeDataFile
+end
