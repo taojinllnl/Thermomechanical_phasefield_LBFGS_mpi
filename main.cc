@@ -1297,6 +1297,7 @@ namespace PhaseField_monolithic
     void make_grid_case_8();
     void make_grid_case_9();
     void make_grid_case_10();
+    void make_grid_case_11();
 
     void setup_system();
 
@@ -2102,6 +2103,8 @@ namespace PhaseField_monolithic
       make_grid_case_9();
     else if (m_parameters.m_scenario == 10)
       make_grid_case_10();
+    else if (m_parameters.m_scenario == 11)
+      make_grid_case_11();
     else
       Assert(false, ExcMessage("The scenario has not been implemented!"));
 
@@ -2607,8 +2610,8 @@ namespace PhaseField_monolithic
     double const width  = 10.0;  //mm
 
     std::vector<unsigned int> repetitions(dim, 1);
-    repetitions[0] = 100;
-    repetitions[1] = 40;
+    repetitions[0] = 125;
+    repetitions[1] = 50;
 
     GridGenerator::subdivided_hyper_rectangle(m_triangulation,
 					      repetitions,
@@ -2635,7 +2638,8 @@ namespace PhaseField_monolithic
 
     if (m_parameters.m_refinement_strategy == "pre-refine")
       {
-	//m_triangulation.refine_global(m_parameters.m_global_refine_times);
+	m_triangulation.refine_global(m_parameters.m_global_refine_times);
+	/*
 	unsigned int material_id;
 	double length_scale;
 	bool initiation_point_refine_unfinished = true;
@@ -2664,6 +2668,7 @@ namespace PhaseField_monolithic
 	      }
 	    m_triangulation.execute_coarsening_and_refinement();
 	  }
+	  */
       }
     else if (m_parameters.m_refinement_strategy == "adaptive-refine")
       {
@@ -3071,6 +3076,115 @@ namespace PhaseField_monolithic
   }
 
   template <int dim>
+  void PhaseFieldMonolithicSolve<dim>::make_grid_case_11()
+  {
+    for (unsigned int i = 0; i < 80; ++i)
+      m_logfile << "*";
+    m_logfile << std::endl;
+    m_logfile << "\t\t\t\tQuenching test (3D, quarter ball)" << std::endl;
+    for (unsigned int i = 0; i < 80; ++i)
+      m_logfile << "*";
+    m_logfile << std::endl;
+
+    AssertThrow(dim==3, ExcMessage("The dimension has to be 3D!"));
+
+    const double radius = 5.0;
+    GridGenerator::quarter_hyper_ball(m_triangulation, Point<dim>(), radius);
+
+    for (const auto &cell : m_triangulation.active_cell_iterators())
+      for (const auto &face : cell->face_iterators())
+	{
+	  if (face->at_boundary() == true)
+	    {
+	      if (std::fabs(face->center()[0] - 0.0 ) < 1.0e-9 )
+		face->set_boundary_id(0);
+	      else if (std::fabs(face->center()[1] - 0.0 ) < 1.0e-9)
+	        face->set_boundary_id(1);
+	      else if (std::fabs(face->center()[2] - 0.0 ) < 1.0e-9)
+	        face->set_boundary_id(2);
+	      else
+	        face->set_boundary_id(3);
+	    }
+	}
+
+    m_triangulation.refine_global(m_parameters.m_global_refine_times);
+
+    if (m_parameters.m_refinement_strategy == "pre-refine")
+      {
+	//m_triangulation.refine_global(m_parameters.m_global_refine_times);
+	unsigned int material_id;
+	double length_scale;
+	bool initiation_point_refine_unfinished = true;
+	while (initiation_point_refine_unfinished)
+	  {
+	    initiation_point_refine_unfinished = false;
+	    for (const auto &cell : m_triangulation.active_cell_iterators())
+	      {
+		double distance2center = std::sqrt( cell->center()[0]*cell->center()[0]
+					          + cell->center()[1]*cell->center()[1]
+						  + cell->center()[2]*cell->center()[2]
+						  );
+
+		if (distance2center > 2.0*radius/3)
+		  {
+		    // Because the mesh is not imported from gmsh, there is no
+		    // material ID associated with each cell. We need to manually
+		    // set this ID based on the materialDateFIle
+		    material_id = cell->material_id();
+		    length_scale = m_material_data[material_id][2];
+		    if (  std::cbrt(cell->measure())
+			> length_scale * m_parameters.m_allowed_max_h_l_ratio )
+		      {
+			cell->set_refine_flag();
+			initiation_point_refine_unfinished = true;
+		      }
+		  }
+	      }
+	    m_triangulation.execute_coarsening_and_refinement();
+	  }
+      }
+    else if (m_parameters.m_refinement_strategy == "adaptive-refine")
+      {
+	unsigned int material_id;
+	double length_scale;
+	bool initiation_point_refine_unfinished = true;
+	while (initiation_point_refine_unfinished)
+	  {
+	    initiation_point_refine_unfinished = false;
+	    for (const auto &cell : m_triangulation.active_cell_iterators())
+	      {
+		double distance2center = std::sqrt( cell->center()[0]*cell->center()[0]
+							          + cell->center()[1]*cell->center()[1]
+								  + cell->center()[2]*cell->center()[2]
+								  );
+                double ratio = std::pow(2, m_parameters.m_global_refine_times+1);
+
+		if (distance2center > radius * (ratio-1) / ratio)
+		  {
+		    // Because the mesh is not imported from gmsh, there is no
+		    // material ID associated with each cell. We need to manually
+		    // set this ID based on the materialDateFIle
+		    material_id = cell->material_id();
+		    length_scale = m_material_data[material_id][2];
+		    if (  std::cbrt(cell->measure())
+			> length_scale * m_parameters.m_allowed_max_h_l_ratio )
+		      {
+		        cell->set_refine_flag();
+		        initiation_point_refine_unfinished = true;
+		      }
+		  }
+	      }
+	    m_triangulation.execute_coarsening_and_refinement();
+	  }
+      }
+    else
+      {
+	AssertThrow(false,
+	            ExcMessage("Selected mesh refinement strategy not implemented!"));
+      }
+  }
+
+  template <int dim>
   void PhaseFieldMonolithicSolve<dim>::setup_system()
   {
     m_timer.enter_subsection("Setup system");
@@ -3145,8 +3259,7 @@ namespace PhaseField_monolithic
 	    m_solution.block(m_t_dof)(i) = m_parameters.m_ref_temperature;
 	  }
       }
-
-    if (m_parameters.m_scenario == 5)
+    else if (m_parameters.m_scenario == 5)
       {
 	for(unsigned int i = 0; i < m_dofs_per_block[m_t_dof]; ++i)
 	  {
@@ -3170,8 +3283,7 @@ namespace PhaseField_monolithic
 	      }
 	  }
       }
-
-    if (m_parameters.m_scenario == 6)
+    else if (m_parameters.m_scenario == 6)
       {
 	for(unsigned int i = 0; i < m_dofs_per_block[m_t_dof]; ++i)
 	  {
@@ -3196,8 +3308,7 @@ namespace PhaseField_monolithic
 	      }
 	  }
       }
-
-    if (m_parameters.m_scenario == 7)
+    else if (m_parameters.m_scenario == 7)
       {
 	for(unsigned int i = 0; i < m_dofs_per_block[m_t_dof]; ++i)
 	  {
@@ -3224,8 +3335,7 @@ namespace PhaseField_monolithic
 	      }
 	  }
       }
-
-    if (m_parameters.m_scenario == 8)
+    else if (m_parameters.m_scenario == 8)
       {
 	for(unsigned int i = 0; i < m_dofs_per_block[m_t_dof]; ++i)
 	  {
@@ -3252,8 +3362,7 @@ namespace PhaseField_monolithic
 	      }
 	  }
       }
-
-    if (m_parameters.m_scenario == 9)
+    else if (m_parameters.m_scenario == 9)
       {
 	for(unsigned int i = 0; i < m_dofs_per_block[m_t_dof]; ++i)
 	  {
@@ -3277,8 +3386,7 @@ namespace PhaseField_monolithic
 	      }
 	  }
       }
-
-    if (m_parameters.m_scenario == 10)
+    else if (m_parameters.m_scenario == 10)
       {
 	for(unsigned int i = 0; i < m_dofs_per_block[m_t_dof]; ++i)
 	  {
@@ -3301,6 +3409,41 @@ namespace PhaseField_monolithic
 		m_solution(item.first) = cool_down_temperature;
 	      }
 	  }
+      }
+    else if (m_parameters.m_scenario == 11)
+      {
+	for(unsigned int i = 0; i < m_dofs_per_block[m_t_dof]; ++i)
+	  {
+	    m_solution.block(m_t_dof)(i) = m_parameters.m_ref_temperature;
+	  }
+
+	const double cool_down_temperature = 293.15; // Kelvin
+
+	std::map<types::global_dof_index, Point<dim> > support_points_T;
+	ComponentMask temperature_mask = m_fe.component_mask(m_t_fe);
+	support_points_T = DoFTools::map_dofs_to_support_points (MappingQ1<dim>(),
+					                         m_dof_handler,
+					                         temperature_mask);
+
+	// This radius has to be consistent with the radius value
+	// used in make_grid_case_11()
+	const double radius = 5.0;
+	for (auto const & item : support_points_T)
+	  {
+	    double distance2center = std::sqrt( item.second[0]*item.second[0]
+	    				      + item.second[1]*item.second[1]
+	    				      + item.second[2]*item.second[2]
+	    				      );
+
+	    if (std::fabs(distance2center - radius) < 1.0e-6)
+	      {
+		m_solution(item.first) = cool_down_temperature;
+	      }
+	  }
+      }
+    else
+      {
+	Assert(false, ExcMessage("The scenario has not been implemented!"));
       }
   }
 
@@ -3795,6 +3938,40 @@ namespace PhaseField_monolithic
 	    const int boundary_id_front_surface = 1;
 	    VectorTools::interpolate_boundary_values(m_dof_handler,
 						     boundary_id_front_surface,
+						     Functions::ConstantFunction<dim>(
+						       delta_temperature, m_n_components),
+						     m_constraints,
+						     m_fe.component_mask(temperature));
+	  }
+	else if (m_parameters.m_scenario == 11)
+	  {
+	    const int boundary_id_surface_x = 0;
+	    VectorTools::interpolate_boundary_values(m_dof_handler,
+						     boundary_id_surface_x,
+						     Functions::ZeroFunction<dim>(m_n_components),
+						     m_constraints,
+						     m_fe.component_mask(x_displacement));
+
+	    const int boundary_id_surface_y = 1;
+	    VectorTools::interpolate_boundary_values(m_dof_handler,
+						     boundary_id_surface_y,
+						     Functions::ZeroFunction<dim>(m_n_components),
+						     m_constraints,
+						     m_fe.component_mask(y_displacement));
+
+	    const int boundary_id_surface_z = 2;
+	    VectorTools::interpolate_boundary_values(m_dof_handler,
+						     boundary_id_surface_z,
+						     Functions::ZeroFunction<dim>(m_n_components),
+						     m_constraints,
+						     m_fe.component_mask(z_displacement));
+
+	    // Remember, the essential B.C. is applied incrementally during each time step.
+	    // If a constant temperature is needed through time, the B.C should be set as zero.
+	    double delta_temperature = 0.0; // temperature change per load step
+	    const int boundary_id_sphere_surface = 3;
+	    VectorTools::interpolate_boundary_values(m_dof_handler,
+						     boundary_id_sphere_surface,
 						     Functions::ConstantFunction<dim>(
 						       delta_temperature, m_n_components),
 						     m_constraints,
