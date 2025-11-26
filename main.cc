@@ -107,6 +107,8 @@
 #include "Utilities.h"
 
 
+#include "Traits.h"
+
 namespace PhaseField_monolithic
 {
   using namespace dealii;
