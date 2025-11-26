@@ -6139,12 +6139,14 @@ int main(int argc, char* argv[])
     AssertThrow(false,
     		ExcMessage("The number of arguments provided to the program has to be 2!"));
 
+  // read prm by input command
   Parameters::AllParameters parameters(argv[1]);
     
   
-    
+  // dimension by prm setting
   const unsigned int dim = parameters.m_dim;
   if(parameters.m_mpi_type == "PETSc") {
+      // PETSc type mpi
       if (dim == 2 )
         {
           PhaseFieldMonolithicSolve<2> Phasefield2D(parameters);
@@ -6161,6 +6163,7 @@ int main(int argc, char* argv[])
                       ExcMessage("Dimension has to be either 2 or 3"));
         }
   } else if(parameters.m_mpi_type == "Trilinos") {
+      // Trilinos type mpi
       if (dim == 2 )
         {
           PhaseFieldMonolithicSolve<2> Phasefield2D(parameters);
@@ -6177,6 +6180,7 @@ int main(int argc, char* argv[])
                       ExcMessage("Dimension has to be either 2 or 3"));
         }
   } else {
+      // Serial type
       if (dim == 2 )
         {
           PhaseFieldMonolithicSolve<2> Phasefield2D(parameters);
