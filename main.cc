@@ -6126,29 +6126,69 @@ int main(int argc, char* argv[])
 {
 
   using namespace dealii;
-
+  using namespace PhaseField_monolithic;
+    
   if (argc != 2)
     AssertThrow(false,
     		ExcMessage("The number of arguments provided to the program has to be 2!"));
 
-  PhaseField_monolithic::Parameters::AllParameters parameters("parameters.prm");
+  Parameters::AllParameters parameters("parameters.prm");
+    
+  
     
   const unsigned int dim = std::stoi(argv[1]);
-  if (dim == 2 )
-    {
-      PhaseField_monolithic::PhaseFieldMonolithicSolve<2> Phasefield2D(parameters);
-      Phasefield2D.run();
-    }
-  else if (dim == 3)
-    {
-      PhaseField_monolithic::PhaseFieldMonolithicSolve<3> Phasefield3D(parameters);
-      Phasefield3D.run();
-    }
-  else
-    {
-      AssertThrow(false,
-                  ExcMessage("Dimension has to be either 2 or 3"));
-    }
+  if(parameters.m_mpi_type == "PETSc") {
+      if (dim == 2 )
+        {
+          PhaseFieldMonolithicSolve<2> Phasefield2D(parameters);
+          Phasefield2D.run();
+        }
+      else if (dim == 3)
+        {
+          PhaseFieldMonolithicSolve<3> Phasefield3D(parameters);
+          Phasefield3D.run();
+        }
+      else
+        {
+          AssertThrow(false,
+                      ExcMessage("Dimension has to be either 2 or 3"));
+        }
+  } else if(parameters.m_mpi_type == "Trilinos") {
+      if (dim == 2 )
+        {
+          PhaseFieldMonolithicSolve<2> Phasefield2D(parameters);
+          Phasefield2D.run();
+        }
+      else if (dim == 3)
+        {
+          PhaseFieldMonolithicSolve<3> Phasefield3D(parameters);
+          Phasefield3D.run();
+        }
+      else
+        {
+          AssertThrow(false,
+                      ExcMessage("Dimension has to be either 2 or 3"));
+        }
+  } else {
+      if (dim == 2 )
+        {
+          PhaseFieldMonolithicSolve<2> Phasefield2D(parameters);
+          Phasefield2D.run();
+        }
+      else if (dim == 3)
+        {
+          PhaseFieldMonolithicSolve<3> Phasefield3D(parameters);
+          Phasefield3D.run();
+        }
+      else
+        {
+          AssertThrow(false,
+                      ExcMessage("Dimension has to be either 2 or 3"));
+        }
+  }
+    
+    
+  
 
   return 0;
 }
