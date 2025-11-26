@@ -202,7 +202,10 @@ namespace PhaseField_monolithic
       int m_reaction_force_face_id;
         
       std::string m_mpi_type;
-
+      
+      std::string m_config_dir;
+      std::string m_output_dir;
+        
       static void declare_parameters(ParameterHandler &prm);
       void parse_parameters(ParameterHandler &prm);
     };
@@ -330,6 +333,16 @@ namespace PhaseField_monolithic
                             "underlying mpi type");
             
           
+        prm.declare_entry("Config dir",
+                            "./",
+                            Patterns::FileName(Patterns::FileName::input),
+                            "Configuration directory");
+          
+        prm.declare_entry("Output dir",
+                           "./",
+                              Patterns::FileName(Patterns::FileName::input),
+                              "Output directory");
+          
       }
       prm.leave_subsection();
     }
@@ -362,6 +375,9 @@ namespace PhaseField_monolithic
         m_reaction_force_face_id = prm.get_integer("Reaction force face ID");
           
         m_mpi_type = prm.get("mpi type");
+          
+        m_config_dir = prm.get("Config dir");
+        m_output_dir = prm.get("Output dir");
       }
       prm.leave_subsection();
     }
@@ -6142,7 +6158,11 @@ int main(int argc, char* argv[])
   // read prm by input command
   Parameters::AllParameters parameters(argv[1]);
     
-  
+  std::cout
+    << "dim: " << parameters.m_dim << std::endl
+    << "mpi type: " << parameters.m_mpi_type << std::endl
+    << "config: " << parameters.m_config_dir << std::endl
+    << "output: " << parameters.m_output_dir << std::endl;
   // dimension by prm setting
   const unsigned int dim = parameters.m_dim;
   if(parameters.m_mpi_type == "PETSc") {
