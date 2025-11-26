@@ -107,7 +107,8 @@
 #include "Utilities.h"
 
 
-#include "Traits.h"
+
+#include "BlockVectorWrapper.h"
 
 namespace PhaseField_monolithic
 {
