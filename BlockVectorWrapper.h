@@ -4,6 +4,8 @@
 //
 //
 
+#include <memory>
+
 #include "Traits.h"
 
 #ifndef BlockVectorWrapper_h
@@ -16,13 +18,13 @@ namespace PhaseField_monolithic
 namespace la
 {
 
-template <typename BackendTag>
+template <typename TraitsType>
 class BlockVectorWrapper
-: public Traits<BackendTag>::Vector
+: public TraitsType::Vector
 {
 private:
     mutable bool __hasRelevance;
-    mutable typename Traits<BackendTag>::Vector __relevance;
+    mutable std::unique_ptr<typename TraitsType::Vector> __relevancePtr{};
     
 public:
     virtual ~BlockVectorWrapper() = default;
@@ -31,7 +33,7 @@ public:
     BlockVectorWrapper(const bool hasRelevance=true);
     
     
-    const typename Traits<BackendTag>::Vector& relevance() const;
+    const typename TraitsType::Vector& relevance() const;
     bool hasRelevance() const;
     
     
@@ -40,38 +42,38 @@ public:
 };
 
 
-template <typename BackendTag>
-BlockVectorWrapper<BackendTag>
+template <typename TraitsType>
+BlockVectorWrapper<TraitsType>
 ::BlockVectorWrapper(const bool hasRelevance)
 : __hasRelevance(hasRelevance)
 {}
 
 
-template <typename BackendTag>
-const typename Traits<BackendTag>::Vector&
-BlockVectorWrapper<BackendTag>
+template <typename TraitsType>
+const typename TraitsType::Vector&
+BlockVectorWrapper<TraitsType>
 ::relevance() const
 {
     if(!__hasRelevance)
     {
         __hasRelevance = true;
     }
-    return __relevance;
+    return *__relevancePtr;
 }
 
 
-template <typename BackendTag>
+template <typename TraitsType>
 bool
-BlockVectorWrapper<BackendTag>
+BlockVectorWrapper<TraitsType>
 ::hasRelevance() const
 {
     return __hasRelevance;
 }
 
 
-template <typename BackendTag>
-void 
-BlockVectorWrapper<BackendTag>
+template <typename TraitsType>
+void
+BlockVectorWrapper<TraitsType>
 ::reinit()
 {
     
