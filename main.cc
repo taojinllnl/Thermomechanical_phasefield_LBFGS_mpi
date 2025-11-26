@@ -1194,7 +1194,7 @@ namespace PhaseField_monolithic
   class PhaseFieldMonolithicSolve
   {
   public:
-    PhaseFieldMonolithicSolve(const std::string &input_file);
+      PhaseFieldMonolithicSolve(const Parameters::AllParameters& parameters);
 
     virtual ~PhaseFieldMonolithicSolve() = default;
     void run();
@@ -1209,7 +1209,7 @@ namespace PhaseField_monolithic
     struct PerTaskData_UQPH;
     struct ScratchData_UQPH;
 
-    Parameters::AllParameters m_parameters;
+    const Parameters::AllParameters& m_parameters;
     Triangulation<dim> m_triangulation;
 
     CellDataStorage<typename Triangulation<dim>::cell_iterator,
@@ -2071,8 +2071,8 @@ namespace PhaseField_monolithic
 
   // constructor has no return type
   template <int dim>
-  PhaseFieldMonolithicSolve<dim>::PhaseFieldMonolithicSolve(const std::string &input_file)
-    : m_parameters(input_file)
+  PhaseFieldMonolithicSolve<dim>::PhaseFieldMonolithicSolve(const Parameters::AllParameters& parameters)
+    : m_parameters(parameters)
     , m_triangulation(Triangulation<dim>::maximum_smoothing)
     , m_time(m_parameters.m_end_time)
     , m_logfile(m_parameters.m_logfile_name)
@@ -6131,15 +6131,17 @@ int main(int argc, char* argv[])
     AssertThrow(false,
     		ExcMessage("The number of arguments provided to the program has to be 2!"));
 
+  PhaseField_monolithic::Parameters::AllParameters parameters("parameters.prm");
+    
   const unsigned int dim = std::stoi(argv[1]);
   if (dim == 2 )
     {
-      PhaseField_monolithic::PhaseFieldMonolithicSolve<2> Phasefield2D("parameters.prm");
+      PhaseField_monolithic::PhaseFieldMonolithicSolve<2> Phasefield2D(parameters);
       Phasefield2D.run();
     }
   else if (dim == 3)
     {
-      PhaseField_monolithic::PhaseFieldMonolithicSolve<3> Phasefield3D("parameters.prm");
+      PhaseField_monolithic::PhaseFieldMonolithicSolve<3> Phasefield3D(parameters);
       Phasefield3D.run();
     }
   else
