@@ -6,11 +6,11 @@
 
 #include "FileSystem.h"
 
+namespace fs = std::filesystem;
 
 std::string
 FileSystem::pwd()
 {
-    namespace fs = std::filesystem;
     return fs::current_path().string();
 }
 
@@ -18,8 +18,6 @@ FileSystem::pwd()
 
 bool FileSystem::dir(const std::string& rel_dir)
 {
-    namespace fs = std::filesystem;
-
     fs::path base = fs::current_path();
     fs::path p(rel_dir);
 
