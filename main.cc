@@ -199,6 +199,8 @@ namespace PhaseField_monolithic
       unsigned int m_total_material_regions;
       std::string m_material_file_name;
       int m_reaction_force_face_id;
+        
+      std::string m_mpi_type;
 
       static void declare_parameters(ParameterHandler &prm);
       void parse_parameters(ParameterHandler &prm);
@@ -314,6 +316,14 @@ namespace PhaseField_monolithic
                           Patterns::Integer(),
                           "Face id where reaction forces should be calculated "
                           "(negative integer means not to calculate reaction force)");
+        
+          
+        prm.declare_entry("mpi type",
+                          "PETSc",
+                            Patterns::Selection("PETSc|Trilinos|Serial"),
+                            "underlying mpi type");
+            
+          
       }
       prm.leave_subsection();
     }
@@ -343,6 +353,8 @@ namespace PhaseField_monolithic
         m_total_material_regions = prm.get_integer("Material regions");
         m_material_file_name = prm.get("Material data file");
         m_reaction_force_face_id = prm.get_integer("Reaction force face ID");
+          
+        m_mpi_type = prm.get("mpi type");
       }
       prm.leave_subsection();
     }
