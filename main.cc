@@ -178,6 +178,7 @@ namespace PhaseField_monolithic
   {
     struct Scenario
     {
+      unsigned int m_dim;
       unsigned int m_scenario;
       std::string m_logfile_name;
       bool m_output_iteration_history;
@@ -210,6 +211,11 @@ namespace PhaseField_monolithic
     {
       prm.enter_subsection("Scenario");
       {
+        prm.declare_entry("dimension",
+                            "2",
+                            Patterns::Integer(2),
+                            "dimension of the problem");
+          
         prm.declare_entry("Scenario number",
                           "1",
                           Patterns::Integer(0),
@@ -332,6 +338,7 @@ namespace PhaseField_monolithic
     {
       prm.enter_subsection("Scenario");
       {
+        m_dim  = prm.get_integer("dimension");
         m_scenario = prm.get_integer("Scenario number");
         m_logfile_name = prm.get("Log file name");
         m_output_iteration_history = prm.get_bool("Output iteration history");
