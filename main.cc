@@ -6139,11 +6139,11 @@ int main(int argc, char* argv[])
     AssertThrow(false,
     		ExcMessage("The number of arguments provided to the program has to be 2!"));
 
-  Parameters::AllParameters parameters("parameters.prm");
+  Parameters::AllParameters parameters(argv[1]);
     
   
     
-  const unsigned int dim = std::stoi(argv[1]);
+  const unsigned int dim = parameters.m_dim;
   if(parameters.m_mpi_type == "PETSc") {
       if (dim == 2 )
         {
