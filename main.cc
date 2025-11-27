@@ -105,7 +105,7 @@
 
 #include "SpectrumDecomposition.h"
 #include "Utilities.h"
-
+#include "FileSystem.h"
 
 
 #include "BlockVectorWrapper.h"
@@ -633,6 +633,11 @@ namespace PhaseField_monolithic
       static void declare_parameters(ParameterHandler &prm);
 
       void parse_parameters(ParameterHandler &prm);
+        
+        std::string subDir;
+        std::string histDir;
+        std::string oriDir;
+        std::string resultsDir;
     };
 
     AllParameters::AllParameters(const std::string &input_file)
@@ -2098,7 +2103,7 @@ namespace PhaseField_monolithic
     : m_parameters(parameters)
     , m_triangulation(Triangulation<dim>::maximum_smoothing)
     , m_time(m_parameters.m_end_time)
-    , m_logfile(m_parameters.m_logfile_name)
+    , m_logfile(m_parameters.m_output_dir + m_parameters.m_logfile_name)
     , m_timer(m_logfile, TimerOutput::summary, TimerOutput::wall_times)
     , m_dof_handler(m_triangulation)
     , m_fe(FE_Q<dim>(m_parameters.m_poly_degree),
@@ -2153,7 +2158,7 @@ namespace PhaseField_monolithic
               << m_triangulation.n_used_vertices()
 	      << std::endl;
 
-    std::ofstream out("original_mesh.vtu");
+    std::ofstream out(m_parameters.m_output_dir + "ori/original_mesh.vtu");
     GridOut       grid_out;
     grid_out.write_vtu(m_triangulation, out);
 
@@ -5504,7 +5509,7 @@ namespace PhaseField_monolithic
 
     data_out.build_patches(m_parameters.m_poly_degree);
 
-    std::ofstream output("Solution-" + std::to_string(dim) + "d-" +
+    std::ofstream output(m_parameters.m_output_dir + "results/Solution-" + std::to_string(dim) + "d-" +
 			 Utilities::int_to_string(m_time.get_timestep(),4) + ".vtu");
 
     data_out.write_vtu(output);
@@ -5673,7 +5678,7 @@ namespace PhaseField_monolithic
   {
     m_logfile << "\t\tWrite history data ... \n"<<std::endl;
 
-    std::ofstream myfile_reaction_force ("Reaction_force.hist");
+    std::ofstream myfile_reaction_force (m_parameters.m_output_dir + "hist/Reaction_force.hist");
     if (myfile_reaction_force.is_open())
     {
       myfile_reaction_force << 0.0 << "\t";
@@ -5701,7 +5706,7 @@ namespace PhaseField_monolithic
     else
       m_logfile << "Unable to open file";
 
-    std::ofstream myfile_energy ("Energy.hist");
+    std::ofstream myfile_energy (m_parameters.m_output_dir + "hist/Energy.hist");
     if (myfile_energy.is_open())
     {
       myfile_energy << std::fixed << std::setprecision(10) << std::scientific
@@ -6034,12 +6039,13 @@ namespace PhaseField_monolithic
   {
     print_parameter_information();
 
-    read_material_data(m_parameters.m_material_file_name,
-    		       m_parameters.m_total_material_regions);
+    read_material_data(m_parameters.m_config_dir + m_parameters.m_material_file_name,
+                       m_parameters.m_total_material_regions);
 
     std::vector<std::array<double, 4>> time_table;
 
-    read_time_data(m_parameters.m_time_file_name, time_table);
+    read_time_data(m_parameters.m_config_dir + m_parameters.m_time_file_name,
+                   time_table);
 
     make_grid();
     setup_system();
@@ -6158,11 +6164,13 @@ int main(int argc, char* argv[])
   // read prm by input command
   Parameters::AllParameters parameters(argv[1]);
     
-  std::cout
-    << "dim: " << parameters.m_dim << std::endl
-    << "mpi type: " << parameters.m_mpi_type << std::endl
-    << "config: " << parameters.m_config_dir << std::endl
-    << "output: " << parameters.m_output_dir << std::endl;
+  // TODO: multiple threads and mpi sync
+  ::FileSystem::numeric_subdir(parameters.subDir, parameters.m_output_dir);
+  parameters.m_output_dir = parameters.m_output_dir + parameters.subDir + "/";
+  ::FileSystem::dir(parameters.m_output_dir+"hist/");
+  ::FileSystem::dir(parameters.m_output_dir+"ori/");
+  ::FileSystem::dir(parameters.m_output_dir+"results/");
+
   // dimension by prm setting
   const unsigned int dim = parameters.m_dim;
   if(parameters.m_mpi_type == "PETSc") {

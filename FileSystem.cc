@@ -49,16 +49,26 @@ bool FileSystem::dir(const std::string& rel_dir)
     if (!__is_subpath(norm_base, normalized))
         return false; // invaid, such as starting with "../"
 
-    // 7. if existed：
+    // 7. if exists already:
     if (fs::exists(normalized)) {
-        // verify if it is a directory instead of a file
-        return fs::is_directory(normalized);
+        
+        // It must be a directory
+        if (fs::is_directory(normalized))
+            return true;   // <-------- ALWAYS true if directory exists
+        else
+            return false;  // exists but is a file → invalid
     }
 
-    // 8. create dir, if not exist
+
+    // 8. create if not exists
     try {
-        return fs::create_directories(normalized);
-    } catch (...) {
+        if (fs::create_directories(normalized))
+            return true; // created successfully
+        
+        // race condition: directory created between exists() and create_directories()
+        return fs::exists(normalized) && fs::is_directory(normalized);
+    }
+    catch (...) {
         return false;
     }
 }
@@ -85,4 +95,82 @@ bool FileSystem::__is_subpath(const std::filesystem::path& base,
     //  - child == base：current dir is child
     //  - child is under base
     return true;
+}
+
+
+bool FileSystem::numeric_subdir(std::string& subdir,
+                                const std::string& rel_dir)
+{
+    
+    // verify if dir exists
+    bool status = dir(rel_dir);
+    if (!status) 
+    {
+        return status;
+    }
+    
+    
+    subdir = find_next_numeric_subdir(rel_dir);
+    status = dir(rel_dir + subdir);
+    
+    return status;
+}
+
+
+
+
+bool FileSystem::__is_all_digits(const std::string& s)
+{
+    if (s.empty())
+        return false;
+
+    for (unsigned char c : s)
+    {
+        // must be ASCII number: 0–9
+        if (c < '0' || c > '9')
+            return false;
+    }
+    return true;
+}
+
+
+
+
+std::string FileSystem::find_next_numeric_subdir(const std::string& path_str)
+{
+    fs::path path(path_str);
+    long long max_val = -1;  // no all digital dir
+
+    try
+    {
+        for (const auto &entry : fs::directory_iterator(path))
+        {
+            if (!entry.is_directory())
+                continue;
+
+            std::string name = entry.path().filename().string();
+            if (!__is_all_digits(name))
+                continue;
+
+            long long val = std::stoll(name);  // cast to long long
+            if (val > max_val)
+                max_val = val;
+        }
+    }
+    catch (const fs::filesystem_error &e)
+    {
+        std::cerr << "Error: " << e.what() << "\n";
+        return "0";
+    }
+    catch (const std::out_of_range &)
+    {
+        // out_of_range of long long
+        return "0";
+    }
+
+
+    if (max_val < 0)
+        return "0";                // no digital dir
+
+    return std::to_string(max_val + 1);
 }
