@@ -113,6 +113,7 @@
 #include "FileSystem.h"
 
 #include "MPIInfo.h"
+#include "Logger.h"
 
 #include "BlockVectorWrapper.h"
 
@@ -6178,6 +6179,8 @@ void init_dirs(PhaseField_monolithic::Parameters::AllParameters &parameters)
     ::FileSystem::dir(parameters.resultsDir);
 }
 
+
+
 int main(int argc, char* argv[])
 {
 
@@ -6192,30 +6195,38 @@ int main(int argc, char* argv[])
     // read prm by input command
   Parameters::AllParameters parameters(argv[1]);
 
+
     MPIInfo mpiInfo(parameters.m_mpi_type == "PETSc" ||
                     parameters.m_mpi_type == "Trilinos",
                     argc, argv);
-    
+
     if(mpiInfo.isMPI())
     {
         std::vector<std::string> dirNames;
         if(mpiInfo.rank() == 0)
         {
             init_dirs(parameters);
-            dirNames = {parameters.subDir, parameters.oriDir, parameters.histDir, parameters.resultsDir};
+            dirNames = {parameters.m_output_dir, parameters.subDir, parameters.oriDir, parameters.histDir, parameters.resultsDir};
         }
         
         dirNames = Utilities::MPI::broadcast(*mpiInfo.mpiComm(), dirNames, 0);
         
         // send subDir and other std::string
-        parameters.subDir     = dirNames[0];
-        parameters.oriDir     = dirNames[1];
-        parameters.histDir    = dirNames[2];
-        parameters.resultsDir = dirNames[3];
+        parameters.m_output_dir = dirNames[0];
+        parameters.subDir       = dirNames[1];
+        parameters.oriDir       = dirNames[2];
+        parameters.histDir      = dirNames[3];
+        parameters.resultsDir   = dirNames[4];
         
     } else {
         init_dirs(parameters);
     }
+
+    Logger logger(mpiInfo, parameters.m_output_dir, parameters.m_logfile_name, 0);
+    logger << "test\n";
+    logger << std::flush;
+
+    
   // dimension by prm setting
   const unsigned int dim = parameters.m_dim;
   if(parameters.m_mpi_type == "PETSc") {
