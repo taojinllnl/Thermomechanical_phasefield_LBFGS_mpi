@@ -1,6 +1,10 @@
 # Listing of Parameters
 # ---------------------
-subsection Scenario  
+subsection Scenario
+
+  # Dimension
+  set dimension = 2
+
   # Geometry, loading and boundary conditions scenario
   # 1 - square tension (2D unstructured mesh)
   # 2 - square shear   (2D unstructured mesh)
@@ -63,6 +67,15 @@ subsection Scenario
   
   # Reaction forces face ID (negative number means not to find reaction force)
   set Reaction force face ID = 0
+  
+  # underlying mpi type: (PETSc|Trilinos|Serial)
+  set mpi type = Serial
+  
+  # Configuration directory
+  set Config dir = ../Case_6/pre_refine/
+  
+  # Output directory
+  set Output dir = ./output/Case_6/pre_refine/
 end
 
 subsection Finite element system
