@@ -30,3 +30,19 @@ const MPI_Comm* MPIInfo::mpiComm() const noexcept
 {
     return __MPISupport ? __mpiCommPtr.get() : nullptr;
 }
+
+
+bool MPIInfo::isMPI() const
+{
+    return __MPISupport;
+}
+
+unsigned int MPIInfo::rank() const
+{
+    return __rank;
+}
+
+unsigned int MPIInfo::nRanks() const
+{
+    return __nRanks;
+}

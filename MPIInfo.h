@@ -33,6 +33,10 @@ public:
     
     const MPI_Comm* mpiComm() const noexcept;
     
+    bool isMPI() const;
+    unsigned int rank() const;
+    unsigned int nRanks() const;
+    
     
     
 };
