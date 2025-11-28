@@ -14,8 +14,8 @@ MPIInfo::MPIInfo(const bool mpiSupport,
 : __MPISupport(mpiSupport)
 , __mpiInitPtr(__MPISupport ? std::make_unique<Utilities::MPI::MPI_InitFinalize>(argc, argv, 1): nullptr)
 , __mpiCommPtr(__MPISupport ? std::make_unique<MPI_Comm>(MPI_COMM_WORLD): nullptr)
-, __rank(__MPISupport ? Utilities::MPI::n_mpi_processes(*__mpiCommPtr) : 1)
-, __nRanks(__MPISupport ? Utilities::MPI::this_mpi_process(*__mpiCommPtr): 1)
+, __rank(__MPISupport ? Utilities::MPI::this_mpi_process(*__mpiCommPtr) : 0)
+, __nRanks(__MPISupport ? Utilities::MPI::n_mpi_processes(*__mpiCommPtr): 1)
 {}
 
 
