@@ -99,14 +99,20 @@
 
 #include <deal.II/numerics/solution_transfer.h>
 
+
+#include <vector>
 #include <fstream>
 #include <iostream>
 #include <deal.II/base/logstream.h>
+
+
+
 
 #include "SpectrumDecomposition.h"
 #include "Utilities.h"
 #include "FileSystem.h"
 
+#include "MPIInfo.h"
 
 #include "BlockVectorWrapper.h"
 
@@ -2158,7 +2164,7 @@ namespace PhaseField_monolithic
               << m_triangulation.n_used_vertices()
 	      << std::endl;
 
-    std::ofstream out(m_parameters.m_output_dir + "ori/original_mesh.vtu");
+    std::ofstream out(m_parameters.oriDir + "original_mesh.vtu");
     GridOut       grid_out;
     grid_out.write_vtu(m_triangulation, out);
 
@@ -5509,7 +5515,7 @@ namespace PhaseField_monolithic
 
     data_out.build_patches(m_parameters.m_poly_degree);
 
-    std::ofstream output(m_parameters.m_output_dir + "results/Solution-" + std::to_string(dim) + "d-" +
+    std::ofstream output(m_parameters.resultsDir + "Solution-" + std::to_string(dim) + "d-" +
 			 Utilities::int_to_string(m_time.get_timestep(),4) + ".vtu");
 
     data_out.write_vtu(output);
@@ -5678,7 +5684,7 @@ namespace PhaseField_monolithic
   {
     m_logfile << "\t\tWrite history data ... \n"<<std::endl;
 
-    std::ofstream myfile_reaction_force (m_parameters.m_output_dir + "hist/Reaction_force.hist");
+    std::ofstream myfile_reaction_force (m_parameters.histDir + "Reaction_force.hist");
     if (myfile_reaction_force.is_open())
     {
       myfile_reaction_force << 0.0 << "\t";
@@ -5706,7 +5712,7 @@ namespace PhaseField_monolithic
     else
       m_logfile << "Unable to open file";
 
-    std::ofstream myfile_energy (m_parameters.m_output_dir + "hist/Energy.hist");
+    std::ofstream myfile_energy (m_parameters.histDir + "Energy.hist");
     if (myfile_energy.is_open())
     {
       myfile_energy << std::fixed << std::setprecision(10) << std::scientific
@@ -6151,26 +6157,65 @@ namespace PhaseField_monolithic
   }
 } // namespace PhaseField_monolithic
 
+
+void init_dirs(PhaseField_monolithic::Parameters::AllParameters &parameters)
+{
+    // verify if output dir is existed. if not, create
+    ::FileSystem::dir(parameters.m_output_dir);
+    
+    // find out the potential subdir name for output
+    parameters.subDir  = ::FileSystem::find_next_numeric_subdir(parameters.m_output_dir);
+    
+    // update output dir and sub-dirs
+    parameters.m_output_dir = parameters.m_output_dir + parameters.subDir + "/";
+    parameters.oriDir       = parameters.m_output_dir + "ori/";
+    parameters.histDir      = parameters.m_output_dir + "hist/";
+    parameters.resultsDir   = parameters.m_output_dir + "results/";
+    
+    // create sub-dirs
+    ::FileSystem::dir(parameters.oriDir);
+    ::FileSystem::dir(parameters.histDir);
+    ::FileSystem::dir(parameters.resultsDir);
+}
+
 int main(int argc, char* argv[])
 {
 
   using namespace dealii;
   using namespace PhaseField_monolithic;
     
+    
   if (argc != 2)
     AssertThrow(false,
     		ExcMessage("The number of arguments provided to the program has to be 2!"));
-
-  // read prm by input command
+  
+    // read prm by input command
   Parameters::AllParameters parameters(argv[1]);
-    
-  // TODO: multiple threads and mpi sync
-  ::FileSystem::numeric_subdir(parameters.subDir, parameters.m_output_dir);
-  parameters.m_output_dir = parameters.m_output_dir + parameters.subDir + "/";
-  ::FileSystem::dir(parameters.m_output_dir+"hist/");
-  ::FileSystem::dir(parameters.m_output_dir+"ori/");
-  ::FileSystem::dir(parameters.m_output_dir+"results/");
 
+    MPIInfo mpiInfo(parameters.m_mpi_type == "PETSc" ||
+                    parameters.m_mpi_type == "Trilinos",
+                    argc, argv);
+    
+    if(mpiInfo.isMPI())
+    {
+        std::vector<std::string> dirNames;
+        if(mpiInfo.rank() == 0)
+        {
+            init_dirs(parameters);
+            dirNames = {parameters.subDir, parameters.oriDir, parameters.histDir, parameters.resultsDir};
+        }
+        
+        dirNames = Utilities::MPI::broadcast(*mpiInfo.mpiComm(), dirNames, 0);
+        
+        // send subDir and other std::string
+        parameters.subDir     = dirNames[0];
+        parameters.oriDir     = dirNames[1];
+        parameters.histDir    = dirNames[2];
+        parameters.resultsDir = dirNames[3];
+        
+    } else {
+        init_dirs(parameters);
+    }
   // dimension by prm setting
   const unsigned int dim = parameters.m_dim;
   if(parameters.m_mpi_type == "PETSc") {
