@@ -46,3 +46,15 @@ unsigned int MPIInfo::nRanks() const
 {
     return __nRanks;
 }
+
+void MPIInfo::summary(std::ostream& stream)
+{
+    if (__MPISupport) {
+        stream << "MPI mode" << std::endl
+        << "\tnumber of ranks: " << __nRanks
+        << "\tcurrent rank: " << __rank << std::endl;
+        
+    } else {
+        stream << "Non-MPI mode" << std::endl;
+    }
+}

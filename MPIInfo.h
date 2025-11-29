@@ -10,6 +10,7 @@
 #include <deal.II/base/mpi.h>
 
 #include <memory>
+#include <ostream>
 
 class MPIInfo
 {
@@ -37,6 +38,8 @@ public:
     unsigned int rank() const;
     unsigned int nRanks() const;
     
+    
+    void summary(std::ostream& stream);
     
     
 };
