@@ -6215,17 +6215,19 @@ int main(int argc, char* argv[])
     // read prm by input command
   Parameters::AllParameters parameters(argv[1]);
 
-
+    // initialize MPI by prm settings
     MPIInfo mpiInfo(parameters.m_mpi_type == "PETSc" ||
                     parameters.m_mpi_type == "Trilinos",
                     argc, argv);
 
+    // print MPI / non-MPI info at rank 0
     if(mpiInfo.rank() == 0)
         mpiInfo.summary(std::cout);
     
-
+    // create dirctories
     if(mpiInfo.isMPI())
     {
+        // only rank 0 creates dirs to avoid repeated creations
         std::vector<std::string> dirNames;
         if(mpiInfo.rank() == 0)
         {
@@ -6233,9 +6235,10 @@ int main(int argc, char* argv[])
             dirNames = {parameters.m_output_dir, parameters.subDir, parameters.oriDir, parameters.histDir, parameters.resultsDir};
         }
         
+        // sync dir names
         dirNames = Utilities::MPI::broadcast(*mpiInfo.mpiComm(), dirNames, 0);
         
-        // send subDir and other std::string
+        // update local variables
         parameters.m_output_dir = dirNames[0];
         parameters.subDir       = dirNames[1];
         parameters.oriDir       = dirNames[2];
@@ -6248,62 +6251,62 @@ int main(int argc, char* argv[])
 
 
     
-  // dimension by prm setting
-  const unsigned int dim = parameters.m_dim;
-  if(parameters.m_mpi_type == "PETSc") {
-      // PETSc type mpi
-      if (dim == 2 )
+    // dimension by prm setting
+    const unsigned int dim = parameters.m_dim;
+    if(parameters.m_mpi_type == "PETSc") {
+        // PETSc type mpi
+        if (dim == 2 )
         {
-          PhaseFieldMonolithicSolve<la::Traits<la::TagPETSc>, 2> Phasefield2D(parameters,
-                                                                              mpiInfo);
-          Phasefield2D.run();
+            PhaseFieldMonolithicSolve<la::Traits<la::TagPETSc>, 2> Phasefield2D(parameters,
+                                                                                mpiInfo);
+            Phasefield2D.run();
         }
-      else if (dim == 3)
+        else if (dim == 3)
         {
-          PhaseFieldMonolithicSolve<la::Traits<la::TagPETSc>, 3> Phasefield3D(parameters,
-                                                                              mpiInfo);
-          Phasefield3D.run();
+            PhaseFieldMonolithicSolve<la::Traits<la::TagPETSc>, 3> Phasefield3D(parameters,
+                                                                                mpiInfo);
+            Phasefield3D.run();
         }
-      else
+        else
         {
-          AssertThrow(false,
-                      ExcMessage("Dimension has to be either 2 or 3"));
+            AssertThrow(false,
+                        ExcMessage("Dimension has to be either 2 or 3"));
         }
-  } else if(parameters.m_mpi_type == "Trilinos") {
-      // Trilinos type mpi
-      if (dim == 2 )
+    } else if(parameters.m_mpi_type == "Trilinos") {
+        // Trilinos type mpi
+        if (dim == 2 )
         {
-          PhaseFieldMonolithicSolve<la::Traits<la::TagTrilinos>,2> Phasefield2D(parameters, mpiInfo);
-          Phasefield2D.run();
+            PhaseFieldMonolithicSolve<la::Traits<la::TagTrilinos>,2> Phasefield2D(parameters, mpiInfo);
+            Phasefield2D.run();
         }
-      else if (dim == 3)
+        else if (dim == 3)
         {
             PhaseFieldMonolithicSolve<la::Traits<la::TagTrilinos>,3> Phasefield3D(parameters, mpiInfo);
-          Phasefield3D.run();
+            Phasefield3D.run();
         }
-      else
+        else
         {
-          AssertThrow(false,
-                      ExcMessage("Dimension has to be either 2 or 3"));
+            AssertThrow(false,
+                        ExcMessage("Dimension has to be either 2 or 3"));
         }
-  } else {
-      // Serial type
-      if (dim == 2 )
+    } else {
+        // Serial type
+        if (dim == 2 )
         {
             PhaseFieldMonolithicSolve<la::Traits<la::TagSerial>, 2> Phasefield2D(parameters, mpiInfo);
-          Phasefield2D.run();
+            Phasefield2D.run();
         }
-      else if (dim == 3)
+        else if (dim == 3)
         {
             PhaseFieldMonolithicSolve<la::Traits<la::TagSerial>, 3> Phasefield3D(parameters, mpiInfo);
-          Phasefield3D.run();
+            Phasefield3D.run();
         }
-      else
+        else
         {
-          AssertThrow(false,
-                      ExcMessage("Dimension has to be either 2 or 3"));
+            AssertThrow(false,
+                        ExcMessage("Dimension has to be either 2 or 3"));
         }
-  }
+    }
     
     
   
