@@ -62,9 +62,10 @@
 #include <deal.II/fe/fe_dgp_monomial.h>
 #include <deal.II/fe/mapping_q_eulerian.h>
 
-#include <deal.II/base/timer.h>
+
 #include <deal.II/base/quadrature_point_data.h>
 #include <deal.II/base/parameter_handler.h>
+#include <deal.II/base/conditional_ostream.h>
 
 #include <deal.II/lac/affine_constraints.h>
 #include <deal.II/lac/vector.h>
@@ -100,6 +101,7 @@
 #include <deal.II/numerics/solution_transfer.h>
 
 
+
 #include <vector>
 #include <fstream>
 #include <iostream>
@@ -114,6 +116,8 @@
 
 #include "MPIInfo.h"
 #include "Logger.h"
+#include "TimerOutputWrapper.h"
+
 
 #include "BlockVectorWrapper.h"
 
@@ -1229,7 +1233,8 @@ namespace PhaseField_monolithic
   class PhaseFieldMonolithicSolve
   {
   public:
-      PhaseFieldMonolithicSolve(const Parameters::AllParameters& parameters);
+      PhaseFieldMonolithicSolve(const Parameters::AllParameters& parameters,
+                                const MPIInfo& mpiInfo);
 
     virtual ~PhaseFieldMonolithicSolve() = default;
     void run();
@@ -1252,8 +1257,17 @@ namespace PhaseField_monolithic
       m_quadrature_point_history;
 
     Time                m_time;
-    std::ofstream m_logfile;
-    mutable TimerOutput m_timer;
+      
+      
+    const MPIInfo& m_mpiInfo;
+      
+//    Logger  m_logfile;
+      
+    std::ofstream      __ofstream;
+    ConditionalOStream m_logfile;
+      
+//    mutable TimerOutput m_timer;
+      mutable TimerOutputWrapper m_timer;
 
     DoFHandler<dim>                  m_dof_handler;
     FESystem<dim>                    m_fe;
@@ -2106,12 +2120,18 @@ namespace PhaseField_monolithic
 
   // constructor has no return type
   template <typename LATraits, int dim>
-  PhaseFieldMonolithicSolve<LATraits, dim>::PhaseFieldMonolithicSolve(const Parameters::AllParameters& parameters)
+  PhaseFieldMonolithicSolve<LATraits, dim>
+::PhaseFieldMonolithicSolve(const Parameters::AllParameters& parameters,
+                            const MPIInfo& mpiInfo)
     : m_parameters(parameters)
     , m_triangulation(Triangulation<dim>::maximum_smoothing)
     , m_time(m_parameters.m_end_time)
-    , m_logfile(m_parameters.m_output_dir + m_parameters.m_logfile_name)
-    , m_timer(m_logfile, TimerOutput::summary, TimerOutput::wall_times)
+    , m_mpiInfo(mpiInfo)
+//    , m_logfile(mpiInfo, parameters.m_output_dir, parameters.m_logfile_name, 0)
+    , __ofstream(parameters.m_output_dir + parameters.m_logfile_name)
+    , m_logfile(__ofstream, mpiInfo.rank() == 0)
+//    , m_timer(*m_mpiInfo.mpiComm(), m_logfile, TimerOutput::summary, TimerOutput::wall_times)
+    , m_timer(m_logfile, m_mpiInfo, TimerOutput::summary, TimerOutput::wall_times)
     , m_dof_handler(m_triangulation)
     , m_fe(FE_Q<dim>(m_parameters.m_poly_degree),
 	   dim, // displacement
@@ -6200,6 +6220,10 @@ int main(int argc, char* argv[])
                     parameters.m_mpi_type == "Trilinos",
                     argc, argv);
 
+    if(mpiInfo.rank() == 0)
+        mpiInfo.summary(std::cout);
+    
+
     if(mpiInfo.isMPI())
     {
         std::vector<std::string> dirNames;
@@ -6222,9 +6246,6 @@ int main(int argc, char* argv[])
         init_dirs(parameters);
     }
 
-    Logger logger(mpiInfo, parameters.m_output_dir, parameters.m_logfile_name, 0);
-    logger << "test\n";
-    logger << std::flush;
 
     
   // dimension by prm setting
@@ -6233,12 +6254,14 @@ int main(int argc, char* argv[])
       // PETSc type mpi
       if (dim == 2 )
         {
-          PhaseFieldMonolithicSolve<la::Traits<la::TagPETSc>, 2> Phasefield2D(parameters);
+          PhaseFieldMonolithicSolve<la::Traits<la::TagPETSc>, 2> Phasefield2D(parameters,
+                                                                              mpiInfo);
           Phasefield2D.run();
         }
       else if (dim == 3)
         {
-          PhaseFieldMonolithicSolve<la::Traits<la::TagPETSc>, 3> Phasefield3D(parameters);
+          PhaseFieldMonolithicSolve<la::Traits<la::TagPETSc>, 3> Phasefield3D(parameters,
+                                                                              mpiInfo);
           Phasefield3D.run();
         }
       else
@@ -6250,12 +6273,12 @@ int main(int argc, char* argv[])
       // Trilinos type mpi
       if (dim == 2 )
         {
-          PhaseFieldMonolithicSolve<la::Traits<la::TagTrilinos>,2> Phasefield2D(parameters);
+          PhaseFieldMonolithicSolve<la::Traits<la::TagTrilinos>,2> Phasefield2D(parameters, mpiInfo);
           Phasefield2D.run();
         }
       else if (dim == 3)
         {
-          PhaseFieldMonolithicSolve<la::Traits<la::TagTrilinos>,3> Phasefield3D(parameters);
+            PhaseFieldMonolithicSolve<la::Traits<la::TagTrilinos>,3> Phasefield3D(parameters, mpiInfo);
           Phasefield3D.run();
         }
       else
@@ -6267,12 +6290,12 @@ int main(int argc, char* argv[])
       // Serial type
       if (dim == 2 )
         {
-          PhaseFieldMonolithicSolve<la::Traits<la::TagSerial>, 2> Phasefield2D(parameters);
+            PhaseFieldMonolithicSolve<la::Traits<la::TagSerial>, 2> Phasefield2D(parameters, mpiInfo);
           Phasefield2D.run();
         }
       else if (dim == 3)
         {
-          PhaseFieldMonolithicSolve<la::Traits<la::TagSerial>, 3> Phasefield3D(parameters);
+            PhaseFieldMonolithicSolve<la::Traits<la::TagSerial>, 3> Phasefield3D(parameters, mpiInfo);
           Phasefield3D.run();
         }
       else
