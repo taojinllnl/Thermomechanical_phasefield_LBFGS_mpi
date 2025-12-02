@@ -10,6 +10,7 @@
 #include <vector>
 #include <string>
 #include <initializer_list>
+#include <ostream>
 
 #include <deal.II/dofs/dof_handler.h>
 #include <deal.II/dofs/dof_tools.h>
@@ -23,18 +24,28 @@
 ///     __names             = { "a", "b", "c" }
 ///
 
-struct Block {
-    const unsigned int dim;
-    const std::string  name;
-    
-    Block(const unsigned int dim,
-          const std::string& name = "N/A")
-    : dim(dim), name(name)
-    {}
-};
+
 
 class BlockDesc
 {
+public:
+    struct Block {
+        const unsigned int dim;
+        const std::string  name;
+        
+        Block(const unsigned int dim,
+              const std::string& name = "N/A");
+    };
+    
+    
+private:
+    static unsigned int __nComponentsInit(const std::vector<Block>& blocks);
+
+    static std::vector<std::array<unsigned int, 2>> 
+    __dimRangeInit(const std::vector<Block>& blocks);
+    
+    static std::vector<unsigned int> __groupIDsInit(const std::vector<Block>& blocks);
+
 private:
     
     const std::vector<Block>                              __blocks;
@@ -43,34 +54,31 @@ private:
     const std::size_t                                    __nBlocks;
     
     // the index range for each block
-    std::vector<std::array<unsigned int, 2>>              __dimRange;
+    const std::vector<std::array<unsigned int, 2>>       __dimRange;
+    
     // the total number of dofs per node
- 
-    unsigned int                                          __nComponents;
+    const unsigned int                                   __nComponents;
     
     // tags for each component in a vector
-    std::vector<unsigned int>                             __groupIDs;
-    
+    const std::vector<unsigned int>                       __groupIDs;
     
     // dofs per block
     std::vector<dealii::types::global_dof_index>          __dofs_per_block;
+    
 public:
-    
-//    BlockDesc(const std::initializer_list<unsigned int> dims);
-    
-    BlockDesc(const std::initializer_list<unsigned int> dims,
-              const std::initializer_list<std::string>  names = {});
     
     BlockDesc(const std::initializer_list<Block> blocks);
     
     const std::vector<std::array<unsigned int, 2>>& dimRange() const;
-    const std::array<unsigned int, 2>& dimRange(unsigned int i) const;
-    
-    unsigned int nComponents() const;
-    const std::vector<unsigned int>& componentTags() const;
-    
+    const std::array<unsigned int, 2>& dimRange(unsigned int ithGroup) const;
     
     std::size_t nBlocks() const;
+    unsigned int nComponents() const;
+    
+    
+    const std::vector<unsigned int>& groupIDs() const;
+    unsigned int ithGroupID(const unsigned int ithComponent) const;
+    
     
     const std::vector<dealii::types::global_dof_index>& dofsPerBlock() const;
     
@@ -82,6 +90,9 @@ public:
             dealii::DoFTools::count_dofs_per_fe_block(dof_handler, __groupIDs);
     }
     
+    
+    
+    void summary(std::ostream& stream);
 };
 
 

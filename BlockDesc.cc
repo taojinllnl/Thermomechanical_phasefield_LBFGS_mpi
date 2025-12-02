@@ -7,40 +7,77 @@
 #include "BlockDesc.h"
 
 
+BlockDesc::Block::Block(const unsigned int dim,
+                        const std::string& name)
+: dim(dim)
+, name(name)
+{}
+
+
+unsigned int 
+BlockDesc::__nComponentsInit(const std::vector<Block>& blocks)
+{
+    unsigned int sum = 0;
+    for (const Block& b : blocks)
+        sum += b.dim;
+    return sum;
+}
+
+std::vector<std::array<unsigned int, 2>> 
+BlockDesc::__dimRangeInit(const std::vector<Block>& blocks)
+{
+    std::vector<std::array<unsigned int, 2>> ranges;
+    
+    ranges.reserve(blocks.size());
+    
+    unsigned int firstIndex = 0;
+    unsigned int lastIndex  = firstIndex;
+    for (const Block& b : blocks)
+    {
+        lastIndex += b.dim;
+        ranges.push_back({firstIndex, lastIndex});
+        firstIndex = lastIndex;
+    }
+    return ranges;
+}
+
+
+std::vector<unsigned int> 
+BlockDesc
+::__groupIDsInit(const std::vector<Block>& blocks)
+{
+    std::vector<unsigned int> groupIDs;
+    unsigned int id = 0;
+    for (const Block& b : blocks)
+    {
+        groupIDs.insert(groupIDs.end(), b.dim, id++);
+    }
+    return groupIDs;
+}
+
 
 BlockDesc::BlockDesc(const std::initializer_list<Block> blocks)
 : __blocks(blocks)
 , __nBlocks(__blocks.size())
-, __nComponents(0)
+, __dimRange(BlockDesc::__dimRangeInit(blocks))
+, __nComponents(BlockDesc::__nComponentsInit(blocks))
+, __groupIDs(BlockDesc::__groupIDsInit(blocks))
 {
-    __dimRange.resize(__nBlocks);
-    __groupIDs.resize(0, 0);
-
-    
-    /// compute the block info
-    unsigned int firstIndex = 0;
-    unsigned int lastIndex  = firstIndex;
-    for(unsigned int i = 0; i < __nBlocks; ++i)
-    {
-        lastIndex += __blocks[i].dim;
-        __dimRange[i] = std::array<unsigned int, 2>{{firstIndex, lastIndex}};
-        firstIndex = lastIndex;
-        
-        __groupIDs.insert(__groupIDs.end(), __blocks[i].dim, i);
-    }
-    __nComponents = lastIndex;
+    __dofs_per_block.reserve(__nBlocks);
 }
 
 
-const std::vector<std::array<unsigned int, 2>>& BlockDesc::dimRange() const
+const std::vector<std::array<unsigned int, 2>>& 
+BlockDesc::dimRange() const
 {
     return __dimRange;
 }
 
 
-const std::array<unsigned int, 2>& BlockDesc::dimRange(unsigned int i) const
+const std::array<unsigned int, 2>& 
+BlockDesc::dimRange(unsigned int ithGroup) const
 {
-    return __dimRange[i];
+    return __dimRange[ithGroup];
 }
 
 unsigned int BlockDesc::nComponents() const
@@ -48,9 +85,14 @@ unsigned int BlockDesc::nComponents() const
     return __nComponents;
 }
 
-const std::vector<unsigned int>& BlockDesc::componentTags() const
+const std::vector<unsigned int>& BlockDesc::groupIDs() const
 {
     return __groupIDs;
+}
+
+unsigned int BlockDesc::ithGroupID(const unsigned int ithComponent) const
+{
+    return __groupIDs[ithComponent];
 }
 
 std::size_t BlockDesc::nBlocks() const
@@ -58,7 +100,34 @@ std::size_t BlockDesc::nBlocks() const
     return __nBlocks;
 }
 
-const std::vector<dealii::types::global_dof_index>& BlockDesc::dofsPerBlock() const
+const std::vector<dealii::types::global_dof_index>& 
+BlockDesc::dofsPerBlock() const
 {
     return __dofs_per_block;
 }
+
+
+
+
+void BlockDesc::summary(std::ostream& stream)
+{
+    stream << __nBlocks << " block(s) with " << __nComponents << " components: " << std::endl;
+    
+    for (unsigned int i = 0; i < __nBlocks; ++i)
+    {
+        stream << "\tBlock No. " << i << ":\n\t\tdim: " << __blocks[i].dim
+        << "\tname: " << __blocks[i].name;
+        stream << "\n\t\tdim range: [ " << __dimRange[i][0] <<  ", " << __dimRange[i][1] << " ] " << std::endl;
+    }
+    
+    stream << "Group IDs :  ";
+    for (const unsigned int groupID : __groupIDs) 
+    {
+        stream << groupID << " ";
+    }
+    stream << std::endl;
+    
+}
+
+
+
