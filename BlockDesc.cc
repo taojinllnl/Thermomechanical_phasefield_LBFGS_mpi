@@ -56,15 +56,15 @@ BlockDesc
 }
 
 
-BlockDesc::BlockDesc(const std::initializer_list<Block> blocks)
-: __blocks(blocks)
+BlockDesc::BlockDesc(const MPIInfo&                     mpiInfo,
+                     const std::initializer_list<Block> blocks)
+: __mpiInfo(mpiInfo)
+, __blocks(blocks)
 , __nBlocks(__blocks.size())
 , __dimRange(BlockDesc::__dimRangeInit(blocks))
 , __nComponents(BlockDesc::__nComponentsInit(blocks))
 , __groupIDs(BlockDesc::__groupIDsInit(blocks))
-{
-    __dofs_per_block.reserve(__nBlocks);
-}
+{}
 
 
 const std::vector<std::array<unsigned int, 2>>& 
@@ -100,11 +100,39 @@ std::size_t BlockDesc::nBlocks() const
     return __nBlocks;
 }
 
-const std::vector<dealii::types::global_dof_index>& 
+const std::vector<dealii::types::global_dof_index>*
 BlockDesc::dofsPerBlock() const
 {
-    return __dofs_per_block;
+    if(!__dofs_per_block)
+    {
+        std::cout << "[ ERROR ] un-updated dofsPerBlock" << std::endl;
+        return nullptr;
+    }
+    return __dofs_per_block.get();
 }
+
+const std::vector<BlockDesc::IndexSet>*
+BlockDesc::ownedPartitionint() const
+{
+    if (!__mpiInfo.isMPI() || !__owned_partitioning) 
+    {
+        std::cout << "[ ERROR ] non-MPI mode or un-updated __owned_partitioning." << std::endl;
+        return nullptr;
+    }
+    return __owned_partitioning.get();
+}
+
+const std::vector<BlockDesc::IndexSet>*
+BlockDesc::relevantPartitionint() const
+{
+    if (!__mpiInfo.isMPI() || !__relevant_partitioning) 
+    {
+        std::cout << "[ ERROR ] non-MPI mode or un-updated __relevant_partitioning." << std::endl;
+        return nullptr;
+    }
+    return __relevant_partitioning.get();
+}
+
 
 
 
@@ -117,7 +145,7 @@ void BlockDesc::summary(std::ostream& stream)
     {
         stream << "\tBlock No. " << i << ":\n\t\tdim: " << __blocks[i].dim
         << "\tname: " << __blocks[i].name;
-        stream << "\n\t\tdim range: [ " << __dimRange[i][0] <<  ", " << __dimRange[i][1] << " ] " << std::endl;
+        stream << "\n\t\tdim range: [ " << __dimRange[i][0] <<  ", " << __dimRange[i][1] << " ) " << std::endl;
     }
     
     stream << "Group IDs :  ";

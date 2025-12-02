@@ -12,6 +12,9 @@
 #include <initializer_list>
 #include <ostream>
 
+#include <memory>
+#include "MPIInfo.h"
+
 #include <deal.II/dofs/dof_handler.h>
 #include <deal.II/dofs/dof_tools.h>
 
@@ -47,6 +50,10 @@ private:
     static std::vector<unsigned int> __groupIDsInit(const std::vector<Block>& blocks);
 
 private:
+    using IndexSet = dealii::IndexSet;
+    
+    
+    const MPIInfo&                                        __mpiInfo;
     
     const std::vector<Block>                              __blocks;
  
@@ -63,11 +70,16 @@ private:
     const std::vector<unsigned int>                       __groupIDs;
     
     // dofs per block
-    std::vector<dealii::types::global_dof_index>          __dofs_per_block;
+    std::unique_ptr<std::vector<dealii::types::global_dof_index>> __dofs_per_block{};
+    
+    
+    std::unique_ptr<std::vector<IndexSet>>              __owned_partitioning{};
+    std::unique_ptr<std::vector<IndexSet>>              __relevant_partitioning{};
     
 public:
     
-    BlockDesc(const std::initializer_list<Block> blocks);
+    BlockDesc(const MPIInfo&                     mpiInfo,
+              const std::initializer_list<Block> blocks);
     
     const std::vector<std::array<unsigned int, 2>>& dimRange() const;
     const std::array<unsigned int, 2>& dimRange(unsigned int ithGroup) const;
@@ -78,43 +90,50 @@ public:
     
     const std::vector<unsigned int>& groupIDs() const;
     unsigned int ithGroupID(const unsigned int ithComponent) const;
+
     
+    template <int dim, int spacedim=dim>
+    void updateDoFsInfo(dealii::DoFHandler<dim, spacedim>& dof_handler);
     
-    const std::vector<dealii::types::global_dof_index>& dofsPerBlock() const;
+    const std::vector<dealii::types::global_dof_index>* dofsPerBlock() const;
     
-    template <int dim, int spacedim = dim>
-    void countDoFPerBlock(dealii::DoFHandler<dim, spacedim>& dof_handler)
-    {
-        // DoF Counting
-        __dofs_per_block =
-            dealii::DoFTools::count_dofs_per_fe_block(dof_handler, __groupIDs);
-    }
-    
-    
+    const std::vector<IndexSet>* ownedPartitionint() const;
+    const std::vector<IndexSet>* relevantPartitionint() const;
     
     void summary(std::ostream& stream);
 };
 
 
-class MPIBlockDesc : public BlockDesc
+template <int dim, int spacedim>
+void BlockDesc::updateDoFsInfo(dealii::DoFHandler<dim, spacedim>& dof_handler)
 {
-private:
-    using IndexSet = dealii::IndexSet;
-    std::vector<IndexSet>                   __owned_partitioning;
-    std::vector<IndexSet>                   __relevant_partitioning;
-    
-    
-    
-public:
-    MPIBlockDesc(const std::initializer_list<unsigned int> dims);
-    
-    const std::vector<IndexSet>& ownedPartitionint() const;
-    const std::vector<IndexSet>& relevantPartitionint() const;
-    
-    
-    template <int dim, int spacedim = dim>
-    void update(dealii::DoFHandler<dim, spacedim>& dof_handler)
+    if(!__dofs_per_block)
     {
+        __dofs_per_block = std::make_unique<std::vector<dealii::types::global_dof_index>>();
+    }
+    
+    if (__mpiInfo.isMPI())
+    {
+        if (!__owned_partitioning)
+        {
+            __owned_partitioning =
+                std::make_unique<std::vector<IndexSet>>(__nBlocks);
+        }
+        else if (__owned_partitioning->size() != __nBlocks)
+        {
+            __owned_partitioning->assign(__nBlocks, IndexSet());
+        }
+
+        if (!__relevant_partitioning)
+        {
+            __relevant_partitioning =
+                std::make_unique<std::vector<IndexSet>>(__nBlocks);
+        }
+        else if (__relevant_partitioning->size() != __nBlocks)
+        {
+            __relevant_partitioning->assign(__nBlocks, IndexSet());
+        }
+
         
         /*  *  *  *   *   *   *   *   *  MPI  *   *   *   *   *   *   *   *   */
         const IndexSet& locally_owned_dofs    = dof_handler.locally_owned_dofs();
@@ -125,13 +144,15 @@ public:
         for(unsigned int i = 0; i < BlockDesc::nBlocks(); ++i)
         {
             const std::array<unsigned int, 2>& indices = dimRange(i);
-            __owned_partitioning[i]    = locally_owned_dofs.get_view(indices[0], indices[1]);
-            __relevant_partitioning[i] = locally_relevant_dofs.get_view(indices[0], indices[1]);
+            (*__owned_partitioning)[i]    = locally_owned_dofs.get_view(indices[0], indices[1]);
+            (*__relevant_partitioning)[i] = locally_relevant_dofs.get_view(indices[0], indices[1]);
         }
-        
-        countDoFPerBlock(dof_handler);
     }
     
-    
-};
+    (*__dofs_per_block) =
+        dealii::DoFTools::count_dofs_per_fe_block(dof_handler, __groupIDs);
+}
+
+
+
 #endif /* BlockDesc_hpp */
