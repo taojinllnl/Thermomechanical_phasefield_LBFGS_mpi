@@ -7,33 +7,26 @@
 #include "BlockDesc.h"
 
 
-BlockDesc::BlockDesc(const std::initializer_list<unsigned int> dims,
-                     const std::initializer_list<std::string>  names)
-: _dims(dims)
-, _nBlocks((unsigned int)_dims.size())
+
+BlockDesc::BlockDesc(const std::initializer_list<Block> blocks)
+: __blocks(blocks)
+, __nBlocks(__blocks.size())
 , __nComponents(0)
-, __names(names)
 {
-    __dimRange.resize(_nBlocks);
-    __componentTags.resize(0, 0);
-        
-    // if the length of the argument, names, is not fit to the number of blocks
-    // "N/A" will be created for each block
-    if (__names.size() != _nBlocks)
-    {
-        __names = std::vector<std::string>(_nBlocks, "N/A");
-    }
+    __dimRange.resize(__nBlocks);
+    __groupIDs.resize(0, 0);
+
     
     /// compute the block info
     unsigned int firstIndex = 0;
     unsigned int lastIndex  = firstIndex;
-    for(unsigned int i = 0; i < _nBlocks; ++i)
+    for(unsigned int i = 0; i < __nBlocks; ++i)
     {
-        lastIndex += _dims[i];
+        lastIndex += __blocks[i].dim;
         __dimRange[i] = std::array<unsigned int, 2>{{firstIndex, lastIndex}};
         firstIndex = lastIndex;
         
-        __componentTags.insert(__componentTags.end(), _dims[i], i);
+        __groupIDs.insert(__groupIDs.end(), __blocks[i].dim, i);
     }
     __nComponents = lastIndex;
 }
@@ -57,7 +50,12 @@ unsigned int BlockDesc::nComponents() const
 
 const std::vector<unsigned int>& BlockDesc::componentTags() const
 {
-    return __componentTags;
+    return __groupIDs;
+}
+
+std::size_t BlockDesc::nBlocks() const
+{
+    return __nBlocks;
 }
 
 const std::vector<dealii::types::global_dof_index>& BlockDesc::dofsPerBlock() const
