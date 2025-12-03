@@ -8,13 +8,15 @@
 
 #include "Traits.h"
 
+#include "MPIInfo.h"
+
+#include "BlockDesc.h"
+
 #ifndef BlockVectorWrapper_h
 #define BlockVectorWrapper_h
 
 
 
-namespace PhaseField_monolithic
-{
 namespace la
 {
 
@@ -23,66 +25,32 @@ class BlockVectorWrapper
 : public TraitsType::Vector
 {
 private:
+    using VecType = typename TraitsType::Vector;
     mutable bool __hasRelevance;
-    mutable std::unique_ptr<typename TraitsType::Vector> __relevancePtr{};
+    mutable std::unique_ptr<VecType> __relevancePtr{};
     
+    const MPIInfo& __mpiInfo;
 public:
     virtual ~BlockVectorWrapper() = default;
     
     BlockVectorWrapper() = delete;
-    BlockVectorWrapper(const bool hasRelevance=true);
+    BlockVectorWrapper(const MPIInfo& mpiInfo, const bool hasRelevance=true);
     
     
     const typename TraitsType::Vector& relevance() const;
     bool hasRelevance() const;
     
     
-    void reinit();
+    void reinit(const BlockDesc& blockDesc);
     
 };
 
 
-template <typename TraitsType>
-BlockVectorWrapper<TraitsType>
-::BlockVectorWrapper(const bool hasRelevance)
-: __hasRelevance(hasRelevance)
-{}
-
-
-template <typename TraitsType>
-const typename TraitsType::Vector&
-BlockVectorWrapper<TraitsType>
-::relevance() const
-{
-    if(!__hasRelevance)
-    {
-        __hasRelevance = true;
-    }
-    return *__relevancePtr;
-}
-
-
-template <typename TraitsType>
-bool
-BlockVectorWrapper<TraitsType>
-::hasRelevance() const
-{
-    return __hasRelevance;
-}
-
-
-template <typename TraitsType>
-void
-BlockVectorWrapper<TraitsType>
-::reinit()
-{
-    
-}
 
 
 
 }
-}
+
 
 
 #endif /* BlockVectorWrapper_h */
