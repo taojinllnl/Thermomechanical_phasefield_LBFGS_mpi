@@ -17,6 +17,7 @@
 
 #include <deal.II/dofs/dof_handler.h>
 #include <deal.II/dofs/dof_tools.h>
+#include <deal.II/dofs/dof_renumbering.h>
 
 /// example:
 ///     _dims               = {3, 2, 1}
@@ -107,10 +108,18 @@ public:
 template <int dim, int spacedim>
 void BlockDesc::updateDoFsInfo(dealii::DoFHandler<dim, spacedim>& dof_handler)
 {
+    using namespace dealii;
+
+    DoFRenumbering::component_wise(dof_handler, __groupIDs);
+
     if(!__dofs_per_block)
     {
         __dofs_per_block = std::make_unique<std::vector<dealii::types::global_dof_index>>();
     }
+    
+
+    (*__dofs_per_block) = DoFTools::count_dofs_per_fe_block(dof_handler, __groupIDs);
+
     
     if (__mpiInfo.isMPI())
     {
@@ -123,34 +132,48 @@ void BlockDesc::updateDoFsInfo(dealii::DoFHandler<dim, spacedim>& dof_handler)
         {
             __owned_partitioning->assign(__nBlocks, IndexSet());
         }
-
+        
         if (!__relevant_partitioning)
         {
             __relevant_partitioning =
-                std::make_unique<std::vector<IndexSet>>(__nBlocks);
+            std::make_unique<std::vector<IndexSet>>(__nBlocks);
         }
         else if (__relevant_partitioning->size() != __nBlocks)
         {
             __relevant_partitioning->assign(__nBlocks, IndexSet());
         }
-
         
-        /*  *  *  *   *   *   *   *   *  MPI  *   *   *   *   *   *   *   *   */
+        
+        
+        __owned_partitioning->resize(__nBlocks);
+        __relevant_partitioning->resize(__nBlocks);
+        
         const IndexSet& locally_owned_dofs    = dof_handler.locally_owned_dofs();
-        const IndexSet  locally_relevant_dofs =
-            dealii::DoFTools::extract_locally_relevant_dofs(dof_handler);
+        const IndexSet  locally_relevant_dofs = DoFTools::extract_locally_relevant_dofs(dof_handler);
         
         
-        for(unsigned int i = 0; i < BlockDesc::nBlocks(); ++i)
+        std::vector<IndexSet::size_type> dofsOffsets(__nBlocks+1, 0);
+        for(unsigned int i = 0; i < __nBlocks; ++i)
         {
-            const std::array<unsigned int, 2>& indices = dimRange(i);
-            (*__owned_partitioning)[i]    = locally_owned_dofs.get_view(indices[0], indices[1]);
-            (*__relevant_partitioning)[i] = locally_relevant_dofs.get_view(indices[0], indices[1]);
+            dofsOffsets[i+1] = (*__dofs_per_block)[i] + dofsOffsets[i];
         }
+        
+        
+        for(unsigned int i = 0; i < __nBlocks; ++i)
+        {
+            
+            
+            (*__owned_partitioning)[i]
+            = locally_owned_dofs.get_view(dofsOffsets[i],
+                                          dofsOffsets[i+1]);
+            (*__relevant_partitioning)[i]
+            = locally_relevant_dofs.get_view(dofsOffsets[i],
+                                             dofsOffsets[i+1]);
+        }
+        /*  *  *  *   *   *   *   *   *  MPI  *   *   *   *   *   *   *   *   */
     }
     
-    (*__dofs_per_block) =
-        dealii::DoFTools::count_dofs_per_fe_block(dof_handler, __groupIDs);
+    
 }
 
 
