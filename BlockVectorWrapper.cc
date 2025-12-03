@@ -11,10 +11,12 @@ using namespace la;
 template <typename TraitsType>
 BlockVectorWrapper<TraitsType>
 ::BlockVectorWrapper(const MPIInfo& mpiInfo,
+                     const BlockDesc& blockDesc,
                      const bool hasRelevance)
 : __hasRelevance(hasRelevance)
 , __relevancePtr(__hasRelevance? std::make_unique<VecType>() : nullptr)
 , __mpiInfo(mpiInfo)
+, __blockDesc(blockDesc)
 {}
 
 
@@ -43,7 +45,7 @@ BlockVectorWrapper<TraitsType>
 template <typename TraitsType>
 void
 BlockVectorWrapper<TraitsType>
-::reinit(const BlockDesc& blockDesc)
+::reinit()
 {
     
     if constexpr (std::is_same_v<VecType, dealii::BlockVector<double>>)
@@ -53,7 +55,7 @@ BlockVectorWrapper<TraitsType>
         if(__mpiInfo.isMPI())
         {
             /*  *  *  *   *   *   *   *   *  MPI  *   *   *   *   *   *   *   *   */
-            TraitsType::Vector::reinit(*(blockDesc.ownedPartitionint()),
+            TraitsType::Vector::reinit(*(__blockDesc.ownedPartitionint()),
                                        *(__mpiInfo.mpiComm()));
             TraitsType::Vector::operator=(0.0);
             
@@ -64,8 +66,8 @@ BlockVectorWrapper<TraitsType>
                     __relevancePtr = std::make_unique<VecType>();
                 }
                 
-                __relevancePtr->reinit(*(blockDesc.ownedPartitionint()),
-                                       *(blockDesc.relevantPartitionint()),
+                __relevancePtr->reinit(*(__blockDesc.ownedPartitionint()),
+                                       *(__blockDesc.relevantPartitionint()),
                                        *(__mpiInfo.mpiComm()));
                 
                 (*__relevancePtr) = 0.0;

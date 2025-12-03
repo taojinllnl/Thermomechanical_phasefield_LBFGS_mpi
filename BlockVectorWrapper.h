@@ -29,19 +29,22 @@ private:
     mutable bool __hasRelevance;
     mutable std::unique_ptr<VecType> __relevancePtr{};
     
-    const MPIInfo& __mpiInfo;
+    const MPIInfo&      __mpiInfo;
+    const BlockDesc&    __blockDesc;
 public:
     virtual ~BlockVectorWrapper() = default;
     
     BlockVectorWrapper() = delete;
-    BlockVectorWrapper(const MPIInfo& mpiInfo, const bool hasRelevance=true);
+    BlockVectorWrapper(const MPIInfo& mpiInfo, 
+                       const BlockDesc& blockDesc,
+                       const bool hasRelevance=true);
     
     
     const typename TraitsType::Vector& relevance() const;
     bool hasRelevance() const;
     
     
-    void reinit(const BlockDesc& blockDesc);
+    void reinit();
     
 };
 
