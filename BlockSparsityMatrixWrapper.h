@@ -80,28 +80,43 @@ BlockSparsityMatrixWrapper<TraitsType>
     
     TraitsType::Matrix::clear();
     
-    const std::vector<IndexSet>& ownedPartition = *__blockDesc.ownedPartitionint();
-    const std::vector<IndexSet>& relevPartition = *__blockDesc.relevantPartitionint();
-    
-    BlockDynamicSparsityPattern dsp(relevPartition);
-    
-    DoFTools::make_sparsity_pattern(dof_handler,
-                                    __coupling,
-                                    dsp, constraints,
-                                    keep_constrained_dofs,
-                                    subdomain_id);
-    __sparsity_pattern.copy_from(dsp);
-    
-    
-    SparsityTools::distribute_sparsity_pattern(dsp,
-                                               ownedPartition,
-                                               __mpiInfo.mpiComm(),
-                                               relevPartition);
-    
+    if constexpr (std::is_same_v<MatType, dealii::BlockSparseMatrix<double>>)
+    {
+        // TODO: serial version
+    } else { 
+        if(!__mpiInfo.isMPI())
+        {
+            return;
+        }
+        
+        /*  *  *  *   *   *   *   *   *  MPI  *   *   *   *   *   *   *   *   */
+        const std::vector<IndexSet>& ownedPartition = *__blockDesc.ownedPartition();
+        const std::vector<IndexSet>& relevPartition = *__blockDesc.relevantPartition();
+        
+        BlockDynamicSparsityPattern dsp(relevPartition);
+        
+        DoFTools::make_sparsity_pattern(dof_handler,
+                                        __coupling,
+                                        dsp, constraints,
+                                        keep_constrained_dofs,
+                                        subdomain_id);
+        __sparsity_pattern.copy_from(dsp);
+        
+        
+        SparsityTools::distribute_sparsity_pattern(dsp,
+                                                   ownedPartition,
+                                                   __mpiInfo.mpiComm(),
+                                                   relevPartition);
+        
 
-    TraitsType::Matrix::reinit(ownedPartition,
-                               dsp,
-                               __mpiInfo.mpiComm());
+        TraitsType::Matrix::reinit(ownedPartition,
+                                   dsp,
+                                   __mpiInfo.mpiComm());
+        /*  *  *  *   *   *   *   *   *  MPI  *   *   *   *   *   *   *   *   */
+    }
+    
+    
+    
 }
 
 

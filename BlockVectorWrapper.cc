@@ -50,30 +50,32 @@ BlockVectorWrapper<TraitsType>
     
     if constexpr (std::is_same_v<VecType, dealii::BlockVector<double>>)
     {
-        
+        // TODO: serial version
     } else {
-        if(__mpiInfo.isMPI())
+        if(!__mpiInfo.isMPI())
         {
-            /*  *  *  *   *   *   *   *   *  MPI  *   *   *   *   *   *   *   *   */
-            TraitsType::Vector::reinit(*(__blockDesc.ownedPartitionint()),
-                                       *(__mpiInfo.mpiComm()));
-            TraitsType::Vector::operator=(0.0);
-            
-            if(__hasRelevance)
-            {
-                if (!__relevancePtr)
-                {
-                    __relevancePtr = std::make_unique<VecType>();
-                }
-                
-                __relevancePtr->reinit(*(__blockDesc.ownedPartitionint()),
-                                       *(__blockDesc.relevantPartitionint()),
-                                       *(__mpiInfo.mpiComm()));
-                
-                (*__relevancePtr) = 0.0;
-            }
-            /*  *  *  *   *   *   *   *   *  MPI  *   *   *   *   *   *   *   *   */
+            return;
         }
+        /*  *  *  *   *   *   *   *   *  MPI  *   *   *   *   *   *   *   *   */
+        TraitsType::Vector::reinit(*(__blockDesc.ownedPartition()),
+                                   *(__mpiInfo.mpiComm()));
+        TraitsType::Vector::operator=(0.0);
+        
+        if(__hasRelevance)
+        {
+            if (!__relevancePtr)
+            {
+                __relevancePtr = std::make_unique<VecType>();
+            }
+            
+            __relevancePtr->reinit(*(__blockDesc.ownedPartition()),
+                                   *(__blockDesc.relevantPartition()),
+                                   *(__mpiInfo.mpiComm()));
+            
+            (*__relevancePtr) = 0.0;
+        }
+        /*  *  *  *   *   *   *   *   *  MPI  *   *   *   *   *   *   *   *   */
+        
     }
 }
 
