@@ -51,6 +51,7 @@ struct Traits;
 template <>
 struct Traits<TagSerial>
 {
+    using TMTag    = TagSerial;
     using Vector   = dealii::LinearAlgebraDealII::BlockVector;
     using Matrix   = dealii::LinearAlgebraDealII::BlockSparseMatrix;
     using IndexSet = dealii::IndexSet;
@@ -65,6 +66,7 @@ struct Traits<TagSerial>
 template <>
 struct Traits<TagPETSc>
 {
+    using TMTag    = TagPETSc;
     using Vector   = dealii::LinearAlgebraPETSc::MPI::BlockVector;
     using Matrix   = dealii::LinearAlgebraPETSc::MPI::BlockSparseMatrix;
     using IndexSet = dealii::IndexSet;
@@ -81,6 +83,7 @@ struct Traits<TagPETSc>
 template <>
 struct Traits<TagTrilinos>
 {
+    using TMTag    = TagTrilinos;
     using Vector   = dealii::LinearAlgebraTrilinos::MPI::BlockVector;
     using Matrix   = dealii::LinearAlgebraTrilinos::MPI::BlockSparseMatrix;
     using IndexSet = dealii::IndexSet;
