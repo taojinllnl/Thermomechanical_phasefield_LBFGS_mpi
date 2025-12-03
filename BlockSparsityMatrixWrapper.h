@@ -83,8 +83,9 @@ BlockSparsityMatrixWrapper<TraitsType>
     const std::vector<IndexSet>& ownedPartition = *__blockDesc.ownedPartitionint();
     const std::vector<IndexSet>& relevPartition = *__blockDesc.relevantPartitionint();
     
-    BlockDynamicSparsityPattern dsp(*__blockDesc.relevantPartitionint());
-    DoFTools::make_sparsity_pattern(dof_handler, 
+    BlockDynamicSparsityPattern dsp(relevPartition);
+    
+    DoFTools::make_sparsity_pattern(dof_handler,
                                     __coupling,
                                     dsp, constraints,
                                     keep_constrained_dofs,
