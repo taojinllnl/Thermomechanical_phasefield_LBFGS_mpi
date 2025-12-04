@@ -35,7 +35,11 @@ public:
     virtual ~BlockVectorWrapper() = default;
     
     BlockVectorWrapper() = delete;
-    BlockVectorWrapper(const MPIInfo& mpiInfo, 
+    
+    BlockVectorWrapper(const BlockVectorWrapper& other);
+    BlockVectorWrapper(BlockVectorWrapper&& other) noexcept;
+    
+    BlockVectorWrapper(const MPIInfo& mpiInfo,
                        const BlockDesc& blockDesc,
                        const bool hasRelevance=true);
     
