@@ -50,7 +50,9 @@ BlockVectorWrapper<TraitsType>
     
     if constexpr (std::is_same_v<VecType, dealii::BlockVector<double>>)
     {
-        // TODO: serial version
+        /*  *  *  *   *   *   *  serial version   *   *   *   *   *   *   *   */
+        TraitsType::Vector::reinit(*__blockDesc.dofsPerBlock());
+        /*  *  *  *   *   *   *  serial version   *   *   *   *   *   *   *   */
     } else {
         if(!__mpiInfo.isMPI())
         {
