@@ -74,8 +74,11 @@ private:
     std::unique_ptr<std::vector<dealii::types::global_dof_index>> __dofs_per_block{};
     
     
-    std::unique_ptr<std::vector<IndexSet>>              __owned_partitioning{};
-    std::unique_ptr<std::vector<IndexSet>>              __relevant_partitioning{};
+
+    std::unique_ptr<std::vector<IndexSet>>  __owned_partitioning{};
+    
+    std::unique_ptr<IndexSet>               __localRelevantDoFs{};
+    std::unique_ptr<std::vector<IndexSet>>  __relevant_partitioning{};
     
 public:
     
@@ -100,6 +103,8 @@ public:
     
     const std::vector<IndexSet>* ownedPartition() const;
     const std::vector<IndexSet>* relevantPartition() const;
+    
+    const IndexSet* localRelevantPartition() const;
     
     void summary(std::ostream& stream);
 };
@@ -144,14 +149,19 @@ void BlockDesc::updateDoFsInfo(dealii::DoFHandler<dim, spacedim>& dof_handler)
             __relevant_partitioning->assign(__nBlocks, IndexSet());
         }
         
+        if (!__localRelevantDoFs)
+        {
+            __localRelevantDoFs = std::make_unique<IndexSet>();
+        }
+        
+        
+        
+        const IndexSet& locally_owned_dofs = dof_handler.locally_owned_dofs();
+        (*__localRelevantDoFs) = DoFTools::extract_locally_relevant_dofs(dof_handler);
         
         
         __owned_partitioning->resize(__nBlocks);
         __relevant_partitioning->resize(__nBlocks);
-        
-        const IndexSet& locally_owned_dofs    = dof_handler.locally_owned_dofs();
-        const IndexSet  locally_relevant_dofs = DoFTools::extract_locally_relevant_dofs(dof_handler);
-        
         
         std::vector<IndexSet::size_type> dofsOffsets(__nBlocks+1, 0);
         for(unsigned int i = 0; i < __nBlocks; ++i)
@@ -162,13 +172,11 @@ void BlockDesc::updateDoFsInfo(dealii::DoFHandler<dim, spacedim>& dof_handler)
         
         for(unsigned int i = 0; i < __nBlocks; ++i)
         {
-            
-            
             (*__owned_partitioning)[i]
             = locally_owned_dofs.get_view(dofsOffsets[i],
                                           dofsOffsets[i+1]);
             (*__relevant_partitioning)[i]
-            = locally_relevant_dofs.get_view(dofsOffsets[i],
+            = __localRelevantDoFs->get_view(dofsOffsets[i],
                                              dofsOffsets[i+1]);
         }
         /*  *  *  *   *   *   *   *   *  MPI  *   *   *   *   *   *   *   *   */

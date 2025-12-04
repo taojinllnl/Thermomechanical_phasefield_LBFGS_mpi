@@ -109,6 +109,7 @@ BlockSparseMatrixWrapper<TraitsType>
         /*  *  *  *   *   *   *   *   *  MPI  *   *   *   *   *   *   *   *   */
         const std::vector<IndexSet>& ownedPartition = *__blockDesc.ownedPartition();
         const std::vector<IndexSet>& relevPartition = *__blockDesc.relevantPartition();
+        const IndexSet& locallyRelevantDoFs = *__blockDesc.localRelevantPartition();
         
         BlockDynamicSparsityPattern dsp(relevPartition);
         
@@ -123,7 +124,7 @@ BlockSparseMatrixWrapper<TraitsType>
         SparsityTools::distribute_sparsity_pattern(dsp,
                                                    ownedPartition,
                                                    *__mpiInfo.mpiCommPtr(),
-                                                   relevPartition);
+                                                   locallyRelevantDoFs);
         
 
         TraitsType::Matrix::reinit(ownedPartition,

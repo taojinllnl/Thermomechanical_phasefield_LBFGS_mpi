@@ -133,7 +133,16 @@ BlockDesc::relevantPartition() const
     return __relevant_partitioning.get();
 }
 
-
+const BlockDesc::IndexSet*
+BlockDesc::localRelevantPartition() const
+{
+    if (!__mpiInfo.isMPI() || !__localRelevantDoFs)
+    {
+        std::cout << "[ ERROR ] non-MPI mode or un-updated __localRelevantDoFs." << std::endl;
+        return nullptr;
+    }
+    return __localRelevantDoFs.get();
+}
 
 
 
