@@ -1235,8 +1235,11 @@ namespace PhaseField_monolithic
   class PhaseFieldMonolithicSolve
   {
   public:
-      using BSMatrix = la::BlockSparseMatrixWrapper<LATraits>;
-      using BVector  = la::BlockVectorWrapper<LATraits>;
+//      using BSMatrix = la::BlockSparseMatrixWrapper<LATraits>;
+//      using BVector  = la::BlockVectorWrapper<LATraits>;
+      
+      using BSMatrix = BlockSparseMatrix<double>;
+      using BVector  = BlockVector<double>;
       
       PhaseFieldMonolithicSolve(const Parameters::AllParameters& parameters,
                                 const MPIInfo& mpiInfo);
@@ -1306,12 +1309,15 @@ namespace PhaseField_monolithic
 
     AffineConstraints<double> m_constraints;
     BlockSparsityPattern      m_sparsity_pattern;
-//    BlockSparseMatrix<double> m_tangent_matrix;
+
+//      BlockSparseMatrix<double> m_tangent_matrix;
+//      BlockVector<double>       m_system_rhs;
+//      BlockVector<double>       m_solution;
+
     BSMatrix                  m_tangent_matrix;
-//    BlockVector<double>       m_system_rhs;
     BVector                   m_system_rhs;
-//    BlockVector<double>       m_solution;
     BVector                   m_solution;
+      
     SparseDirectUMFPACK       m_A_direct;
 
 
@@ -1357,7 +1363,7 @@ namespace PhaseField_monolithic
       m_error_update_0, m_error_update_norm;
 
     void get_error_residual(Errors &error_residual);
-    void get_error_update(const BlockVector<double> &soln_update,
+    void get_error_update(const BVector &soln_update,
                           Errors & error_update);
 
     void make_grid();
@@ -1393,49 +1399,49 @@ namespace PhaseField_monolithic
       ScratchData_ASM_RHS_BFGS &                           scratch,
       PerTaskData_ASM_RHS_BFGS &                           data) const;
 
-    void assemble_system_rhs_LBFGS_parallel(const BlockVector<double> & solution_old,
-    				           BlockVector<double> & system_rhs);
+    void assemble_system_rhs_LBFGS_parallel(const BVector & solution_old,
+    				           BVector & system_rhs);
 
-    void solve_nonlinear_timestep_LBFGS(BlockVector<double> &solution_delta,
-					BlockVector<double> & LBFGS_update_refine);
+    void solve_nonlinear_timestep_LBFGS(BVector &solution_delta,
+					BVector & LBFGS_update_refine);
 
     double line_search_stepsize_strong_wolfe(const double phi_0,
 				             const double phi_0_prime,
-				             const BlockVector<double> & BFGS_p_vector,
-				             const BlockVector<double> & solution_delta);
+				             const BVector & BFGS_p_vector,
+				             const BVector & solution_delta);
 
-    double line_search_stepsize_gradient_based(const BlockVector<double> & BFGS_p_vector,
-					       const BlockVector<double> & solution_delta);
+    double line_search_stepsize_gradient_based(const BVector & BFGS_p_vector,
+					       const BVector & solution_delta);
 
     double line_search_zoom_strong_wolfe(double phi_low, double phi_low_prime, double alpha_low,
 					 double phi_high, double phi_high_prime, double alpha_high,
-					 double phi_0, double phi_0_prime, const BlockVector<double> & BFGS_p_vector,
+					 double phi_0, double phi_0_prime, const BVector & BFGS_p_vector,
 					 double c1, double c2, unsigned int max_iter,
-					 const BlockVector<double> & solution_delta);
+					 const BVector & solution_delta);
 
     double line_search_stepsize_residual_projection(const double f0,
-				                    const BlockVector<double> & BFGS_p_vector,
-				                    const BlockVector<double> & solution_delta);
+				                    const BVector & BFGS_p_vector,
+				                    const BVector & solution_delta);
 
     double binary_search(double a, double b,
 			 double fa, double fb,
 			 const double threshold,
-			 const BlockVector<double> & BFGS_p_vector,
-			 const BlockVector<double> & solution_delta);
+			 const BVector & BFGS_p_vector,
+			 const BVector & solution_delta);
 
     double line_search_interpolation_cubic(const double alpha_0, const double phi_0, const double phi_0_prime,
 					   const double alpha_1, const double phi_1, const double phi_1_prime);
 
     std::pair<double, double> calculate_phi_and_phi_prime(const double alpha,
-							  const BlockVector<double> & BFGS_p_vector,
-							  const BlockVector<double> & solution_delta);
+							  const BVector & BFGS_p_vector,
+							  const BVector & solution_delta);
 
     double calculate_phi_prime(const double alpha,
-  	    		       const BlockVector<double> & BFGS_p_vector,
-  			       const BlockVector<double> & solution_delta);
+  	    		       const BVector & BFGS_p_vector,
+  			       const BVector & solution_delta);
 
-    void LBFGS_B0(BlockVector<double> & LBFGS_r_vector,
-		  BlockVector<double> & LBFGS_q_vector);
+    void LBFGS_B0(BVector & LBFGS_r_vector,
+		  BVector & LBFGS_q_vector);
 
     void update_history_field_step();
 
@@ -1443,8 +1449,8 @@ namespace PhaseField_monolithic
 
     void setup_qph();
 
-    void update_qph_incremental(const BlockVector<double> &solution_delta,
-				const BlockVector<double> &solution_old,
+    void update_qph_incremental(const BVector &solution_delta,
+				const BVector &solution_old,
 				const bool is_print);
 
     void update_qph_incremental_one_cell(
@@ -1455,8 +1461,8 @@ namespace PhaseField_monolithic
     void copy_local_to_global_UQPH(const PerTaskData_UQPH & /*data*/)
     {}
 
-    BlockVector<double>
-    get_total_solution(const BlockVector<double> &solution_delta) const;
+    BVector
+    get_total_solution(const BVector &solution_delta) const;
 
     // Should not make this function const
     void read_material_data(const std::string &data_file,
@@ -1477,14 +1483,24 @@ namespace PhaseField_monolithic
 
     std::pair<double, double> calculate_total_strain_energy_and_crack_energy_dissipation() const;
 
-    bool local_refine_and_solution_transfer(BlockVector<double> & solution_delta,
-					    BlockVector<double> & LBFGS_update_refine);
+    bool local_refine_and_solution_transfer(BVector & solution_delta,
+					    BVector & LBFGS_update_refine);
   }; // class PhaseFieldMonolithicSolve
+
+namespace type{
+
+template <typename LATraits, int dim>
+using BSMatrix = typename PhaseFieldMonolithicSolve<LATraits, dim>::BSMatrix;
+
+template <typename LATraits, int dim>
+using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
+
+}
 
   template <typename LATraits, int dim>
   void PhaseFieldMonolithicSolve<LATraits, dim>::get_error_residual(Errors &error_residual)
   {
-    BlockVector<double> error_res(m_dofs_per_block);
+    BVector error_res(m_dofs_per_block);
 
     for (unsigned int i = 0; i < m_dof_handler.n_dofs(); ++i)
       if (!m_constraints.is_constrained(i))
@@ -1497,10 +1513,10 @@ namespace PhaseField_monolithic
   }
 
   template <typename LATraits, int dim>
-  void PhaseFieldMonolithicSolve<LATraits, dim>::get_error_update(const BlockVector<double> &soln_update,
+  void PhaseFieldMonolithicSolve<LATraits, dim>::get_error_update(const BVector &soln_update,
                                                         Errors & error_update)
   {
-    BlockVector<double> error_ud(m_dofs_per_block);
+    BVector error_ud(m_dofs_per_block);
     for (unsigned int i = 0; i < m_dof_handler.n_dofs(); ++i)
       if (!m_constraints.is_constrained(i))
         error_ud(i) = soln_update(i);
@@ -1709,8 +1725,8 @@ namespace PhaseField_monolithic
   }
 
   template <typename LATraits, int dim>
-  BlockVector<double> PhaseFieldMonolithicSolve<LATraits, dim>::get_total_solution(
-    const BlockVector<double> &solution_delta) const
+  type::BVector<LATraits, dim> PhaseFieldMonolithicSolve<LATraits, dim>::get_total_solution(
+    const BVector &solution_delta) const
   {
     BVector solution_total(m_solution);
     solution_total += solution_delta;
@@ -1719,15 +1735,15 @@ namespace PhaseField_monolithic
 
   template <typename LATraits, int dim>
   void
-  PhaseFieldMonolithicSolve<LATraits, dim>::update_qph_incremental(const BlockVector<double> &solution_delta,
-							 const BlockVector<double> &solution_old,
+  PhaseFieldMonolithicSolve<LATraits, dim>::update_qph_incremental(const BVector &solution_delta,
+							 const BVector &solution_old,
 							 const bool is_print)
   {
     m_timer.enter_subsection("Update QPH data");
     if (is_print && m_parameters.m_output_iteration_history)
       m_logfile << " UQPH " << std::flush;
 
-    const BlockVector<double> solution_total(get_total_solution(solution_delta));
+    const BVector solution_total(get_total_solution(solution_delta));
 
     const UpdateFlags uf_UQPH(update_values | update_gradients);
     PerTaskData_UQPH  per_task_data_UQPH;
@@ -1772,7 +1788,7 @@ namespace PhaseField_monolithic
   template <typename LATraits, int dim>
   struct PhaseFieldMonolithicSolve<LATraits, dim>::ScratchData_UQPH
   {
-    const BlockVector<double> & m_solution_UQPH;
+    const BVector & m_solution_UQPH;
 
     std::vector<SymmetricTensor<2, dim>> m_solution_symm_grads_u_cell;
     std::vector<double>         m_solution_values_phasefield_cell;
@@ -1783,7 +1799,7 @@ namespace PhaseField_monolithic
 
     FEValues<dim> m_fe_values;
 
-    const BlockVector<double>&       m_solution_previous_step;
+    const BVector&       m_solution_previous_step;
     std::vector<double>              m_phasefield_previous_step_cell;
 
     const double                     m_delta_time;
@@ -1793,8 +1809,8 @@ namespace PhaseField_monolithic
     ScratchData_UQPH(const FiniteElement<dim> & fe_cell,
                      const QGauss<dim> &        qf_cell,
                      const UpdateFlags          uf_cell,
-                     const BlockVector<double> &solution_total,
-		     const BlockVector<double> &solution_old,
+                     const BVector &solution_total,
+		     const BVector &solution_old,
 		     const double delta_time,
 		     const bool degrade_conductivity_or_not)
       : m_solution_UQPH(solution_total)
@@ -2030,7 +2046,7 @@ namespace PhaseField_monolithic
     std::vector<std::vector<Tensor<2, dim>>>          m_grad_Nx_disp;  // gradient of shape function values for displacement
     std::vector<std::vector<SymmetricTensor<2, dim>>> m_symm_grad_Nx_disp;  // symmetric gradient of shape function values for displacement
 
-    const BlockVector<double>&       m_solution_previous_step;
+    const BVector&       m_solution_previous_step;
     std::vector<SymmetricTensor<2, dim>> m_strain_previous_step_cell;
     std::vector<double>              m_phasefield_previous_step_cell;
     std::vector<double>              m_temperature_previous_step_cell;
@@ -2040,7 +2056,7 @@ namespace PhaseField_monolithic
                              const UpdateFlags          uf_cell,
 		             const QGauss<dim - 1> &    qf_face,
 		             const UpdateFlags          uf_face,
-		             const BlockVector<double>& solution_old)
+		             const BVector& solution_old)
       : m_fe_values(fe_cell, qf_cell, uf_cell)
       , m_fe_face_values(fe_cell, qf_face, uf_face)
       , m_Nx_phasefield(qf_cell.size(),
@@ -2164,10 +2180,10 @@ namespace PhaseField_monolithic
     , m_qf_face(m_parameters.m_quad_order)
     , m_n_q_points(m_qf_cell.size())
     , m_vol_reference(0.0)
-    , m_tangent_matrix(m_mpiInfo, m_blocks_desc,
-                       [](unsigned int, unsigned int){return DoFTools::always;})
-    , m_system_rhs(m_mpiInfo, m_blocks_desc, true)
-    , m_solution(m_mpiInfo, m_blocks_desc, true)
+//    , m_tangent_matrix(m_mpiInfo, m_blocks_desc,
+//                       [](unsigned int, unsigned int){return DoFTools::always;})
+//    , m_system_rhs(m_mpiInfo, m_blocks_desc, true)
+//    , m_solution(m_mpiInfo, m_blocks_desc, true)
   {}
 
   template <typename LATraits, int dim>
@@ -4126,8 +4142,8 @@ namespace PhaseField_monolithic
   }
 
   template <typename LATraits, int dim>
-  void PhaseFieldMonolithicSolve<LATraits, dim>::assemble_system_rhs_LBFGS_parallel(const BlockVector<double> & solution_old,
-								         BlockVector<double> & system_rhs)
+  void PhaseFieldMonolithicSolve<LATraits, dim>::assemble_system_rhs_LBFGS_parallel(const BVector & solution_old,
+								         BVector & system_rhs)
   {
     m_timer.enter_subsection("Assemble RHS");
 
@@ -4543,22 +4559,22 @@ namespace PhaseField_monolithic
   }
 
   template <typename LATraits, int dim>
-  double PhaseFieldMonolithicSolve<LATraits, dim>::line_search_stepsize_gradient_based(const BlockVector<double> & BFGS_p_vector,
-				                                             const BlockVector<double> & solution_delta)
+  double PhaseFieldMonolithicSolve<LATraits, dim>::line_search_stepsize_gradient_based(const BVector & BFGS_p_vector,
+				                                             const BVector & solution_delta)
   {
-    BlockVector<double> g_old(m_system_rhs);
+    BVector g_old(m_system_rhs);
 
     // BFGS_p_vector is the search direction
-    BlockVector<double> solution_delta_trial(solution_delta);
+    BVector solution_delta_trial(solution_delta);
     // take a full step size 1.0
     solution_delta_trial.add(1.0, BFGS_p_vector);
 
     update_qph_incremental(solution_delta_trial, m_solution, false);
 
-    BlockVector<double> g_new(m_dofs_per_block);
+    BVector g_new(m_dofs_per_block);
     assemble_system_rhs_LBFGS_parallel(m_solution, g_new);
 
-    BlockVector<double> y_old(m_dofs_per_block);
+    BVector y_old(m_dofs_per_block);
 
     y_old = g_new - g_old;
 
@@ -4609,8 +4625,8 @@ namespace PhaseField_monolithic
   template <typename LATraits, int dim>
   double PhaseFieldMonolithicSolve<LATraits, dim>::line_search_stepsize_strong_wolfe(const double phi_0,
 				                                           const double phi_0_prime,
-				                                           const BlockVector<double> & BFGS_p_vector,
-				                                           const BlockVector<double> & solution_delta)
+				                                           const BVector & BFGS_p_vector,
+				                                           const BVector & solution_delta)
   {
     //AssertThrow(phi_0_prime < 0,
     //            ExcMessage("The derivative of phi at alpha = 0 should be negative!"));
@@ -4682,8 +4698,8 @@ namespace PhaseField_monolithic
   double PhaseFieldMonolithicSolve<LATraits, dim>::
     line_search_zoom_strong_wolfe(double phi_low, double phi_low_prime, double alpha_low,
 				  double phi_high, double phi_high_prime, double alpha_high,
-				  double phi_0, double phi_0_prime, const BlockVector<double> & BFGS_p_vector,
-				  double c1, double c2, unsigned int max_iter, const BlockVector<double> & solution_delta)
+				  double phi_0, double phi_0_prime, const BVector & BFGS_p_vector,
+				  double c1, double c2, unsigned int max_iter, const BVector & solution_delta)
   {
     double alpha = 0;
     std::pair<double, double> current_phi_phi_prime;
@@ -4740,8 +4756,8 @@ namespace PhaseField_monolithic
 
   template <typename LATraits, int dim>
   double PhaseFieldMonolithicSolve<LATraits, dim>::line_search_stepsize_residual_projection(const double f0,
-				                                                  const BlockVector<double> & BFGS_p_vector,
-				                                                  const BlockVector<double> & solution_delta)
+				                                                  const BVector & BFGS_p_vector,
+				                                                  const BVector & solution_delta)
   {
     // We want to find an alpha such that |f(alpha)| <= eta * |f(0)|
     // This value is suggested by Abaqus line search process
@@ -4806,8 +4822,8 @@ namespace PhaseField_monolithic
   double PhaseFieldMonolithicSolve<LATraits, dim>::binary_search(double a, double b,
 						       double fa, double fb,
 						       const double threshold,
-						       const BlockVector<double> & BFGS_p_vector,
-						       const BlockVector<double> & solution_delta)
+						       const BVector & BFGS_p_vector,
+						       const BVector & solution_delta)
   {
     double m = 0.5* (a + b);
     double fm = calculate_phi_prime(m, BFGS_p_vector, solution_delta);
@@ -4870,18 +4886,18 @@ namespace PhaseField_monolithic
   template <typename LATraits, int dim>
   std::pair<double, double> PhaseFieldMonolithicSolve<LATraits, dim>::
     calculate_phi_and_phi_prime(const double alpha,
-				const BlockVector<double> & BFGS_p_vector,
-				const BlockVector<double> & solution_delta)
+				const BVector & BFGS_p_vector,
+				const BVector & solution_delta)
   {
     // the first component is phi(alpha), the second component is phi_prime(alpha),
     std::pair<double, double> phi_values;
 
-    BlockVector<double> solution_delta_trial(solution_delta);
+    BVector solution_delta_trial(solution_delta);
     solution_delta_trial.add(alpha, BFGS_p_vector);
 
     update_qph_incremental(solution_delta_trial, m_solution, false);
 
-    BlockVector<double> system_rhs(m_dofs_per_block);
+    BVector system_rhs(m_dofs_per_block);
     assemble_system_rhs_LBFGS_parallel(m_solution, system_rhs);
     //m_constraints.condense(system_rhs);
 
@@ -4893,24 +4909,24 @@ namespace PhaseField_monolithic
   template <typename LATraits, int dim>
   double PhaseFieldMonolithicSolve<LATraits, dim>::
     calculate_phi_prime(const double alpha,
-			const BlockVector<double> & BFGS_p_vector,
-			const BlockVector<double> & solution_delta)
+			const BVector & BFGS_p_vector,
+			const BVector & solution_delta)
   {
     // phi_prime(alpha) =  p^T * r(alpha)
     double phi_prime;
 
-    BlockVector<double> solution_delta_trial(solution_delta);
+    BVector solution_delta_trial(solution_delta);
     solution_delta_trial.add(alpha, BFGS_p_vector);
 
     update_qph_incremental(solution_delta_trial, m_solution, false);
 
-    BlockVector<double> system_rhs(m_dofs_per_block);
+    BVector system_rhs(m_dofs_per_block);
     assemble_system_rhs_LBFGS_parallel(m_solution, system_rhs);
     //m_constraints.condense(system_rhs);
 
     //phi_prime = system_rhs * BFGS_p_vector;
 
-    BlockVector<double> error_res(m_dofs_per_block);
+    BVector error_res(m_dofs_per_block);
 
     for (unsigned int i = 0; i < m_dof_handler.n_dofs(); ++i)
       if (!m_constraints.is_constrained(i))
@@ -4922,8 +4938,8 @@ namespace PhaseField_monolithic
   }
 
   template <typename LATraits, int dim>
-  void PhaseFieldMonolithicSolve<LATraits, dim>::LBFGS_B0(BlockVector<double> & LBFGS_r_vector,
-						BlockVector<double> & LBFGS_q_vector)
+  void PhaseFieldMonolithicSolve<LATraits, dim>::LBFGS_B0(BVector & LBFGS_r_vector,
+						BVector & LBFGS_q_vector)
   {
     m_timer.enter_subsection("Solve B0");
 
@@ -5031,10 +5047,10 @@ namespace PhaseField_monolithic
 
   template <typename LATraits, int dim>
   void PhaseFieldMonolithicSolve<LATraits, dim>::
-  solve_nonlinear_timestep_LBFGS(BlockVector<double> & solution_delta,
-				 BlockVector<double> & LBFGS_update_refine)
+  solve_nonlinear_timestep_LBFGS(BVector & solution_delta,
+				 BVector & LBFGS_update_refine)
   {
-    BlockVector<double> LBFGS_update(m_dofs_per_block);
+    BVector LBFGS_update(m_dofs_per_block);
 
     LBFGS_update = 0.0;
 
@@ -5050,12 +5066,12 @@ namespace PhaseField_monolithic
 
     unsigned int LBFGS_iteration = 0;
 
-    BlockVector<double> LBFGS_r_vector(m_dofs_per_block);
-    BlockVector<double> LBFGS_y_vector(m_dofs_per_block);
-    BlockVector<double> LBFGS_q_vector(m_dofs_per_block);
-    BlockVector<double> LBFGS_s_vector(m_dofs_per_block);
-    std::list<std::pair< std::pair<BlockVector<double>,
-                                   BlockVector<double>>,
+    BVector LBFGS_r_vector(m_dofs_per_block);
+    BVector LBFGS_y_vector(m_dofs_per_block);
+    BVector LBFGS_q_vector(m_dofs_per_block);
+    BVector LBFGS_s_vector(m_dofs_per_block);
+    std::list<std::pair< std::pair<BVector,
+                                   BVector>,
                          double>> LBFGS_vector_list;
 
     const unsigned int LBFGS_m = m_parameters.m_LBFGS_m;
@@ -5568,7 +5584,7 @@ namespace PhaseField_monolithic
   {
     m_timer.enter_subsection("Calculate reaction force");
 
-    BlockVector<double>       system_rhs;
+    BVector       system_rhs;
     system_rhs.reinit(m_dofs_per_block);
 
     Vector<double> cell_rhs(m_dofs_per_cell);
@@ -5832,11 +5848,11 @@ namespace PhaseField_monolithic
 
 
   template <typename LATraits, int dim>
-  bool PhaseFieldMonolithicSolve<LATraits, dim>::local_refine_and_solution_transfer(BlockVector<double> & solution_delta,
-									  BlockVector<double> & LBFGS_update_refine)
+  bool PhaseFieldMonolithicSolve<LATraits, dim>::local_refine_and_solution_transfer(BVector & solution_delta,
+									  BVector & LBFGS_update_refine)
   {
     // This is the solution at (n+1) obtained from the old (coarse) mesh
-    BlockVector<double> solution_next_step(m_dofs_per_block);
+    BVector solution_next_step(m_dofs_per_block);
     solution_next_step = m_solution + solution_delta;
     bool mesh_is_same = true;
     bool cell_refine_flag = true;
@@ -5896,7 +5912,7 @@ namespace PhaseField_monolithic
 	  {
 	    mesh_is_same = false;
 
-	    std::vector<BlockVector<double> > old_solutions(2);
+	    std::vector<BVector > old_solutions(2);
 	    old_solutions[0] = solution_next_step;
 	    old_solutions[1] = m_solution;
 
@@ -5925,7 +5941,7 @@ namespace PhaseField_monolithic
 			     old_history_variable_field_L2);
 
 	    m_triangulation.prepare_coarsening_and_refinement();
-	    SolutionTransfer<dim, BlockVector<double>> solution_transfer(m_dof_handler);
+	    SolutionTransfer<dim, BVector> solution_transfer(m_dof_handler);
 	    solution_transfer.prepare_for_coarsening_and_refinement(old_solutions);
 	    SolutionTransfer<dim, Vector<double>> solution_transfer_history_variable(dof_handler_L2);
 	    solution_transfer_history_variable.prepare_for_coarsening_and_refinement(old_history_variable_field_L2);
@@ -5938,7 +5954,7 @@ namespace PhaseField_monolithic
 	    DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
 	    constraints.close();
 
-	    std::vector<BlockVector<double>> tmp_solutions(2);
+	    std::vector<BVector> tmp_solutions(2);
 	    tmp_solutions[0].reinit(m_dofs_per_block);
 	    tmp_solutions[1].reinit(m_dofs_per_block);
 
@@ -6000,8 +6016,8 @@ namespace PhaseField_monolithic
     // calculate field variables for newly refined cells
     if (!mesh_is_same)
       {
-	BlockVector<double> temp_solution_delta(m_dofs_per_block);
-	BlockVector<double> temp_previous_solution(m_dofs_per_block);
+	BVector temp_solution_delta(m_dofs_per_block);
+	BVector temp_previous_solution(m_dofs_per_block);
 	temp_solution_delta = 0.0;
 	temp_previous_solution = 0.0;
 	update_qph_incremental(temp_solution_delta, temp_previous_solution, false);
@@ -6113,7 +6129,7 @@ namespace PhaseField_monolithic
         bool mesh_is_same = false;
 
         // initial guess for the resolve on the refined mesh
-	BlockVector<double> LBFGS_update_refine(m_dofs_per_block);
+	BVector LBFGS_update_refine(m_dofs_per_block);
 	LBFGS_update_refine = 0.0;
 
         // local adaptive mesh refinement loop
@@ -6123,7 +6139,7 @@ namespace PhaseField_monolithic
 	    if (m_parameters.m_refinement_strategy == "adaptive-refine")
 	      m_logfile << "\tAdaptive refinement-"<< adp_refine_iteration << ": " << std::endl;
 
-	    BlockVector<double> solution_delta(m_dofs_per_block);
+	    BVector solution_delta(m_dofs_per_block);
 	    solution_delta = 0.0;
 
 	    if (m_parameters.m_type_nonlinear_solver == "LBFGS")
