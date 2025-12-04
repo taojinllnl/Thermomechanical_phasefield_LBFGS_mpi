@@ -82,7 +82,7 @@ BlockVectorWrapper<TraitsType>
         }
         /*  *  *  *   *   *   *   *   *  MPI  *   *   *   *   *   *   *   *   */
         TraitsType::Vector::reinit(*(__blockDesc.ownedPartition()),
-                                   *(__mpiInfo.mpiComm()));
+                                   *(__mpiInfo.mpiCommPtr()));
         TraitsType::Vector::operator=(0.0);
         
         if(__hasRelevance)
@@ -94,7 +94,7 @@ BlockVectorWrapper<TraitsType>
             
             __relevancePtr->reinit(*(__blockDesc.ownedPartition()),
                                    *(__blockDesc.relevantPartition()),
-                                   *(__mpiInfo.mpiComm()));
+                                   *(__mpiInfo.mpiCommPtr()));
             
             (*__relevancePtr) = 0.0;
         }

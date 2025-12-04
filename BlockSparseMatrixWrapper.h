@@ -122,17 +122,17 @@ BlockSparseMatrixWrapper<TraitsType>
         
         SparsityTools::distribute_sparsity_pattern(dsp,
                                                    ownedPartition,
-                                                   __mpiInfo.mpiComm(),
+                                                   *__mpiInfo.mpiCommPtr(),
                                                    relevPartition);
         
 
         TraitsType::Matrix::reinit(ownedPartition,
                                    dsp,
-                                   __mpiInfo.mpiComm());
+                                   *__mpiInfo.mpiCommPtr());
         /*  *  *  *   *   *   *   *   *  MPI  *   *   *   *   *   *   *   *   */
     }
     
-    
+
     
 }
 

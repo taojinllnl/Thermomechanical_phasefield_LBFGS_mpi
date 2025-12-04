@@ -2156,7 +2156,7 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
 //    , m_logfile(mpiInfo, parameters.m_output_dir, parameters.m_logfile_name, 0)
     , __ofstream(parameters.m_output_dir + parameters.m_logfile_name)
     , m_logfile(__ofstream, mpiInfo.rank() == 0)
-//    , m_timer(*m_mpiInfo.mpiComm(), m_logfile, TimerOutput::summary, TimerOutput::wall_times)
+//    , m_timer(*m_mpiInfo.mpiCommPtr(), m_logfile, TimerOutput::summary, TimerOutput::wall_times)
     , m_timer(m_logfile, m_mpiInfo, TimerOutput::summary, TimerOutput::wall_times)
     , m_blocks_desc(m_mpiInfo,
                     {
@@ -6283,7 +6283,7 @@ int main(int argc, char* argv[])
         }
         
         // sync dir names
-        dirNames = Utilities::MPI::broadcast(*mpiInfo.mpiComm(), dirNames, 0);
+        dirNames = Utilities::MPI::broadcast(*mpiInfo.mpiCommPtr(), dirNames, 0);
         
         // update local variables
         parameters.m_output_dir = dirNames[0];

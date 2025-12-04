@@ -30,9 +30,9 @@ public:
             int argc, char* argv[]);
     
     
-    MPI_Comm* mpiComm() noexcept;
+    MPI_Comm* mpiCommPtr() noexcept;
     
-    const MPI_Comm* mpiComm() const noexcept;
+    const MPI_Comm* mpiCommPtr() const noexcept;
     
     bool isMPI() const;
     unsigned int rank() const;

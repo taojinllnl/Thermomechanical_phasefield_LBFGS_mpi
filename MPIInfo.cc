@@ -20,13 +20,13 @@ MPIInfo::MPIInfo(const bool mpiSupport,
 
 
 
-MPI_Comm* MPIInfo::mpiComm() noexcept
+MPI_Comm* MPIInfo::mpiCommPtr() noexcept
 {
     return __MPISupport ? __mpiCommPtr.get() : nullptr;
 }
 
 
-const MPI_Comm* MPIInfo::mpiComm() const noexcept
+const MPI_Comm* MPIInfo::mpiCommPtr() const noexcept
 {
     return __MPISupport ? __mpiCommPtr.get() : nullptr;
 }

@@ -19,7 +19,7 @@ TimerOutputWrapper
 : __mpiInfo(mpiInfo)
 {
     if (__mpiInfo.isMPI()) {
-        __timerPtr = std::make_unique<TimerOutput>(*mpiInfo.mpiComm(),
+        __timerPtr = std::make_unique<TimerOutput>(*mpiInfo.mpiCommPtr(),
                                                    stream,
                                                    output_frequency,
                                                    output_type);
@@ -39,7 +39,7 @@ TimerOutputWrapper
 : __mpiInfo(mpiInfo)
 {
     if (__mpiInfo.isMPI()) {
-        __timerPtr = std::make_unique<TimerOutput>(*mpiInfo.mpiComm(),
+        __timerPtr = std::make_unique<TimerOutput>(*mpiInfo.mpiCommPtr(),
                                                    stream,
                                                    output_frequency,
                                                    output_type);
@@ -95,7 +95,7 @@ void
 TimerOutputWrapper
 ::print_wall_time_statistics (const double print_quantile) const
 {
-    __timerPtr->print_wall_time_statistics(*__mpiInfo.mpiComm(),
+    __timerPtr->print_wall_time_statistics(*__mpiInfo.mpiCommPtr(),
                                            print_quantile);
 }
 
