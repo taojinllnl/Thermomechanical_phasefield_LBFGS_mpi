@@ -1,19 +1,19 @@
 //
-//  BlockSparsityMatrixWrapper.cpp
+//  BlockSparseMatrixWrapper.cpp
 //  main
 //
 //
 
-#include "BlockSparsityMatrixWrapper.h"
+#include "BlockSparseMatrixWrapper.h"
 using namespace la;
 
 template <typename TraitsType>
-using BSMatrix = BlockSparsityMatrixWrapper<TraitsType>;
+using BSMatrix = BlockSparseMatrixWrapper<TraitsType>;
 
 
 template <typename TraitsType>
 typename BSMatrix<TraitsType>::Coupling
-BlockSparsityMatrixWrapper<TraitsType>
+BlockSparseMatrixWrapper<TraitsType>
 ::__couplingInit(const BlockDesc& blockDesc,
                  const BSMatrix<TraitsType>::CouplingFunc& func)
 {
@@ -31,8 +31,8 @@ BlockSparsityMatrixWrapper<TraitsType>
 
 
 template <typename TraitsType>
-BlockSparsityMatrixWrapper<TraitsType>
-::BlockSparsityMatrixWrapper(const MPIInfo& mpiInfo,
+BlockSparseMatrixWrapper<TraitsType>
+::BlockSparseMatrixWrapper(const MPIInfo& mpiInfo,
                              const BlockDesc& blockDesc,
                              const BSMatrix<TraitsType>::CouplingFunc& func)
 : __mpiInfo(mpiInfo)
@@ -44,6 +44,6 @@ BlockSparsityMatrixWrapper<TraitsType>
 
 
 
-template class la::BlockSparsityMatrixWrapper<la::Traits<TagSerial>>;
-template class la::BlockSparsityMatrixWrapper<la::Traits<TagPETSc>>;
-template class la::BlockSparsityMatrixWrapper<la::Traits<TagTrilinos>>;
+template class la::BlockSparseMatrixWrapper<la::Traits<TagSerial>>;
+template class la::BlockSparseMatrixWrapper<la::Traits<TagPETSc>>;
+template class la::BlockSparseMatrixWrapper<la::Traits<TagTrilinos>>;

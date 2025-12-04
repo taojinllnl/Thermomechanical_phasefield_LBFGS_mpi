@@ -1,11 +1,11 @@
 //
-//  BlockSparsityMatrixWrapper.hpp
+//  BlockSparseMatrixWrapper.hpp
 //  main
 //
 //
 
-#ifndef BlockSparsityMatrixWrapper_hpp
-#define BlockSparsityMatrixWrapper_hpp
+#ifndef BlockSparseMatrixWrapper_hpp
+#define BlockSparseMatrixWrapper_hpp
 
 #include <functional>
 
@@ -26,7 +26,7 @@ namespace la
 {
 
 template <typename TraitsType>
-class BlockSparsityMatrixWrapper
+class BlockSparseMatrixWrapper
 : public TraitsType::Matrix
 {
 private:
@@ -49,10 +49,10 @@ private:
     
     dealii::BlockSparsityPattern        __sparsity_pattern;
 public:
-    virtual ~BlockSparsityMatrixWrapper() = default;
+    virtual ~BlockSparseMatrixWrapper() = default;
     
-    BlockSparsityMatrixWrapper() = delete;
-    BlockSparsityMatrixWrapper(const MPIInfo& mpiInfo,
+    BlockSparseMatrixWrapper() = delete;
+    BlockSparseMatrixWrapper(const MPIInfo& mpiInfo,
                                const BlockDesc& blockDesc,
                                const CouplingFunc& func);
     
@@ -70,7 +70,7 @@ public:
 template <typename TraitsType>
 template <int dim, int spacedim>
 void
-BlockSparsityMatrixWrapper<TraitsType>
+BlockSparseMatrixWrapper<TraitsType>
 ::init(dealii::DoFHandler<dim, spacedim>&       dof_handler,
        const dealii::AffineConstraints<double>& constraints,
        const bool                               keep_constrained_dofs,
@@ -138,4 +138,4 @@ BlockSparsityMatrixWrapper<TraitsType>
 
 }
 
-#endif /* BlockSparsityMatrixWrapper_hpp */
+#endif /* BlockSparseMatrixWrapper_hpp */
