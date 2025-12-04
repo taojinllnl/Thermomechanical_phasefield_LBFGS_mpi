@@ -104,6 +104,25 @@ BlockVectorWrapper<TraitsType>
 }
 
 
+template <typename TraitsType>
+BlockVectorWrapper<TraitsType>&
+BlockVectorWrapper<TraitsType>
+::operator= (const double s)
+{
+    TraitsType::Vector::operator=(s);
+    return *this;
+}
+
+
+template <typename TraitsType>
+BlockVectorWrapper<TraitsType>&
+BlockVectorWrapper<TraitsType>
+::operator= (const BlockVectorWrapper<TraitsType>& v)
+{
+    TraitsType::Vector::operator=(static_cast<const typename TraitsType::Vector&>(v));
+    return *this;
+}
+
 
 
 template class la::BlockVectorWrapper<la::Traits<TagSerial>>;

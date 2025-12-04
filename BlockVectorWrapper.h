@@ -50,6 +50,9 @@ public:
     
     void reinit();
     
+    BlockVectorWrapper&     operator= (const double s);
+    BlockVectorWrapper&     operator= (const BlockVectorWrapper& v);
+    
 };
 
 
