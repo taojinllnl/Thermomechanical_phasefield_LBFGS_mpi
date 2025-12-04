@@ -11,8 +11,6 @@
 #include <deal.II/lac/generic_linear_algebra.h>
 
 
-namespace PhaseField_monolithic
-{
 //
 //namespace mpi
 //{
@@ -91,5 +89,5 @@ struct Traits<TagTrilinos>
 #endif
 
 }
-}
+
 #endif /* Traits_h */
