@@ -29,7 +29,7 @@ template <typename TraitsType>
 class BlockSparseMatrixWrapper
 : public TraitsType::Matrix
 {
-private:
+public:
     using MatType       = typename TraitsType::Matrix;
     using CouplingItem  = dealii::DoFTools::Coupling;
     using Coupling      = dealii::Table<2, CouplingItem>;
@@ -38,7 +38,7 @@ private:
     
     
     
-    
+private:
     static Coupling __couplingInit(const BlockDesc& blockDesc,
                                    const CouplingFunc& func);
     
@@ -53,8 +53,8 @@ public:
     
     BlockSparseMatrixWrapper() = delete;
     BlockSparseMatrixWrapper(const MPIInfo& mpiInfo,
-                               const BlockDesc& blockDesc,
-                               const CouplingFunc& func);
+                             const BlockDesc& blockDesc,
+                             const CouplingFunc& func);
     
     
     template <int dim, int spacedim=dim>
