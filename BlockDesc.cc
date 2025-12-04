@@ -112,7 +112,7 @@ BlockDesc::dofsPerBlock() const
 }
 
 const std::vector<BlockDesc::IndexSet>*
-BlockDesc::ownedPartitionint() const
+BlockDesc::ownedPartition() const
 {
     if (!__mpiInfo.isMPI() || !__owned_partitioning) 
     {
@@ -123,7 +123,7 @@ BlockDesc::ownedPartitionint() const
 }
 
 const std::vector<BlockDesc::IndexSet>*
-BlockDesc::relevantPartitionint() const
+BlockDesc::relevantPartition() const
 {
     if (!__mpiInfo.isMPI() || !__relevant_partitioning) 
     {

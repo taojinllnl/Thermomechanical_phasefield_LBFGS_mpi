@@ -98,8 +98,8 @@ public:
     
     const std::vector<dealii::types::global_dof_index>* dofsPerBlock() const;
     
-    const std::vector<IndexSet>* ownedPartitionint() const;
-    const std::vector<IndexSet>* relevantPartitionint() const;
+    const std::vector<IndexSet>* ownedPartition() const;
+    const std::vector<IndexSet>* relevantPartition() const;
     
     void summary(std::ostream& stream);
 };
@@ -123,6 +123,7 @@ void BlockDesc::updateDoFsInfo(dealii::DoFHandler<dim, spacedim>& dof_handler)
     
     if (__mpiInfo.isMPI())
     {
+        /*  *  *  *   *   *   *   *   *  MPI  *   *   *   *   *   *   *   *   */
         if (!__owned_partitioning)
         {
             __owned_partitioning =
