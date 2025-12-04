@@ -41,6 +41,24 @@ BlockSparseMatrixWrapper<TraitsType>
 {}
 
 
+template <typename TraitsType>
+BlockSparseMatrixWrapper<TraitsType>&
+BlockSparseMatrixWrapper<TraitsType>
+::operator= (const BlockSparseMatrixWrapper<TraitsType>&  m)
+{
+    TraitsType::Matrix::operator=(static_cast<const typename TraitsType::Matrix&>(m));
+    return *this;
+}
+
+
+template <typename TraitsType>
+BlockSparseMatrixWrapper<TraitsType>&
+BlockSparseMatrixWrapper<TraitsType>
+::operator= (const double d)
+{
+    TraitsType::Matrix::operator=(d);
+    return *this;
+}
 
 
 

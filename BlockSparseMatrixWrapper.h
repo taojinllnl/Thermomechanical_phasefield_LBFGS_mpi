@@ -63,6 +63,9 @@ public:
               const bool keep_constrained_dofs = true,
               const dealii::types::subdomain_id subdomain_id = dealii::numbers::invalid_subdomain_id );
     
+    
+    BlockSparseMatrixWrapper& operator= (const BlockSparseMatrixWrapper&  m);
+    BlockSparseMatrixWrapper& operator= (const double d);
 };
 
 
