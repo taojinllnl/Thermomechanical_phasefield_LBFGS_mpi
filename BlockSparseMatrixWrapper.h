@@ -82,8 +82,22 @@ BlockSparsityMatrixWrapper<TraitsType>
     
     if constexpr (std::is_same_v<MatType, dealii::BlockSparseMatrix<double>>)
     {
-        // TODO: serial version
-    } else { 
+        /*  *  *  *   *   *   *  serial version   *   *   *   *   *   *   *   */
+        BlockDynamicSparsityPattern dsp(__blockDesc.dofsPerBlock(),
+                                        __blockDesc.dofsPerBlock());
+        
+        DoFTools::make_sparsity_pattern(dof_handler,
+                                        __coupling,
+                                        dsp, 
+                                        constraints,
+                                        keep_constrained_dofs,
+                                        subdomain_id);
+        
+        __sparsity_pattern.copy_from(dsp);
+
+        TraitsType::Matrix::reinit(dsp);
+        /*  *  *  *   *   *   *  serial version   *   *   *   *   *   *   *   */
+    } else {
         if(!__mpiInfo.isMPI())
         {
             return;
