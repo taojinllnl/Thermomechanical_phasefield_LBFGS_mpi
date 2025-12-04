@@ -3330,25 +3330,33 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
 	      << m_dofs_per_block[m_t_dof]
               << std::endl;
 
-    m_tangent_matrix.clear();
-    {
-      BlockDynamicSparsityPattern dsp(m_dofs_per_block, m_dofs_per_block);
+//
+//    m_tangent_matrix.clear();
+//    {
+//      BlockDynamicSparsityPattern dsp(m_dofs_per_block, m_dofs_per_block);
+//
+//      Table<2, DoFTools::Coupling> coupling(m_n_components, m_n_components);
+//      for (unsigned int ii = 0; ii < m_n_components; ++ii)
+//        for (unsigned int jj = 0; jj < m_n_components; ++jj)
+//          coupling[ii][jj] = DoFTools::always;
+//
+//      DoFTools::make_sparsity_pattern(
+//        m_dof_handler, coupling, dsp, m_constraints, false);
+//      m_sparsity_pattern.copy_from(dsp);
+//    }
+//
+//    m_tangent_matrix.reinit(m_sparsity_pattern);
+      
 
-      Table<2, DoFTools::Coupling> coupling(m_n_components, m_n_components);
-      for (unsigned int ii = 0; ii < m_n_components; ++ii)
-        for (unsigned int jj = 0; jj < m_n_components; ++jj)
-          coupling[ii][jj] = DoFTools::always;
+//    m_system_rhs.reinit(m_dofs_per_block);
+//    m_solution.reinit(m_dofs_per_block);
 
-      DoFTools::make_sparsity_pattern(
-        m_dof_handler, coupling, dsp, m_constraints, false);
-      m_sparsity_pattern.copy_from(dsp);
-    }
-
-    m_tangent_matrix.reinit(m_sparsity_pattern);
-
-    m_system_rhs.reinit(m_dofs_per_block);
-    m_solution.reinit(m_dofs_per_block);
-
+      
+      m_tangent_matrix.init(m_dof_handler, m_constraints, false);
+      
+      m_system_rhs.reinit();
+      m_solution.reinit();
+      
     setup_qph();
 
     m_timer.leave_subsection();
@@ -5584,8 +5592,9 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
   {
     m_timer.enter_subsection("Calculate reaction force");
 
-    BVector       system_rhs;
-    system_rhs.reinit(m_dofs_per_block);
+    BVector       system_rhs(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
+//    system_rhs.reinit(m_dofs_per_block);
+      system_rhs.reinit();
 
     Vector<double> cell_rhs(m_dofs_per_cell);
     std::vector<types::global_dof_index> local_dof_indices(m_dofs_per_cell);
@@ -5955,8 +5964,10 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
 	    constraints.close();
 
 	    std::vector<BVector> tmp_solutions(2);
-	    tmp_solutions[0].reinit(m_dofs_per_block);
-	    tmp_solutions[1].reinit(m_dofs_per_block);
+//	    tmp_solutions[0].reinit(m_dofs_per_block);
+//	    tmp_solutions[1].reinit(m_dofs_per_block);
+          tmp_solutions[0].reinit();
+          tmp_solutions[1].reinit();
 
 	    Vector<double> new_history_variable_field_L2;
 	    new_history_variable_field_L2.reinit(dof_handler_L2.n_dofs());
