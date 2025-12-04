@@ -120,6 +120,8 @@
 
 
 #include "BlockVectorWrapper.h"
+#include "BlockSparseMatrixWrapper.h"
+#include "BlockDesc.h"
 
 namespace PhaseField_monolithic
 {
@@ -1233,6 +1235,9 @@ namespace PhaseField_monolithic
   class PhaseFieldMonolithicSolve
   {
   public:
+      using BSMatrix = la::BlockSparseMatrixWrapper<LATraits>;
+      using BVector  = la::BlockVectorWrapper<LATraits>;
+      
       PhaseFieldMonolithicSolve(const Parameters::AllParameters& parameters,
                                 const MPIInfo& mpiInfo);
 
@@ -1268,6 +1273,8 @@ namespace PhaseField_monolithic
       
 //    mutable TimerOutput m_timer;
       mutable TimerOutputWrapper m_timer;
+      
+      BlockDesc                     m_blocks_desc;
 
     DoFHandler<dim>                  m_dof_handler;
     FESystem<dim>                    m_fe;
@@ -1299,9 +1306,12 @@ namespace PhaseField_monolithic
 
     AffineConstraints<double> m_constraints;
     BlockSparsityPattern      m_sparsity_pattern;
-    BlockSparseMatrix<double> m_tangent_matrix;
-    BlockVector<double>       m_system_rhs;
-    BlockVector<double>       m_solution;
+//    BlockSparseMatrix<double> m_tangent_matrix;
+    BSMatrix                  m_tangent_matrix;
+//    BlockVector<double>       m_system_rhs;
+    BVector                   m_system_rhs;
+//    BlockVector<double>       m_solution;
+    BVector                   m_solution;
     SparseDirectUMFPACK       m_A_direct;
 
 
@@ -1702,7 +1712,7 @@ namespace PhaseField_monolithic
   BlockVector<double> PhaseFieldMonolithicSolve<LATraits, dim>::get_total_solution(
     const BlockVector<double> &solution_delta) const
   {
-    BlockVector<double> solution_total(m_solution);
+    BVector solution_total(m_solution);
     solution_total += solution_delta;
     return solution_total;
   }
@@ -2132,6 +2142,12 @@ namespace PhaseField_monolithic
     , m_logfile(__ofstream, mpiInfo.rank() == 0)
 //    , m_timer(*m_mpiInfo.mpiComm(), m_logfile, TimerOutput::summary, TimerOutput::wall_times)
     , m_timer(m_logfile, m_mpiInfo, TimerOutput::summary, TimerOutput::wall_times)
+    , m_blocks_desc(m_mpiInfo,
+                    {
+        BlockDesc::Block(dim, "displacement"),
+        BlockDesc::Block(1,   "phase-field"),
+        BlockDesc::Block(1,   "temperature")
+        })
     , m_dof_handler(m_triangulation)
     , m_fe(FE_Q<dim>(m_parameters.m_poly_degree),
 	   dim, // displacement
@@ -2148,6 +2164,10 @@ namespace PhaseField_monolithic
     , m_qf_face(m_parameters.m_quad_order)
     , m_n_q_points(m_qf_cell.size())
     , m_vol_reference(0.0)
+    , m_tangent_matrix(m_mpiInfo, m_blocks_desc,
+                       [](unsigned int, unsigned int){return DoFTools::always;})
+    , m_system_rhs(m_mpiInfo, m_blocks_desc, true)
+    , m_solution(m_mpiInfo, m_blocks_desc, true)
   {}
 
   template <typename LATraits, int dim>
