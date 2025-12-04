@@ -1235,11 +1235,11 @@ namespace PhaseField_monolithic
   class PhaseFieldMonolithicSolve
   {
   public:
-//      using BSMatrix = la::BlockSparseMatrixWrapper<LATraits>;
-//      using BVector  = la::BlockVectorWrapper<LATraits>;
+      using BSMatrix = la::BlockSparseMatrixWrapper<LATraits>;
+      using BVector  = la::BlockVectorWrapper<LATraits>;
       
-      using BSMatrix = BlockSparseMatrix<double>;
-      using BVector  = BlockVector<double>;
+//      using BSMatrix = BlockSparseMatrix<double>;
+//      using BVector  = BlockVector<double>;
       
       PhaseFieldMonolithicSolve(const Parameters::AllParameters& parameters,
                                 const MPIInfo& mpiInfo);
@@ -1500,7 +1500,7 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
   template <typename LATraits, int dim>
   void PhaseFieldMonolithicSolve<LATraits, dim>::get_error_residual(Errors &error_residual)
   {
-    BVector error_res(m_dofs_per_block);
+    BVector error_res(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
 
     for (unsigned int i = 0; i < m_dof_handler.n_dofs(); ++i)
       if (!m_constraints.is_constrained(i))
@@ -1516,7 +1516,7 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
   void PhaseFieldMonolithicSolve<LATraits, dim>::get_error_update(const BVector &soln_update,
                                                         Errors & error_update)
   {
-    BVector error_ud(m_dofs_per_block);
+    BVector error_ud(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
     for (unsigned int i = 0; i < m_dof_handler.n_dofs(); ++i)
       if (!m_constraints.is_constrained(i))
         error_ud(i) = soln_update(i);
@@ -2180,10 +2180,10 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
     , m_qf_face(m_parameters.m_quad_order)
     , m_n_q_points(m_qf_cell.size())
     , m_vol_reference(0.0)
-//    , m_tangent_matrix(m_mpiInfo, m_blocks_desc,
-//                       [](unsigned int, unsigned int){return DoFTools::always;})
-//    , m_system_rhs(m_mpiInfo, m_blocks_desc, true)
-//    , m_solution(m_mpiInfo, m_blocks_desc, true)
+    , m_tangent_matrix(m_mpiInfo, m_blocks_desc,
+                       [](unsigned int, unsigned int){return DoFTools::always;})
+    , m_system_rhs(m_mpiInfo, m_blocks_desc, /*relevance=*/ true)
+    , m_solution(m_mpiInfo, m_blocks_desc, /*relevance=*/ true)
   {}
 
   template <typename LATraits, int dim>
@@ -4571,10 +4571,10 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
 
     update_qph_incremental(solution_delta_trial, m_solution, false);
 
-    BVector g_new(m_dofs_per_block);
+    BVector g_new(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
     assemble_system_rhs_LBFGS_parallel(m_solution, g_new);
 
-    BVector y_old(m_dofs_per_block);
+    BVector y_old(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
 
     y_old = g_new - g_old;
 
@@ -5050,7 +5050,7 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
   solve_nonlinear_timestep_LBFGS(BVector & solution_delta,
 				 BVector & LBFGS_update_refine)
   {
-    BVector LBFGS_update(m_dofs_per_block);
+    BVector LBFGS_update(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
 
     LBFGS_update = 0.0;
 
@@ -5066,10 +5066,10 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
 
     unsigned int LBFGS_iteration = 0;
 
-    BVector LBFGS_r_vector(m_dofs_per_block);
-    BVector LBFGS_y_vector(m_dofs_per_block);
-    BVector LBFGS_q_vector(m_dofs_per_block);
-    BVector LBFGS_s_vector(m_dofs_per_block);
+    BVector LBFGS_r_vector(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
+    BVector LBFGS_y_vector(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
+    BVector LBFGS_q_vector(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
+    BVector LBFGS_s_vector(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
     std::list<std::pair< std::pair<BVector,
                                    BVector>,
                          double>> LBFGS_vector_list;
@@ -5852,7 +5852,7 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
 									  BVector & LBFGS_update_refine)
   {
     // This is the solution at (n+1) obtained from the old (coarse) mesh
-    BVector solution_next_step(m_dofs_per_block);
+    BVector solution_next_step(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
     solution_next_step = m_solution + solution_delta;
     bool mesh_is_same = true;
     bool cell_refine_flag = true;
@@ -6016,8 +6016,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
     // calculate field variables for newly refined cells
     if (!mesh_is_same)
       {
-	BVector temp_solution_delta(m_dofs_per_block);
-	BVector temp_previous_solution(m_dofs_per_block);
+	BVector temp_solution_delta(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
+	BVector temp_previous_solution(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
 	temp_solution_delta = 0.0;
 	temp_previous_solution = 0.0;
 	update_qph_incremental(temp_solution_delta, temp_previous_solution, false);
@@ -6129,7 +6129,7 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
         bool mesh_is_same = false;
 
         // initial guess for the resolve on the refined mesh
-	BVector LBFGS_update_refine(m_dofs_per_block);
+	BVector LBFGS_update_refine(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
 	LBFGS_update_refine = 0.0;
 
         // local adaptive mesh refinement loop
@@ -6139,7 +6139,7 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
 	    if (m_parameters.m_refinement_strategy == "adaptive-refine")
 	      m_logfile << "\tAdaptive refinement-"<< adp_refine_iteration << ": " << std::endl;
 
-	    BVector solution_delta(m_dofs_per_block);
+	    BVector solution_delta(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
 	    solution_delta = 0.0;
 
 	    if (m_parameters.m_type_nonlinear_solver == "LBFGS")
