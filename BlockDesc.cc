@@ -8,9 +8,11 @@
 
 
 BlockDesc::Block::Block(const unsigned int dim,
+                        const unsigned int groupID,
                         const std::string& name)
 : dim(dim)
 , name(name)
+, groupID(groupID)
 {}
 
 
@@ -56,14 +58,33 @@ BlockDesc
 }
 
 
-BlockDesc::BlockDesc(const MPIInfo&                     mpiInfo,
-                     const std::initializer_list<Block> blocks)
+std::vector<BlockDesc::Block>
+BlockDesc
+::__blockInit(const std::initializer_list<InitType>& blocks)
+{
+    std::vector<Block> blockList;
+
+    unsigned int i = 0;
+    
+    for(const InitType& init : blocks)
+    {
+        blockList.emplace_back(init.first, i, init.second);
+        
+        ++i;
+    }
+    
+    return blockList;
+}
+
+
+BlockDesc::BlockDesc(const MPIInfo&                         mpiInfo,
+                     const std::initializer_list<InitType>  blocks)
 : __mpiInfo(mpiInfo)
-, __blocks(blocks)
+, __blocks(BlockDesc::__blockInit(blocks))
 , __nBlocks(__blocks.size())
-, __dimRange(BlockDesc::__dimRangeInit(blocks))
-, __nComponents(BlockDesc::__nComponentsInit(blocks))
-, __groupIDs(BlockDesc::__groupIDsInit(blocks))
+, __dimRange(BlockDesc::__dimRangeInit(__blocks))
+, __nComponents(BlockDesc::__nComponentsInit(__blocks))
+, __groupIDs(BlockDesc::__groupIDsInit(__blocks))
 {}
 
 
@@ -93,6 +114,18 @@ const std::vector<unsigned int>& BlockDesc::groupIDs() const
 unsigned int BlockDesc::ithGroupID(const unsigned int ithComponent) const
 {
     return __groupIDs[ithComponent];
+}
+
+unsigned int BlockDesc::ithGroupID(const std::string& name) const
+{
+    for (const Block& block : __blocks)
+    {
+        if (block.name == name) {
+            return block.groupID;
+        }
+    }
+    // TODO: ERROR
+    return 0;
 }
 
 std::size_t BlockDesc::nBlocks() const
@@ -153,7 +186,7 @@ void BlockDesc::summary(std::ostream& stream)
     for (unsigned int i = 0; i < __nBlocks; ++i)
     {
         stream << "\tBlock No. " << i << ":\n\t\tdim: " << __blocks[i].dim
-        << "\tname: " << __blocks[i].name;
+        << "\tname: " << __blocks[i].name << "\tgroup ID: " << __blocks[i].groupID;
         stream << "\n\t\tdim range: [ " << __dimRange[i][0] <<  ", " << __dimRange[i][1] << " ) " << std::endl;
     }
     

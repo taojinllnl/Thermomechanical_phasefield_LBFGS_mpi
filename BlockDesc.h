@@ -12,6 +12,7 @@
 #include <initializer_list>
 #include <ostream>
 
+#include <utility>
 #include <memory>
 #include "MPIInfo.h"
 
@@ -32,12 +33,18 @@
 
 class BlockDesc
 {
+private:
+    using IndexSet = dealii::IndexSet;
+    using InitType = std::pair<unsigned int, std::string>;
+    
 public:
     struct Block {
         const unsigned int dim;
         const std::string  name;
+        const unsigned int groupID;
         
         Block(const unsigned int dim,
+              const unsigned int groupID,
               const std::string& name = "N/A");
     };
     
@@ -50,9 +57,9 @@ private:
     
     static std::vector<unsigned int> __groupIDsInit(const std::vector<Block>& blocks);
 
-private:
-    using IndexSet = dealii::IndexSet;
+    static std::vector<Block> __blockInit(const std::initializer_list<InitType>& blocks);
     
+private:
     
     const MPIInfo&                                        __mpiInfo;
     
@@ -82,8 +89,8 @@ private:
     
 public:
     
-    BlockDesc(const MPIInfo&                     mpiInfo,
-              const std::initializer_list<Block> blocks);
+    BlockDesc(const MPIInfo&                            mpiInfo,
+              const std::initializer_list<InitType>     blocks);
     
     const std::vector<std::array<unsigned int, 2>>& dimRange() const;
     const std::array<unsigned int, 2>& dimRange(unsigned int ithGroup) const;
@@ -94,6 +101,7 @@ public:
     
     const std::vector<unsigned int>& groupIDs() const;
     unsigned int ithGroupID(const unsigned int ithComponent) const;
+    unsigned int ithGroupID(const std::string& name) const;
 
     
     template <int dim, int spacedim=dim>
