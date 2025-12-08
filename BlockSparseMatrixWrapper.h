@@ -66,6 +66,10 @@ public:
     
     BlockSparseMatrixWrapper& operator= (const BlockSparseMatrixWrapper&  m);
     BlockSparseMatrixWrapper& operator= (const double d);
+    
+    
+    typename TraitsType::Matrix& base();
+    const typename TraitsType::Matrix& base() const;
 };
 
 
@@ -86,8 +90,9 @@ BlockSparseMatrixWrapper<TraitsType>
     if constexpr (std::is_same_v<MatType, dealii::BlockSparseMatrix<double>>)
     {
         /*  *  *  *   *   *   *  serial version   *   *   *   *   *   *   *   */
-        BlockDynamicSparsityPattern dsp(__blockDesc.dofsPerBlock(),
-                                        __blockDesc.dofsPerBlock());
+        BlockDynamicSparsityPattern dsp(*__blockDesc.dofsPerBlock(),
+                                        *__blockDesc.dofsPerBlock());
+        
         
         DoFTools::make_sparsity_pattern(dof_handler,
                                         __coupling,
@@ -97,8 +102,9 @@ BlockSparseMatrixWrapper<TraitsType>
                                         subdomain_id);
         
         __sparsity_pattern.copy_from(dsp);
-
-        TraitsType::Matrix::reinit(dsp);
+        
+        
+        TraitsType::Matrix::reinit(__sparsity_pattern);
         /*  *  *  *   *   *   *  serial version   *   *   *   *   *   *   *   */
     } else {
         if(!__mpiInfo.isMPI())

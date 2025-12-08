@@ -60,6 +60,22 @@ BlockSparseMatrixWrapper<TraitsType>
     return *this;
 }
 
+template <typename TraitsType>
+typename TraitsType::Matrix& 
+BlockSparseMatrixWrapper<TraitsType>
+::base()
+{
+    return *this;
+}
+
+template <typename TraitsType>
+const typename TraitsType::Matrix& 
+BlockSparseMatrixWrapper<TraitsType>
+::base() const
+{
+    return *this;
+}
+
 
 
 template class la::BlockSparseMatrixWrapper<la::Traits<TagSerial>>;

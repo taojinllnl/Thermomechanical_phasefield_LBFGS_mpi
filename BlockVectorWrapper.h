@@ -48,11 +48,14 @@ public:
     bool hasRelevance() const;
     
     
-    void reinit();
+    void initalize();
     
     BlockVectorWrapper&     operator= (const double s);
     BlockVectorWrapper&     operator= (const BlockVectorWrapper& v);
     
+    
+    typename TraitsType::Vector& base();
+    const typename TraitsType::Vector& base() const;
 };
 
 

@@ -67,7 +67,7 @@ BlockVectorWrapper<TraitsType>
 template <typename TraitsType>
 void
 BlockVectorWrapper<TraitsType>
-::reinit()
+::initalize()
 {
     
     if constexpr (std::is_same_v<VecType, dealii::BlockVector<double>>)
@@ -123,6 +123,22 @@ BlockVectorWrapper<TraitsType>
     return *this;
 }
 
+
+template <typename TraitsType>
+typename TraitsType::Vector& 
+BlockVectorWrapper<TraitsType>
+::base()
+{
+    return *this;
+}
+
+template <typename TraitsType>
+const typename TraitsType::Vector& 
+BlockVectorWrapper<TraitsType>
+::base() const
+{
+    return *this;
+}
 
 
 template class la::BlockVectorWrapper<la::Traits<TagSerial>>;
