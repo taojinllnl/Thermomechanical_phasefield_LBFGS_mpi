@@ -11,10 +11,13 @@
 
 #include <ostream>
 #include <memory>
+#include <map>
+
+#include "Traits.h"
 
 #include "MPIInfo.h"
 
-
+template <typename LATraits>
 class TimerOutputWrapper
 {
 private:
@@ -22,11 +25,14 @@ private:
     using OutputFrequency   =  dealii::TimerOutput::OutputFrequency;
     using OutputType        =  dealii::TimerOutput::OutputType;
     using OutputData        =  dealii::TimerOutput::OutputData;
+    using Scope             =  dealii::TimerOutput::Scope;
     
     const MPIInfo&                          __mpiInfo;
     
     std::unique_ptr<dealii::TimerOutput>    __timerPtr;
     
+    
+    std::map<std::string, std::unique_ptr<Scope>>   __scopeMap;
     
 public:
     virtual ~TimerOutputWrapper() = default;

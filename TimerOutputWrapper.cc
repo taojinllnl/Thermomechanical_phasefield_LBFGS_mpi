@@ -11,7 +11,8 @@ using OutputFrequency   =  dealii::TimerOutput::OutputFrequency;
 using OutputType        =  dealii::TimerOutput::OutputType;
 using OutputData        =  dealii::TimerOutput::OutputData;
 
-TimerOutputWrapper
+template <typename LATraits>
+TimerOutputWrapper<LATraits>
 ::TimerOutputWrapper(std::ostream&  stream,
                      const MPIInfo& mpiInfo,
                      const OutputFrequency output_frequency,
@@ -31,7 +32,8 @@ TimerOutputWrapper
     
 }
 
-TimerOutputWrapper
+template <typename LATraits>
+TimerOutputWrapper<LATraits>
 ::TimerOutputWrapper(ConditionalOStream &stream,
                      const MPIInfo& mpiInfo,
                      const OutputFrequency output_frequency,
@@ -51,9 +53,9 @@ TimerOutputWrapper
 }
 
 
-
+template <typename LATraits>
 TimerOutput&
-TimerOutputWrapper
+TimerOutputWrapper<LATraits>
 ::timer()
 {
     return *__timerPtr;
@@ -61,61 +63,92 @@ TimerOutputWrapper
 
 
 
-
-void     
-TimerOutputWrapper
+template <typename LATraits>
+void
+TimerOutputWrapper<LATraits>
 ::enter_subsection (const std::string& section_name)
 {
-    __timerPtr->enter_subsection(section_name);
+    if constexpr (std::is_same_v<la::Traits<la::TagSerial>, LATraits>) {
+        __timerPtr->enter_subsection(section_name);
+    } else {
+        __scopeMap[section_name] = std::make_unique<Scope>(timer(), section_name);
+    }
 }
 
-
+template <typename LATraits>
 void
-TimerOutputWrapper
+TimerOutputWrapper<LATraits>
 ::leave_subsection (const std::string& section_name)
 {
-    __timerPtr->leave_subsection(section_name);
+    if constexpr (std::is_same_v<la::Traits<la::TagSerial>, LATraits>) {
+        __timerPtr->leave_subsection(section_name);
+    } else {
+        auto scopePtr = __scopeMap.find(section_name);
+        if (scopePtr != __scopeMap.end() && scopePtr->second)
+        {
+            scopePtr->second.reset();
+            __scopeMap.erase(scopePtr);
+        }
+        else
+        {
+            AssertThrow(false,
+                        ExcMessage("leave_subsection called on unopened section"));
+        }
+    }
 }
 
-std::map< std::string, double >     
-TimerOutputWrapper
+template <typename LATraits>
+std::map< std::string, double >
+TimerOutputWrapper<LATraits>
 ::get_summary_data (const OutputData kind) const
 {
     return __timerPtr->get_summary_data(kind);
 }
 
-void     
-TimerOutputWrapper
+template <typename LATraits>
+void
+TimerOutputWrapper<LATraits>
 ::print_summary () const
 {
     __timerPtr->print_summary();
 }
 
-void     
-TimerOutputWrapper
+template <typename LATraits>
+void
+TimerOutputWrapper<LATraits>
 ::print_wall_time_statistics (const double print_quantile) const
 {
     __timerPtr->print_wall_time_statistics(*__mpiInfo.mpiCommPtr(),
                                            print_quantile);
 }
 
-void     
-TimerOutputWrapper
+template <typename LATraits>
+void
+TimerOutputWrapper<LATraits>
 ::disable_output ()
 {
     __timerPtr->disable_output();
 }
 
-void     
-TimerOutputWrapper
+template <typename LATraits>
+void
+TimerOutputWrapper<LATraits>
 ::enable_output ()
 {
     __timerPtr->enable_output();
 }
 
-void     
-TimerOutputWrapper
+template <typename LATraits>
+void
+TimerOutputWrapper<LATraits>
 ::reset ()
 {
     __timerPtr->reset();
 }
+
+
+
+
+template class TimerOutputWrapper<la::Traits<la::TagSerial>>;
+template class TimerOutputWrapper<la::Traits<la::TagPETSc>>;
+template class TimerOutputWrapper<la::Traits<la::TagTrilinos>>;
