@@ -106,6 +106,12 @@ unsigned int BlockDesc::nComponents() const
     return __nComponents;
 }
 
+
+std::size_t BlockDesc::nGroups() const
+{
+    return __groupIDs.size();
+}
+
 const std::vector<unsigned int>& BlockDesc::groupIDs() const
 {
     return __groupIDs;

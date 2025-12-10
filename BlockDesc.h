@@ -98,7 +98,7 @@ public:
     std::size_t nBlocks() const;
     unsigned int nComponents() const;
     
-    
+    std::size_t nGroups() const;
     const std::vector<unsigned int>& groupIDs() const;
     unsigned int ithGroupID(const unsigned int ithComponent) const;
     unsigned int ithGroupID(const std::string& name) const;
