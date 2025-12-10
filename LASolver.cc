@@ -22,10 +22,10 @@ Tol::Tol(const unsigned int nIters,
 template <typename LATraits>
 LASolver<LATraits>
 ::LASolver(const SolverType&   type,
-          const double        cg_u_tol,
-          const double        cg_d_tol,
-          const double        cg_T_tol,
-          const BlockDesc&    blockDesc)
+           const double        cg_u_tol,
+           const double        cg_d_tol,
+           const double        cg_T_tol,
+           const BlockDesc&    blockDesc)
 : __type(type)
 , __cg_u_tol(cg_u_tol)
 , __cg_d_tol(cg_d_tol)
@@ -46,10 +46,10 @@ LASolver<LATraits>
 
 
 template <typename LATraits>
-void 
+void
 LASolver<LATraits>::solve(BVector & LBFGS_r_vector,
-                         BVector & LBFGS_q_vector,
-                         BSMatrix& tangent_matrix)
+                          const BVector & LBFGS_q_vector,
+                          const BSMatrix& tangent_matrix)
 {
     if (__type == SolverType::Direct) {
         __directSolve(LBFGS_r_vector, LBFGS_q_vector, tangent_matrix);
@@ -63,8 +63,8 @@ LASolver<LATraits>::solve(BVector & LBFGS_r_vector,
 template <typename LATraits>
 void
 LASolver<LATraits>::__directSolve(BVector & LBFGS_r_vector,
-                                 BVector & LBFGS_q_vector,
-                                 BSMatrix& tangent_matrix)
+                                  const BVector & LBFGS_q_vector,
+                                  const BSMatrix& tangent_matrix)
 {
     using namespace dealii;
     if constexpr (std::is_same_v<typename LATraits::TMTag, ::la::TagSerial>) {
@@ -78,27 +78,27 @@ LASolver<LATraits>::__directSolve(BVector & LBFGS_r_vector,
         // Performing LU decomposition on each block is much faster than
         // performing LU decomposition on the whole system
         
-//        {
-//            SparseDirectUMFPACK A_direct_u;
-//            A_direct_u.initialize(tangent_matrix.block(__u_group_ID, __u_group_ID));
-//            A_direct_u.vmult(LBFGS_r_vector.block(__u_group_ID),
-//                             LBFGS_q_vector.block(__u_group_ID));
-//        }
-//        
-//        {
-//            SparseDirectUMFPACK A_direct_d;
-//            A_direct_d.initialize(tangent_matrix.block(__d_group_ID, __d_group_ID));
-//            A_direct_d.vmult(LBFGS_r_vector.block(__d_group_ID),
-//                             LBFGS_q_vector.block(__d_group_ID));
-//        }
-//        
-//        {
-//            SparseDirectUMFPACK A_direct_t;
-//            A_direct_t.initialize(tangent_matrix.block(__T_group_ID, __T_group_ID));
-//            A_direct_t.vmult(LBFGS_r_vector.block(__T_group_ID),
-//                             LBFGS_q_vector.block(__T_group_ID));
-//        }
-        for (const unsigned int ithGroup : __blockDesc.groupIDs()) 
+        //        {
+        //            SparseDirectUMFPACK A_direct_u;
+        //            A_direct_u.initialize(tangent_matrix.block(__u_group_ID, __u_group_ID));
+        //            A_direct_u.vmult(LBFGS_r_vector.block(__u_group_ID),
+        //                             LBFGS_q_vector.block(__u_group_ID));
+        //        }
+        //
+        //        {
+        //            SparseDirectUMFPACK A_direct_d;
+        //            A_direct_d.initialize(tangent_matrix.block(__d_group_ID, __d_group_ID));
+        //            A_direct_d.vmult(LBFGS_r_vector.block(__d_group_ID),
+        //                             LBFGS_q_vector.block(__d_group_ID));
+        //        }
+        //
+        //        {
+        //            SparseDirectUMFPACK A_direct_t;
+        //            A_direct_t.initialize(tangent_matrix.block(__T_group_ID, __T_group_ID));
+        //            A_direct_t.vmult(LBFGS_r_vector.block(__T_group_ID),
+        //                             LBFGS_q_vector.block(__T_group_ID));
+        //        }
+        for (const unsigned int ithGroup : __blockDesc.groupIDs())
         {
             SparseDirectUMFPACK A_direct;
             A_direct.initialize(tangent_matrix.block(ithGroup, ithGroup));
@@ -135,20 +135,20 @@ LASolver<LATraits>::__directSolve(BVector & LBFGS_r_vector,
             
         }
         
-//        SolverControl solver_control_uu(1e6, __cg_u_tol);
-//        SolverControl solver_control_dd(1e6, __cg_d_tol);
-//        SolverControl solver_control_TT(1e6, __cg_T_tol);
-//        MPIPreconditionerGen<LATraits> precond_uu(m_parameters.m_preconditioner_type,
-//                                           tangent_matrix.block(__u_group_ID, __u_group_ID));
-//        
-//        MPIPreconditionerGen<LATraits> precond_dd(m_parameters.m_preconditioner_type,
-//                                                       tangent_matrix.block(__d_group_ID, __d_group_ID));
-//        {
-//            InverseMatrix<LA::MPI::SparseMatrix, LA::PreconditionBase> A_direct_uu(tangent_matrix.block(__u_group_ID, __u_group_ID), precond_uu.preconditioner());
-//            A_direct_uu.vmult(solver_control_uu,
-//                              LBFGS_r_vector.block(__u_group_ID),
-//                              LBFGS_q_vector.block(__u_group_ID));
-//        }
+        //        SolverControl solver_control_uu(1e6, __cg_u_tol);
+        //        SolverControl solver_control_dd(1e6, __cg_d_tol);
+        //        SolverControl solver_control_TT(1e6, __cg_T_tol);
+        //        MPIPreconditionerGen<LATraits> precond_uu(m_parameters.m_preconditioner_type,
+        //                                           tangent_matrix.block(__u_group_ID, __u_group_ID));
+        //
+        //        MPIPreconditionerGen<LATraits> precond_dd(m_parameters.m_preconditioner_type,
+        //                                                       tangent_matrix.block(__d_group_ID, __d_group_ID));
+        //        {
+        //            InverseMatrix<LA::MPI::SparseMatrix, LA::PreconditionBase> A_direct_uu(tangent_matrix.block(__u_group_ID, __u_group_ID), precond_uu.preconditioner());
+        //            A_direct_uu.vmult(solver_control_uu,
+        //                              LBFGS_r_vector.block(__u_group_ID),
+        //                              LBFGS_q_vector.block(__u_group_ID));
+        //        }
     } else if constexpr (std::is_same_v<typename LATraits::TMTag, ::la::TagTrilinos>) {
         using PrecJacobi = dealii::TrilinosWrappers::PreconditionBlockJacobi;
         using PrecILU    = dealii::TrilinosWrappers::PreconditionILU;
@@ -159,7 +159,7 @@ LASolver<LATraits>::__directSolve(BVector & LBFGS_r_vector,
         using PrecShebs  = dealii::TrilinosWrappers::PreconditionChebyshev;
         using PrecI      = dealii::TrilinosWrappers::PreconditionIdentity;
         using MatBlock   = typename LATraits::MatrixBlock;
-       
+        
         using InverseMatrix = InverseMatrix<MatBlock, PrecJacobi>;
         
         for (const unsigned int ithGroup : __blockDesc.groupIDs())
@@ -190,8 +190,8 @@ LASolver<LATraits>::__directSolve(BVector & LBFGS_r_vector,
 template <typename LATraits>
 void
 LASolver<LATraits>::__cgSolve(BVector & LBFGS_r_vector,
-                             BVector & LBFGS_q_vector,
-                             BSMatrix& tangent_matrix)
+                              const BVector & LBFGS_q_vector,
+                              const BSMatrix& tangent_matrix)
 {
     using namespace dealii;
     if constexpr (std::is_same_v<typename LATraits::TMTag, ::la::TagSerial>) {
@@ -207,35 +207,35 @@ LASolver<LATraits>::__cgSolve(BVector & LBFGS_r_vector,
          LBFGS_q_vector,
          preconditioner);
          */
-//        SolverControl            solver_control_uu(1e6, __cg_u_tol);
-//        SolverCG<Vector<double>> cg_uu(solver_control_uu);
-//        
-//        PreconditionJacobi<SparseMatrix<double>> preconditioner_uu;
-//        preconditioner_uu.initialize(tangent_matrix.block(__u_group_ID, __u_group_ID), 1.0);
-//        cg_uu.solve(tangent_matrix.block(__u_group_ID, __u_group_ID),
-//                    LBFGS_r_vector.block(__u_group_ID),
-//                    LBFGS_q_vector.block(__u_group_ID),
-//                    preconditioner_uu);
-//        
-//        SolverControl            solver_control_dd(1e6, __cg_d_tol);
-//        SolverCG<Vector<double>> cg_dd(solver_control_dd);
-//        
-//        PreconditionJacobi<SparseMatrix<double>> preconditioner_dd;
-//        preconditioner_dd.initialize(tangent_matrix.block(__d_group_ID, __d_group_ID), 1.0);
-//        cg_dd.solve(tangent_matrix.block(__d_group_ID, __d_group_ID),
-//                    LBFGS_r_vector.block(__d_group_ID),
-//                    LBFGS_q_vector.block(__d_group_ID),
-//                    preconditioner_dd);
-//        
-//        SolverControl            solver_control_tt(1e6, __cg_T_tol);
-//        SolverCG<Vector<double>> cg_tt(solver_control_tt);
-//        
-//        PreconditionJacobi<SparseMatrix<double>> preconditioner_tt;
-//        preconditioner_tt.initialize(tangent_matrix.block(__T_group_ID, __T_group_ID), 1.0);
-//        cg_tt.solve(tangent_matrix.block(__T_group_ID, __T_group_ID),
-//                    LBFGS_r_vector.block(__T_group_ID),
-//                    LBFGS_q_vector.block(__T_group_ID),
-//                    preconditioner_tt);
+        //        SolverControl            solver_control_uu(1e6, __cg_u_tol);
+        //        SolverCG<Vector<double>> cg_uu(solver_control_uu);
+        //
+        //        PreconditionJacobi<SparseMatrix<double>> preconditioner_uu;
+        //        preconditioner_uu.initialize(tangent_matrix.block(__u_group_ID, __u_group_ID), 1.0);
+        //        cg_uu.solve(tangent_matrix.block(__u_group_ID, __u_group_ID),
+        //                    LBFGS_r_vector.block(__u_group_ID),
+        //                    LBFGS_q_vector.block(__u_group_ID),
+        //                    preconditioner_uu);
+        //
+        //        SolverControl            solver_control_dd(1e6, __cg_d_tol);
+        //        SolverCG<Vector<double>> cg_dd(solver_control_dd);
+        //
+        //        PreconditionJacobi<SparseMatrix<double>> preconditioner_dd;
+        //        preconditioner_dd.initialize(tangent_matrix.block(__d_group_ID, __d_group_ID), 1.0);
+        //        cg_dd.solve(tangent_matrix.block(__d_group_ID, __d_group_ID),
+        //                    LBFGS_r_vector.block(__d_group_ID),
+        //                    LBFGS_q_vector.block(__d_group_ID),
+        //                    preconditioner_dd);
+        //
+        //        SolverControl            solver_control_tt(1e6, __cg_T_tol);
+        //        SolverCG<Vector<double>> cg_tt(solver_control_tt);
+        //
+        //        PreconditionJacobi<SparseMatrix<double>> preconditioner_tt;
+        //        preconditioner_tt.initialize(tangent_matrix.block(__T_group_ID, __T_group_ID), 1.0);
+        //        cg_tt.solve(tangent_matrix.block(__T_group_ID, __T_group_ID),
+        //                    LBFGS_r_vector.block(__T_group_ID),
+        //                    LBFGS_q_vector.block(__T_group_ID),
+        //                    preconditioner_tt);
         
         for (const unsigned int ithGroup : __blockDesc.groupIDs()) {
             SolverControl            solver_control(1e6, ithGroup);
@@ -297,7 +297,7 @@ LASolver<LATraits>::__cgSolve(BVector & LBFGS_r_vector,
         {
             PrecJacobi prec;
             prec.initialize(tangent_matrix.block(ithGroup, ithGroup));
-        
+            
             CGSolver cg(__tolList[ithGroup].tol,
                         __tolList[ithGroup].nIters);
             

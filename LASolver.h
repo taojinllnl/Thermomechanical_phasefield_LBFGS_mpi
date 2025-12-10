@@ -34,7 +34,7 @@ struct Tol
     const double tol;
     Tol(const unsigned int nIters,
         const double tol);
-        
+    
 };
 
 template <typename LATraits>
@@ -60,11 +60,11 @@ private:
     
     
     void __directSolve(BVector & LBFGS_r_vector,
-                       BVector & LBFGS_q_vector,
-                       BSMatrix& tangentMatrix);
+                       const BVector & LBFGS_q_vector,
+                       const BSMatrix& tangentMatrix);
     void __cgSolve(BVector & LBFGS_r_vector,
-                   BVector & LBFGS_q_vector,
-                   BSMatrix& tangentMatrix);
+                   const BVector & LBFGS_q_vector,
+                   const BSMatrix& tangentMatrix);
     
 public:
     
@@ -72,14 +72,14 @@ public:
     
     
     LASolver(const SolverType&   type,
-                const double        cg_u_tol,
-                const double        cg_d_tol,
-                const double        cg_T_tol,
-                const BlockDesc&    blockDesc);
+             const double        cg_u_tol,
+             const double        cg_d_tol,
+             const double        cg_T_tol,
+             const BlockDesc&    blockDesc);
     
     void solve(BVector & LBFGS_r_vector,
-               BVector & LBFGS_q_vector,
-               BSMatrix& tangentMatrix);
+               const BVector & LBFGS_q_vector,
+               const BSMatrix& tangentMatrix);
     
 };
 
