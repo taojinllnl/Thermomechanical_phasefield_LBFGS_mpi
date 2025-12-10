@@ -1240,6 +1240,8 @@ namespace PhaseField_monolithic
       using BSMatrix = ::la::BlockSparseMatrixWrapper<LATraits>;
       using BVector  = ::la::BlockVectorWrapper<LATraits>;
       
+      static constexpr bool is_mpi =
+          !std::is_same_v<typename LATraits::TMTag, ::la::TagSerial>;
 //            using BSMatrix = la::BlockSparseMatrixWrapper<la::Traits<la::TagSerial>>;
 //            using BVector  = la::BlockVectorWrapper<la::Traits<la::TagSerial>>;
       
@@ -4216,6 +4218,13 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
       ScratchData_ASM_RHS_BFGS & scratch,
       PerTaskData_ASM_RHS_BFGS & data) const
   {
+      if constexpr (PhaseFieldMonolithicSolve<LATraits, dim>::is_mpi)
+      {
+          if (!cell->is_locally_owned()) {
+              return;
+          }
+      }
+      
     data.reset();
     scratch.reset();
     scratch.m_fe_values.reinit(cell);
@@ -4446,6 +4455,12 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
       ScratchData_ASM & scratch,
       PerTaskData_ASM & data) const
   {
+      if constexpr (PhaseFieldMonolithicSolve<LATraits, dim>::is_mpi)
+      {
+          if (!cell->is_locally_owned()) {
+              return;
+          }
+      }
     data.reset();
     scratch.reset();
     scratch.m_fe_values.reinit(cell);
