@@ -53,14 +53,16 @@ struct Traits<TagSerial>
     using Vector   = dealii::LinearAlgebraDealII::BlockVector;
     using Matrix   = dealii::LinearAlgebraDealII::BlockSparseMatrix;
     using IndexSet = dealii::IndexSet;
+    
+    using MatrixBlock   = dealii::LinearAlgebraDealII::SparseMatrix;
 };
 
 
 
 #ifdef DEAL_II_WITH_PETSC
-#  define OZ_HAVE_PETSC 1
+#  define HAVE_PETSC 1
 #include <deal.II/lac/petsc_solver.h>
-
+#include <deal.II/lac/petsc_precondition.h>
 template <>
 struct Traits<TagPETSc>
 {
@@ -68,6 +70,8 @@ struct Traits<TagPETSc>
     using Vector   = dealii::LinearAlgebraPETSc::MPI::BlockVector;
     using Matrix   = dealii::LinearAlgebraPETSc::MPI::BlockSparseMatrix;
     using IndexSet = dealii::IndexSet;
+    
+    using MatrixBlock   = dealii::LinearAlgebraPETSc::MPI::SparseMatrix;
 };
 #endif
 
@@ -75,8 +79,9 @@ struct Traits<TagPETSc>
 
 
 #ifdef DEAL_II_WITH_TRILINOS
-#  define OZ_HAVE_TRILINOS 1
+#  define HAVE_TRILINOS 1
 #include <deal.II/lac/trilinos_solver.h>
+#include <deal.II/lac/trilinos_precondition.h>
 
 template <>
 struct Traits<TagTrilinos>
@@ -85,6 +90,8 @@ struct Traits<TagTrilinos>
     using Vector   = dealii::LinearAlgebraTrilinos::MPI::BlockVector;
     using Matrix   = dealii::LinearAlgebraTrilinos::MPI::BlockSparseMatrix;
     using IndexSet = dealii::IndexSet;
+    
+    using MatrixBlock   = dealii::LinearAlgebraTrilinos::MPI::SparseMatrix;
 };
 #endif
 
