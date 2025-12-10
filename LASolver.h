@@ -1,11 +1,11 @@
 //
-//  LBFGSB0.hpp
+//  LASolver.hpp
 //  main
 //
 //
 
-#ifndef LBFGSB0_hpp
-#define LBFGSB0_hpp
+#ifndef LASolver_hpp
+#define LASolver_hpp
 
 #include <array>
 
@@ -19,7 +19,6 @@
 #include "BlockDesc.h"
 
 #include "InverseMatrix.h"
-#include "MPIPreconditionerGen.h"
 #include "MPICGSolver.h"
 
 namespace PhaseField_monolithic {
@@ -39,7 +38,7 @@ struct Tol
 };
 
 template <typename LATraits>
-class LBFGSB0
+class LASolver
 {
 public:
     using BSMatrix  = ::la::BlockSparseMatrixWrapper<LATraits>;
@@ -69,10 +68,10 @@ private:
     
 public:
     
-    virtual ~LBFGSB0() = default;
+    virtual ~LASolver() = default;
     
     
-    LBFGSB0(const SolverType&   type,
+    LASolver(const SolverType&   type,
                 const double        cg_u_tol,
                 const double        cg_d_tol,
                 const double        cg_T_tol,
@@ -89,4 +88,4 @@ public:
 
 
 }
-#endif /* LBFGSB0_hpp */
+#endif /* LASolver_hpp */
