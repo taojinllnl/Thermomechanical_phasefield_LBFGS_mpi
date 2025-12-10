@@ -1507,7 +1507,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
   void PhaseFieldMonolithicSolve<LATraits, dim>::get_error_residual(Errors &error_residual)
   {
     BVector error_res(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
-
+      error_res.initalize();
+      
     for (unsigned int i = 0; i < m_dof_handler.n_dofs(); ++i)
       if (!m_constraints.is_constrained(i))
         error_res(i) = m_system_rhs(i);
@@ -1523,6 +1524,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
                                                         Errors & error_update)
   {
     BVector error_ud(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
+      error_ud.initalize();
+      
     for (unsigned int i = 0; i < m_dof_handler.n_dofs(); ++i)
       if (!m_constraints.is_constrained(i))
         error_ud(i) = soln_update(i);
@@ -3323,7 +3326,7 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
       // TODO: move m_dofs_per_block = DoFTools::count_dofs_per_fe_block(m_dof_handler, block_component); to m_blocks_desc.updateDoFsInfo(m_dof_handler);
     m_dofs_per_block =
       DoFTools::count_dofs_per_fe_block(m_dof_handler, block_component);
-      m_blocks_desc.updateDoFsInfo(m_dof_handler);
+      m_blocks_desc.updateDoFsInfo(m_dof_handler, false);
     
 
     m_logfile << "\t\tTriangulation:"
@@ -4595,9 +4598,11 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
     update_qph_incremental(solution_delta_trial, m_solution, false);
 
     BVector g_new(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
+      g_new.initalize();
     assemble_system_rhs_LBFGS_parallel(m_solution, g_new);
 
     BVector y_old(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
+      y_old.initalize();
 
     y_old.base() = g_new.base() - g_old.base();
 
@@ -4920,7 +4925,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
 
     update_qph_incremental(solution_delta_trial, m_solution, false);
 
-    BVector system_rhs(m_dofs_per_block);
+        BVector system_rhs(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
+        system_rhs.initalize();
     assemble_system_rhs_LBFGS_parallel(m_solution, system_rhs);
     //m_constraints.condense(system_rhs);
 
@@ -4943,13 +4949,17 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
 
     update_qph_incremental(solution_delta_trial, m_solution, false);
 
-    BVector system_rhs(m_dofs_per_block);
+//    BVector system_rhs(m_dofs_per_block);
+        BVector system_rhs(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
+        system_rhs.initalize();
     assemble_system_rhs_LBFGS_parallel(m_solution, system_rhs);
     //m_constraints.condense(system_rhs);
 
     //phi_prime = system_rhs * BFGS_p_vector;
 
-    BVector error_res(m_dofs_per_block);
+//    BVector error_res(m_dofs_per_block);
+        BVector error_res(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
+        error_res.initalize();
 
     for (unsigned int i = 0; i < m_dof_handler.n_dofs(); ++i)
       if (!m_constraints.is_constrained(i))
@@ -4999,8 +5009,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
 				 BVector & LBFGS_update_refine)
   {
     BVector LBFGS_update(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
-
-    LBFGS_update = 0.0;
+      LBFGS_update.initalize();
+//    LBFGS_update = 0.0;
 
     m_error_residual.reset();
     m_error_residual_0.reset();
@@ -5015,9 +5025,13 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
     unsigned int LBFGS_iteration = 0;
 
     BVector LBFGS_r_vector(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
+      LBFGS_r_vector.initalize();
     BVector LBFGS_y_vector(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
+      LBFGS_y_vector.initalize();
     BVector LBFGS_q_vector(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
+      LBFGS_q_vector.initalize();
     BVector LBFGS_s_vector(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
+      LBFGS_s_vector.initalize();
     std::list<std::pair< std::pair<BVector,
                                    BVector>,
                          double>> LBFGS_vector_list;
@@ -5802,6 +5816,7 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
   {
     // This is the solution at (n+1) obtained from the old (coarse) mesh
     BVector solution_next_step(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
+      solution_next_step.initalize();
     solution_next_step.base() = m_solution.base() + solution_delta.base();
     bool mesh_is_same = true;
     bool cell_refine_flag = true;
@@ -5974,8 +5989,10 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
       {
 	BVector temp_solution_delta(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
 	BVector temp_previous_solution(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
-	temp_solution_delta = 0.0;
-	temp_previous_solution = 0.0;
+//	temp_solution_delta = 0.0;
+          temp_solution_delta.initalize();
+//	temp_previous_solution = 0.0;
+          temp_previous_solution.initalize();
 	update_qph_incremental(temp_solution_delta, temp_previous_solution, false);
 	update_history_field_step();
 
@@ -6086,7 +6103,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
 
         // initial guess for the resolve on the refined mesh
 	BVector LBFGS_update_refine(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
-	LBFGS_update_refine = 0.0;
+          LBFGS_update_refine.initalize();
+//	LBFGS_update_refine = 0.0;
 
         // local adaptive mesh refinement loop
 	unsigned int adp_refine_iteration = 0;
@@ -6096,7 +6114,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
 	      m_logfile << "\tAdaptive refinement-"<< adp_refine_iteration << ": " << std::endl;
 
 	    BVector solution_delta(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
-	    solution_delta = 0.0;
+              solution_delta.initalize();
+//	    solution_delta = 0.0;
 
 	    if (m_parameters.m_type_nonlinear_solver == "LBFGS")
 	      solve_nonlinear_timestep_LBFGS(solution_delta, LBFGS_update_refine);
