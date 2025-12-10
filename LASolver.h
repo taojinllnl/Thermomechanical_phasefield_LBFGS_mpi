@@ -1,11 +1,13 @@
 //
-//  LBFGSSolver.hpp
+//  LBFGSB0.hpp
 //  main
 //
 //
 
-#ifndef LBFGSSolver_hpp
-#define LBFGSSolver_hpp
+#ifndef LBFGSB0_hpp
+#define LBFGSB0_hpp
+
+#include <array>
 
 #include <deal.II/lac/sparse_direct.h>
 
@@ -16,6 +18,9 @@
 
 #include "BlockDesc.h"
 
+#include "InverseMatrix.h"
+#include "MPIPreconditionerGen.h"
+#include "MPICGSolver.h"
 
 namespace PhaseField_monolithic {
 
@@ -24,8 +29,17 @@ enum class SolverType
     Direct, CG
 };
 
+struct Tol
+{
+    const unsigned int nIters;
+    const double tol;
+    Tol(const unsigned int nIters,
+        const double tol);
+        
+};
+
 template <typename LATraits>
-class LBFGSSolver
+class LBFGSB0
 {
 public:
     using BSMatrix  = ::la::BlockSparseMatrixWrapper<LATraits>;
@@ -41,6 +55,10 @@ private:
     const unsigned int      __d_group_ID;
     const unsigned int      __T_group_ID;
     
+    const std::array<Tol, 3> __tolList;
+    
+    const BlockDesc&        __blockDesc;
+    
     
     void __directSolve(BVector & LBFGS_r_vector,
                        BVector & LBFGS_q_vector,
@@ -51,10 +69,10 @@ private:
     
 public:
     
-    virtual ~LBFGSSolver() = default;
+    virtual ~LBFGSB0() = default;
     
     
-    LBFGSSolver(const SolverType&   type,
+    LBFGSB0(const SolverType&   type,
                 const double        cg_u_tol,
                 const double        cg_d_tol,
                 const double        cg_T_tol,
@@ -71,4 +89,4 @@ public:
 
 
 }
-#endif /* LBFGSSolver_hpp */
+#endif /* LBFGSB0_hpp */
