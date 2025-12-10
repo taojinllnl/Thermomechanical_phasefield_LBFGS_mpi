@@ -238,7 +238,8 @@ LASolver<LATraits>::__cgSolve(BVector & LBFGS_r_vector,
         //                    preconditioner_tt);
         
         for (const unsigned int ithGroup : __blockDesc.groupIDs()) {
-            SolverControl            solver_control(1e6, ithGroup);
+            SolverControl            solver_control(__tolList[ithGroup].nIters,
+                                                    __tolList[ithGroup].tol);
             SolverCG<Vector<double>> cg(solver_control);
             
             PreconditionJacobi<SparseMatrix<double>> preconditioner;
