@@ -105,7 +105,8 @@ public:
 
     
     template <int dim, int spacedim=dim>
-    void updateDoFsInfo(dealii::DoFHandler<dim, spacedim>& dof_handler);
+    void updateDoFsInfo(dealii::DoFHandler<dim, spacedim>& dof_handler,
+                        const bool componentWise = true);
     
     const std::vector<dealii::types::global_dof_index>* dofsPerBlock() const;
     
@@ -119,11 +120,13 @@ public:
 
 
 template <int dim, int spacedim>
-void BlockDesc::updateDoFsInfo(dealii::DoFHandler<dim, spacedim>& dof_handler)
+void BlockDesc::updateDoFsInfo(dealii::DoFHandler<dim, spacedim>& dof_handler,
+                               const bool componentWise)
 {
     using namespace dealii;
 
-    DoFRenumbering::component_wise(dof_handler, __groupIDs);
+    if(componentWise)
+        DoFRenumbering::component_wise(dof_handler, __groupIDs);
 
     if(!__dofs_per_block)
     {
