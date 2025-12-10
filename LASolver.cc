@@ -1,10 +1,10 @@
 //
-//  LBFGSB0.cpp
+//  LASolver.cpp
 //  main
 //
 //
 
-#include "LBFGSB0.h"
+#include "LASolver.h"
 
 using namespace PhaseField_monolithic;
 using namespace dealii;
@@ -20,8 +20,8 @@ Tol::Tol(const unsigned int nIters,
 
 
 template <typename LATraits>
-LBFGSB0<LATraits>
-::LBFGSB0(const SolverType&   type,
+LASolver<LATraits>
+::LASolver(const SolverType&   type,
           const double        cg_u_tol,
           const double        cg_d_tol,
           const double        cg_T_tol,
@@ -47,7 +47,7 @@ LBFGSB0<LATraits>
 
 template <typename LATraits>
 void 
-LBFGSB0<LATraits>::solve(BVector & LBFGS_r_vector,
+LASolver<LATraits>::solve(BVector & LBFGS_r_vector,
                          BVector & LBFGS_q_vector,
                          BSMatrix& tangent_matrix)
 {
@@ -62,7 +62,7 @@ LBFGSB0<LATraits>::solve(BVector & LBFGS_r_vector,
 
 template <typename LATraits>
 void
-LBFGSB0<LATraits>::__directSolve(BVector & LBFGS_r_vector,
+LASolver<LATraits>::__directSolve(BVector & LBFGS_r_vector,
                                  BVector & LBFGS_q_vector,
                                  BSMatrix& tangent_matrix)
 {
@@ -189,7 +189,7 @@ LBFGSB0<LATraits>::__directSolve(BVector & LBFGS_r_vector,
 
 template <typename LATraits>
 void
-LBFGSB0<LATraits>::__cgSolve(BVector & LBFGS_r_vector,
+LASolver<LATraits>::__cgSolve(BVector & LBFGS_r_vector,
                              BVector & LBFGS_q_vector,
                              BSMatrix& tangent_matrix)
 {
@@ -313,6 +313,6 @@ LBFGSB0<LATraits>::__cgSolve(BVector & LBFGS_r_vector,
 
 
 
-template class PhaseField_monolithic::LBFGSB0<la::Traits<la::TagSerial>>;
-template class PhaseField_monolithic::LBFGSB0<la::Traits<la::TagPETSc>>;
-template class PhaseField_monolithic::LBFGSB0<la::Traits<la::TagTrilinos>>;
+template class PhaseField_monolithic::LASolver<la::Traits<la::TagSerial>>;
+template class PhaseField_monolithic::LASolver<la::Traits<la::TagPETSc>>;
+template class PhaseField_monolithic::LASolver<la::Traits<la::TagTrilinos>>;
