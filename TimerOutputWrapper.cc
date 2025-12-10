@@ -83,17 +83,9 @@ TimerOutputWrapper<LATraits>
     if constexpr (std::is_same_v<la::Traits<la::TagSerial>, LATraits>) {
         __timerPtr->leave_subsection(section_name);
     } else {
-        auto scopePtr = __scopeMap.find(section_name);
-        if (scopePtr != __scopeMap.end() && scopePtr->second)
-        {
-            scopePtr->second.reset();
-            __scopeMap.erase(scopePtr);
-        }
-        else
-        {
-            AssertThrow(false,
-                        ExcMessage("leave_subsection called on unopened section"));
-        }
+        auto it = __scopeMap.find(section_name);
+        if (it != __scopeMap.end())
+            __scopeMap.erase(it);
     }
 }
 
