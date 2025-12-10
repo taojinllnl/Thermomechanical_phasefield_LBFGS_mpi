@@ -123,7 +123,7 @@
 #include "BlockSparseMatrixWrapper.h"
 #include "BlockDesc.h"
 
-#include "LBFGSSolver.h"
+#include "LASolver.h"
 
 namespace PhaseField_monolithic
 {
@@ -1237,8 +1237,8 @@ namespace PhaseField_monolithic
   class PhaseFieldMonolithicSolve
   {
   public:
-      using BSMatrix = la::BlockSparseMatrixWrapper<LATraits>;
-      using BVector  = la::BlockVectorWrapper<LATraits>;
+      using BSMatrix = ::la::BlockSparseMatrixWrapper<LATraits>;
+      using BVector  = ::la::BlockVectorWrapper<LATraits>;
       
 //            using BSMatrix = la::BlockSparseMatrixWrapper<la::Traits<la::TagSerial>>;
 //            using BVector  = la::BlockVectorWrapper<la::Traits<la::TagSerial>>;
@@ -1280,7 +1280,7 @@ namespace PhaseField_monolithic
     ConditionalOStream m_logfile;
       
 //    mutable TimerOutput m_timer;
-      mutable TimerOutputWrapper m_timer;
+      mutable TimerOutputWrapper<LATraits> m_timer;
       
       BlockDesc                     m_blocks_desc;
 
@@ -1331,7 +1331,7 @@ namespace PhaseField_monolithic
     std::vector<std::pair<double, std::vector<double>>> m_history_reaction_force;
     std::vector<std::pair<double, std::array<double, 3>>> m_history_energy;
 
-    la::LBFGSSolver<LATraits>     m_solver;
+    LASolver<LATraits>     m_solver;
 
     struct Errors
     {
@@ -1447,7 +1447,7 @@ namespace PhaseField_monolithic
   			       const BVector & solution_delta);
 
     void LBFGS_B0(BVector & LBFGS_r_vector,
-		  BVector & LBFGS_q_vector);
+		  const BVector & LBFGS_q_vector);
 
     void update_history_field_step();
 
@@ -2166,9 +2166,9 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
     , m_timer(m_logfile, m_mpiInfo, TimerOutput::summary, TimerOutput::wall_times)
     , m_blocks_desc(m_mpiInfo,
                     {
-        BlockDesc::Block(dim, "displacement"),
-        BlockDesc::Block(1,   "phase-field"),
-        BlockDesc::Block(1,   "temperature")
+        {dim, "displacement"},
+        {1,   "phase-field"},
+        {1,   "temperature"}
         })
     , m_dof_handler(m_triangulation)
     , m_fe(FE_Q<dim>(m_parameters.m_poly_degree),
@@ -2190,6 +2190,12 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
                        [](unsigned int, unsigned int){return DoFTools::always;})
     , m_system_rhs(m_mpiInfo, m_blocks_desc, /*relevance=*/ true)
     , m_solution(m_mpiInfo, m_blocks_desc, /*relevance=*/ true)
+    , m_solver(m_parameters.m_type_linear_solver == "Direct"
+               ? SolverType::Direct : SolverType::CG,
+               m_parameters.m_cg_u_tol,
+               m_parameters.m_cg_d_tol,
+               m_parameters.m_cg_t_tol,
+               m_blocks_desc)
   {}
 
   template <typename LATraits, int dim>
@@ -3314,8 +3320,11 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
     DoFTools::make_hanging_node_constraints(m_dof_handler, m_constraints);
     m_constraints.close();
 
+      // TODO: move m_dofs_per_block = DoFTools::count_dofs_per_fe_block(m_dof_handler, block_component); to m_blocks_desc.updateDoFsInfo(m_dof_handler);
     m_dofs_per_block =
       DoFTools::count_dofs_per_fe_block(m_dof_handler, block_component);
+      m_blocks_desc.updateDoFsInfo(m_dof_handler);
+    
 
     m_logfile << "\t\tTriangulation:"
               << "\n\t\t\t Number of active cells: "
@@ -4953,13 +4962,13 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
 
   template <typename LATraits, int dim>
   void PhaseFieldMonolithicSolve<LATraits, dim>::LBFGS_B0(BVector & LBFGS_r_vector,
-						BVector & LBFGS_q_vector)
+						const BVector & LBFGS_q_vector)
   {
       m_timer.enter_subsection("Solve B0");
       
       assemble_system_B0();
       
-      m_solver.solve();
+      m_solver.solve(LBFGS_r_vector, LBFGS_q_vector, m_tangent_matrix);
       
       m_timer.leave_subsection();
   }
