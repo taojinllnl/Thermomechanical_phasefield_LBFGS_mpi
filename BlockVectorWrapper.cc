@@ -12,7 +12,8 @@ using namespace la;
 template <typename TraitsType>
 BlockVectorWrapper<TraitsType>
 ::BlockVectorWrapper(const BlockVectorWrapper& other)
-: __hasRelevance(other.hasRelevance())
+: TraitsType::Vector(other.base())
+, __hasRelevance(other.hasRelevance())
 , __relevancePtr(__hasRelevance
                  ? std::make_unique<VecType>(*other.__relevancePtr)
                  : nullptr)
@@ -23,7 +24,8 @@ BlockVectorWrapper<TraitsType>
 template <typename TraitsType>
 BlockVectorWrapper<TraitsType>
 ::BlockVectorWrapper(BlockVectorWrapper&& other) noexcept
-: __hasRelevance(other.hasRelevance())
+: TraitsType::Vector(other.base())
+, __hasRelevance(other.hasRelevance())
 , __relevancePtr(std::move(other.__relevancePtr))
 , __mpiInfo(other.__mpiInfo)
 , __blockDesc(other.__blockDesc)
@@ -35,7 +37,8 @@ BlockVectorWrapper<TraitsType>
 ::BlockVectorWrapper(const MPIInfo& mpiInfo,
                      const BlockDesc& blockDesc,
                      const bool hasRelevance)
-: __hasRelevance(hasRelevance)
+: TraitsType::Vector()
+, __hasRelevance(hasRelevance)
 , __relevancePtr(__hasRelevance? std::make_unique<VecType>() : nullptr)
 , __mpiInfo(mpiInfo)
 , __blockDesc(blockDesc)
