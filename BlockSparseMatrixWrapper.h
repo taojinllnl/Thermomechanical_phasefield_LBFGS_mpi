@@ -31,8 +31,8 @@ class BlockSparseMatrixWrapper
 {
 public:
     using MatType       = typename TraitsType::Matrix;
-    using CouplingItem  = dealii::DoFTools::Coupling;
-    using Coupling      = dealii::Table<2, CouplingItem>;
+    using CouplingItem  = ::dealii::DoFTools::Coupling;
+    using Coupling      = ::dealii::Table<2, CouplingItem>;
     using CouplingFunc  = std::function<CouplingItem(const unsigned int,
                                                      const unsigned int)>;
     
@@ -47,7 +47,7 @@ private:
     const BlockDesc&            __blockDesc;
     const Coupling              __coupling;
     
-    dealii::BlockSparsityPattern        __sparsity_pattern;
+    ::dealii::BlockSparsityPattern        __sparsity_pattern;
 public:
     virtual ~BlockSparseMatrixWrapper() = default;
     
@@ -58,10 +58,10 @@ public:
     
     
     template <int dim, int spacedim=dim>
-    void init(dealii::DoFHandler<dim, spacedim>& dof_handler,
-              const dealii::AffineConstraints<double>&  constraints = {},
+    void init(::dealii::DoFHandler<dim, spacedim>& dof_handler,
+              const ::dealii::AffineConstraints<double>&  constraints = {},
               const bool keep_constrained_dofs = true,
-              const dealii::types::subdomain_id subdomain_id = dealii::numbers::invalid_subdomain_id );
+              const ::dealii::types::subdomain_id subdomain_id = ::dealii::numbers::invalid_subdomain_id );
     
     
     BlockSparseMatrixWrapper& operator= (const BlockSparseMatrixWrapper&  m);
@@ -78,16 +78,16 @@ template <typename TraitsType>
 template <int dim, int spacedim>
 void
 BlockSparseMatrixWrapper<TraitsType>
-::init(dealii::DoFHandler<dim, spacedim>&       dof_handler,
-       const dealii::AffineConstraints<double>& constraints,
+::init(::dealii::DoFHandler<dim, spacedim>&       dof_handler,
+       const ::dealii::AffineConstraints<double>& constraints,
        const bool                               keep_constrained_dofs,
-       const dealii::types::subdomain_id        subdomain_id)
+       const ::dealii::types::subdomain_id        subdomain_id)
 {
     using namespace dealii;
     
     TraitsType::Matrix::clear();
     
-    if constexpr (std::is_same_v<MatType, dealii::BlockSparseMatrix<double>>)
+    if constexpr (std::is_same_v<MatType, ::dealii::BlockSparseMatrix<double>>)
     {
         /*  *  *  *   *   *   *  serial version   *   *   *   *   *   *   *   */
         BlockDynamicSparsityPattern dsp(*__blockDesc.dofsPerBlock(),
