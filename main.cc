@@ -1233,10 +1233,11 @@ namespace PhaseField_monolithic
     bool   m_coupling_on_heat_eq;
   };
 
-  template <typename LATraits, int dim>
+  template <typename LATraits, typename Tria>
   class PhaseFieldMonolithicSolve
   {
   public:
+      constexpr static int dim = Tria::dimension;
       using BSMatrix = ::la::BlockSparseMatrixWrapper<LATraits>;
       using BVector  = ::la::BlockVectorWrapper<LATraits>;
       
@@ -1265,7 +1266,7 @@ namespace PhaseField_monolithic
     struct ScratchData_UQPH;
 
     const Parameters::AllParameters& m_parameters;
-    Triangulation<dim> m_triangulation;
+    Tria m_triangulation;
 
     CellDataStorage<typename Triangulation<dim>::cell_iterator,
                     PointHistory<dim>>
@@ -1497,16 +1498,16 @@ namespace PhaseField_monolithic
 
 namespace type{
 
-template <typename LATraits, int dim>
-using BSMatrix = typename PhaseFieldMonolithicSolve<LATraits, dim>::BSMatrix;
+template <typename LATraits, typename Tria>
+using BSMatrix = typename PhaseFieldMonolithicSolve<LATraits, Tria>::BSMatrix;
 
-template <typename LATraits, int dim>
-using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
+template <typename LATraits, typename Tria>
+using BVector  = typename PhaseFieldMonolithicSolve<LATraits, Tria>::BVector;
 
 }
 
-  template <typename LATraits, int dim>
-  void PhaseFieldMonolithicSolve<LATraits, dim>::get_error_residual(Errors &error_residual)
+  template <typename LATraits, typename Tria>
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::get_error_residual(Errors &error_residual)
   {
     BVector error_res(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
       error_res.initalize();
@@ -1521,8 +1522,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
     error_residual.m_t    = error_res.block(m_t_dof).l2_norm();
   }
 
-  template <typename LATraits, int dim>
-  void PhaseFieldMonolithicSolve<LATraits, dim>::get_error_update(const BVector &soln_update,
+  template <typename LATraits, typename Tria>
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::get_error_update(const BVector &soln_update,
                                                         Errors & error_update)
   {
     BVector error_ud(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
@@ -1538,8 +1539,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
     error_update.m_t    = error_ud.block(m_t_dof).l2_norm();
   }
 
-  template <typename LATraits, int dim>
-  void PhaseFieldMonolithicSolve<LATraits, dim>::read_material_data(const std::string &data_file,
+  template <typename LATraits, typename Tria>
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::read_material_data(const std::string &data_file,
 				                     const unsigned int total_material_regions)
   {
     std::ifstream myfile (data_file);
@@ -1622,8 +1623,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
       }
   }
 
-  template <typename LATraits, int dim>
-  void PhaseFieldMonolithicSolve<LATraits, dim>::read_time_data(const std::string &data_file,
+  template <typename LATraits, typename Tria>
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::read_time_data(const std::string &data_file,
 				                      std::vector<std::array<double, 4>> & time_table)
   {
     std::ifstream myfile (data_file);
@@ -1668,8 +1669,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
       }
   }
 
-  template <typename LATraits, int dim>
-  void PhaseFieldMonolithicSolve<LATraits, dim>::setup_qph()
+  template <typename LATraits, typename Tria>
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::setup_qph()
   {
     m_logfile << "\t\tSetting up quadrature point data ("
 	      << m_n_q_points
@@ -1735,8 +1736,9 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
       }
   }
 
-  template <typename LATraits, int dim>
-  type::BVector<LATraits, dim> PhaseFieldMonolithicSolve<LATraits, dim>::get_total_solution(
+  template <typename LATraits, typename Tria>
+typename PhaseFieldMonolithicSolve<LATraits, Tria>::BVector
+PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
     const BVector &solution_delta) const
   {
     BVector solution_total(m_solution);
@@ -1744,9 +1746,9 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
     return solution_total;
   }
 
-  template <typename LATraits, int dim>
+  template <typename LATraits, typename Tria>
   void
-  PhaseFieldMonolithicSolve<LATraits, dim>::update_qph_incremental(const BVector &solution_delta,
+  PhaseFieldMonolithicSolve<LATraits, Tria>::update_qph_incremental(const BVector &solution_delta,
 							 const BVector &solution_old,
 							 const bool is_print)
   {
@@ -1789,15 +1791,15 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
     m_timer.leave_subsection();
   }
 
-  template <typename LATraits, int dim>
-  struct PhaseFieldMonolithicSolve<LATraits, dim>::PerTaskData_UQPH
+  template <typename LATraits, typename Tria>
+  struct PhaseFieldMonolithicSolve<LATraits, Tria>::PerTaskData_UQPH
   {
     void reset()
     {}
   };
 
-  template <typename LATraits, int dim>
-  struct PhaseFieldMonolithicSolve<LATraits, dim>::ScratchData_UQPH
+  template <typename LATraits, typename Tria>
+  struct PhaseFieldMonolithicSolve<LATraits, Tria>::ScratchData_UQPH
   {
     const BVector & m_solution_UQPH;
 
@@ -1868,8 +1870,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
     }
   };
 
-  template <typename LATraits, int dim>
-  void PhaseFieldMonolithicSolve<LATraits, dim>::update_qph_incremental_one_cell(
+  template <typename LATraits, typename Tria>
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::update_qph_incremental_one_cell(
     const typename DoFHandler<dim>::active_cell_iterator &cell,
     ScratchData_UQPH & scratch,
     PerTaskData_UQPH & /*data*/)
@@ -1908,8 +1910,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
 					 scratch.m_degrade_conductivity_or_not);
   }
 
-  template <typename LATraits, int dim>
-  struct PhaseFieldMonolithicSolve<LATraits, dim>::PerTaskData_ASM
+  template <typename LATraits, typename Tria>
+  struct PhaseFieldMonolithicSolve<LATraits, Tria>::PerTaskData_ASM
   {
     FullMatrix<double>                   m_cell_matrix;
     Vector<double>                       m_cell_rhs;
@@ -1928,8 +1930,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
     }
   };
 
-  template <typename LATraits, int dim>
-  struct PhaseFieldMonolithicSolve<LATraits, dim>::PerTaskData_ASM_RHS_BFGS
+  template <typename LATraits, typename Tria>
+  struct PhaseFieldMonolithicSolve<LATraits, Tria>::PerTaskData_ASM_RHS_BFGS
   {
     Vector<double>                       m_cell_rhs;
     std::vector<types::global_dof_index> m_local_dof_indices;
@@ -1945,8 +1947,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
     }
   };
 
-  template <typename LATraits, int dim>
-  struct PhaseFieldMonolithicSolve<LATraits, dim>::ScratchData_ASM
+  template <typename LATraits, typename Tria>
+  struct PhaseFieldMonolithicSolve<LATraits, Tria>::ScratchData_ASM
   {
     FEValues<dim>     m_fe_values;
     FEFaceValues<dim> m_fe_face_values;
@@ -2041,8 +2043,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
     }
   };
 
-  template <typename LATraits, int dim>
-  struct PhaseFieldMonolithicSolve<LATraits, dim>::ScratchData_ASM_RHS_BFGS
+  template <typename LATraits, typename Tria>
+  struct PhaseFieldMonolithicSolve<LATraits, Tria>::ScratchData_ASM_RHS_BFGS
   {
     FEValues<dim>     m_fe_values;
     FEFaceValues<dim> m_fe_face_values;
@@ -2156,8 +2158,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
   };
 
   // constructor has no return type
-  template <typename LATraits, int dim>
-  PhaseFieldMonolithicSolve<LATraits, dim>
+  template <typename LATraits, typename Tria>
+  PhaseFieldMonolithicSolve<LATraits, Tria>
 ::PhaseFieldMonolithicSolve(const Parameters::AllParameters& parameters,
                             const MPIInfo& mpiInfo)
     : m_parameters(parameters)
@@ -2203,8 +2205,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
                m_blocks_desc)
   {}
 
-  template <typename LATraits, int dim>
-  void PhaseFieldMonolithicSolve<LATraits, dim>::make_grid()
+  template <typename LATraits, typename Tria>
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::make_grid()
   {
     if (m_parameters.m_scenario == 1)
       make_grid_case_1();
@@ -2246,8 +2248,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
     m_logfile << "\t\tGrid:\n\t\t\tReference volume: " << m_vol_reference << std::endl;
   }
 
-  template <typename LATraits, int dim>
-  void PhaseFieldMonolithicSolve<LATraits, dim>::make_grid_case_1()
+  template <typename LATraits, typename Tria>
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::make_grid_case_1()
   {
     for (unsigned int i = 0; i < 80; ++i)
       m_logfile << "*";
@@ -2335,8 +2337,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
   }
 
 
-  template <typename LATraits, int dim>
-  void PhaseFieldMonolithicSolve<LATraits, dim>::make_grid_case_2()
+  template <typename LATraits, typename Tria>
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::make_grid_case_2()
   {
     for (unsigned int i = 0; i < 80; ++i)
       m_logfile << "*";
@@ -2426,8 +2428,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
       }
   }
 
-  template <typename LATraits, int dim>
-  void PhaseFieldMonolithicSolve<LATraits, dim>::make_grid_case_3()
+  template <typename LATraits, typename Tria>
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::make_grid_case_3()
   {
     for (unsigned int i = 0; i < 80; ++i)
       m_logfile << "*";
@@ -2514,8 +2516,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
       }
   }
 
-  template <typename LATraits, int dim>
-  void PhaseFieldMonolithicSolve<LATraits, dim>::make_grid_case_4()
+  template <typename LATraits, typename Tria>
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::make_grid_case_4()
   {
     for (unsigned int i = 0; i < 80; ++i)
       m_logfile << "*";
@@ -2605,8 +2607,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
       }
   }
 
-  template <typename LATraits, int dim>
-  void PhaseFieldMonolithicSolve<LATraits, dim>::make_grid_case_5()
+  template <typename LATraits, typename Tria>
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::make_grid_case_5()
   {
     for (unsigned int i = 0; i < 80; ++i)
       m_logfile << "*";
@@ -2716,8 +2718,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
       }
   }
 
-  template <typename LATraits, int dim>
-  void PhaseFieldMonolithicSolve<LATraits, dim>::make_grid_case_6()
+  template <typename LATraits, typename Tria>
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::make_grid_case_6()
   {
     for (unsigned int i = 0; i < 80; ++i)
       m_logfile << "*";
@@ -2831,8 +2833,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
       }
   }
 
-  template <typename LATraits, int dim>
-  void PhaseFieldMonolithicSolve<LATraits, dim>::make_grid_case_7()
+  template <typename LATraits, typename Tria>
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::make_grid_case_7()
   {
     for (unsigned int i = 0; i < 80; ++i)
       m_logfile << "*";
@@ -2922,8 +2924,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
       }
   }
 
-  template <typename LATraits, int dim>
-  void PhaseFieldMonolithicSolve<LATraits, dim>::make_grid_case_8()
+  template <typename LATraits, typename Tria>
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::make_grid_case_8()
   {
     for (unsigned int i = 0; i < 80; ++i)
       m_logfile << "*";
@@ -3015,8 +3017,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
       }
   }
 
-  template <typename LATraits, int dim>
-  void PhaseFieldMonolithicSolve<LATraits, dim>::make_grid_case_9()
+  template <typename LATraits, typename Tria>
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::make_grid_case_9()
   {
     for (unsigned int i = 0; i < 80; ++i)
       m_logfile << "*";
@@ -3108,8 +3110,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
       }
   }
 
-  template <typename LATraits, int dim>
-  void PhaseFieldMonolithicSolve<LATraits, dim>::make_grid_case_10()
+  template <typename LATraits, typename Tria>
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::make_grid_case_10()
   {
     for (unsigned int i = 0; i < 80; ++i)
       m_logfile << "*";
@@ -3198,8 +3200,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
       }
   }
 
-  template <typename LATraits, int dim>
-  void PhaseFieldMonolithicSolve<LATraits, dim>::make_grid_case_11()
+  template <typename LATraits, typename Tria>
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::make_grid_case_11()
   {
     for (unsigned int i = 0; i < 80; ++i)
       m_logfile << "*";
@@ -3307,8 +3309,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
       }
   }
 
-  template <typename LATraits, int dim>
-  void PhaseFieldMonolithicSolve<LATraits, dim>::setup_system()
+  template <typename LATraits, typename Tria>
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::setup_system()
   {
     m_timer.enter_subsection("Setup system");
 
@@ -3382,8 +3384,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
     m_timer.leave_subsection();
   }
 
-  template <typename LATraits, int dim>
-  void PhaseFieldMonolithicSolve<LATraits, dim>::setup_temperature_initial_conditions()
+  template <typename LATraits, typename Tria>
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::setup_temperature_initial_conditions()
   {
     if (   m_parameters.m_scenario == 3
     	|| m_parameters.m_scenario == 4)
@@ -3581,8 +3583,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
       }
   }
 
-  template <typename LATraits, int dim>
-  void PhaseFieldMonolithicSolve<LATraits, dim>::make_constraints(const unsigned int it_nr)
+  template <typename LATraits, typename Tria>
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::make_constraints(const unsigned int it_nr)
   {
     const bool apply_dirichlet_bc = (it_nr == 0);
 
@@ -4129,8 +4131,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
     m_constraints.close();
   }
 
-  template <typename LATraits, int dim>
-  void PhaseFieldMonolithicSolve<LATraits, dim>::assemble_system_B0()
+  template <typename LATraits, typename Tria>
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::assemble_system_B0()
   {
     m_timer.enter_subsection("Assemble B0");
 
@@ -4169,8 +4171,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
     m_timer.leave_subsection();
   }
 
-  template <typename LATraits, int dim>
-  void PhaseFieldMonolithicSolve<LATraits, dim>::assemble_system_rhs_LBFGS_parallel(const BVector & solution_old,
+  template <typename LATraits, typename Tria>
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::assemble_system_rhs_LBFGS_parallel(const BVector & solution_old,
 								         BVector & system_rhs)
   {
     m_timer.enter_subsection("Assemble RHS");
@@ -4212,13 +4214,13 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
     m_timer.leave_subsection();
   }
 
-  template <typename LATraits, int dim>
-  void PhaseFieldMonolithicSolve<LATraits, dim>::assemble_system_rhs_LBFGS_one_cell(
+  template <typename LATraits, typename Tria>
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::assemble_system_rhs_LBFGS_one_cell(
       const typename DoFHandler<dim>::active_cell_iterator &cell,
       ScratchData_ASM_RHS_BFGS & scratch,
       PerTaskData_ASM_RHS_BFGS & data) const
   {
-      if constexpr (PhaseFieldMonolithicSolve<LATraits, dim>::is_mpi)
+      if constexpr (PhaseFieldMonolithicSolve<LATraits, Tria>::is_mpi)
       {
           if (!cell->is_locally_owned()) {
               return;
@@ -4449,13 +4451,13 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
         }
   }
 
-  template <typename LATraits, int dim>
-  void PhaseFieldMonolithicSolve<LATraits, dim>::assemble_system_B0_one_cell(
+  template <typename LATraits, typename Tria>
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::assemble_system_B0_one_cell(
       const typename DoFHandler<dim>::active_cell_iterator &cell,
       ScratchData_ASM & scratch,
       PerTaskData_ASM & data) const
   {
-      if constexpr (PhaseFieldMonolithicSolve<LATraits, dim>::is_mpi)
+      if constexpr (PhaseFieldMonolithicSolve<LATraits, Tria>::is_mpi)
       {
           if (!cell->is_locally_owned()) {
               return;
@@ -4581,8 +4583,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
       }  // q_point
   }
 
-  template <typename LATraits, int dim>
-  void PhaseFieldMonolithicSolve<LATraits, dim>::update_history_field_step()
+  template <typename LATraits, typename Tria>
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::update_history_field_step()
   {
     m_logfile << "\t\tUpdate history variable" << std::endl;
 
@@ -4599,8 +4601,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
       }
   }
 
-  template <typename LATraits, int dim>
-  double PhaseFieldMonolithicSolve<LATraits, dim>::line_search_stepsize_gradient_based(const BVector & BFGS_p_vector,
+  template <typename LATraits, typename Tria>
+  double PhaseFieldMonolithicSolve<LATraits, Tria>::line_search_stepsize_gradient_based(const BVector & BFGS_p_vector,
 				                                             const BVector & solution_delta)
   {
     BVector g_old(m_system_rhs);
@@ -4665,8 +4667,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
     return alpha;
   }
 
-  template <typename LATraits, int dim>
-  double PhaseFieldMonolithicSolve<LATraits, dim>::line_search_stepsize_strong_wolfe(const double phi_0,
+  template <typename LATraits, typename Tria>
+  double PhaseFieldMonolithicSolve<LATraits, Tria>::line_search_stepsize_strong_wolfe(const double phi_0,
 				                                           const double phi_0_prime,
 				                                           const BVector & BFGS_p_vector,
 				                                           const BVector & solution_delta)
@@ -4737,8 +4739,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
     return alpha;
   }
 
-  template <typename LATraits, int dim>
-  double PhaseFieldMonolithicSolve<LATraits, dim>::
+  template <typename LATraits, typename Tria>
+  double PhaseFieldMonolithicSolve<LATraits, Tria>::
     line_search_zoom_strong_wolfe(double phi_low, double phi_low_prime, double alpha_low,
 				  double phi_high, double phi_high_prime, double alpha_high,
 				  double phi_0, double phi_0_prime, const BVector & BFGS_p_vector,
@@ -4797,8 +4799,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
     return alpha;
   }
 
-  template <typename LATraits, int dim>
-  double PhaseFieldMonolithicSolve<LATraits, dim>::line_search_stepsize_residual_projection(const double f0,
+  template <typename LATraits, typename Tria>
+  double PhaseFieldMonolithicSolve<LATraits, Tria>::line_search_stepsize_residual_projection(const double f0,
 				                                                  const BVector & BFGS_p_vector,
 				                                                  const BVector & solution_delta)
   {
@@ -4861,8 +4863,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
     return 1.01;
   }
 
-  template <typename LATraits, int dim>
-  double PhaseFieldMonolithicSolve<LATraits, dim>::binary_search(double a, double b,
+  template <typename LATraits, typename Tria>
+  double PhaseFieldMonolithicSolve<LATraits, Tria>::binary_search(double a, double b,
 						       double fa, double fb,
 						       const double threshold,
 						       const BVector & BFGS_p_vector,
@@ -4892,8 +4894,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
     return m;
   }
 
-  template <typename LATraits, int dim>
-  double PhaseFieldMonolithicSolve<LATraits, dim>::
+  template <typename LATraits, typename Tria>
+  double PhaseFieldMonolithicSolve<LATraits, Tria>::
     line_search_interpolation_cubic(const double alpha_0, const double phi_0, const double phi_0_prime,
   			            const double alpha_1, const double phi_1, const double phi_1_prime)
   {
@@ -4926,8 +4928,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
     return alpha;
   }
 
-  template <typename LATraits, int dim>
-  std::pair<double, double> PhaseFieldMonolithicSolve<LATraits, dim>::
+  template <typename LATraits, typename Tria>
+  std::pair<double, double> PhaseFieldMonolithicSolve<LATraits, Tria>::
     calculate_phi_and_phi_prime(const double alpha,
 				const BVector & BFGS_p_vector,
 				const BVector & solution_delta)
@@ -4950,8 +4952,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
     return phi_values;
   }
 
-  template <typename LATraits, int dim>
-  double PhaseFieldMonolithicSolve<LATraits, dim>::
+  template <typename LATraits, typename Tria>
+  double PhaseFieldMonolithicSolve<LATraits, Tria>::
     calculate_phi_prime(const double alpha,
 			const BVector & BFGS_p_vector,
 			const BVector & solution_delta)
@@ -4985,8 +4987,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
     return phi_prime;
   }
 
-  template <typename LATraits, int dim>
-  void PhaseFieldMonolithicSolve<LATraits, dim>::LBFGS_B0(BVector & LBFGS_r_vector,
+  template <typename LATraits, typename Tria>
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::LBFGS_B0(BVector & LBFGS_r_vector,
 						const BVector & LBFGS_q_vector)
   {
       m_timer.enter_subsection("Solve B0");
@@ -4998,8 +5000,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
       m_timer.leave_subsection();
   }
 
-  template <typename LATraits, int dim>
-  void PhaseFieldMonolithicSolve<LATraits, dim>::print_conv_header_LBFGS()
+  template <typename LATraits, typename Tria>
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::print_conv_header_LBFGS()
   {
     static const unsigned int l_width = 140;
     m_logfile << '\t' << '\t';
@@ -5018,8 +5020,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
     m_logfile << std::endl;
   }
 
-  template <typename LATraits, int dim>
-  void PhaseFieldMonolithicSolve<LATraits, dim>::
+  template <typename LATraits, typename Tria>
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::
   solve_nonlinear_timestep_LBFGS(BVector & solution_delta,
 				 BVector & LBFGS_update_refine)
   {
@@ -5384,8 +5386,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
                 ExcMessage("No convergence in L-BFGS nonlinear solver!"));
   }
 
-  template <typename LATraits, int dim>
-  void PhaseFieldMonolithicSolve<LATraits, dim>::output_results() const
+  template <typename LATraits, typename Tria>
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::output_results() const
   {
     m_timer.enter_subsection("Output results");
 
@@ -5556,8 +5558,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
     m_timer.leave_subsection();
   }
 
-  template <typename LATraits, int dim>
-  void PhaseFieldMonolithicSolve<LATraits, dim>::calculate_reaction_force(unsigned int face_ID)
+  template <typename LATraits, typename Tria>
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::calculate_reaction_force(unsigned int face_ID)
   {
     m_timer.enter_subsection("Calculate reaction force");
 
@@ -5714,8 +5716,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
     m_timer.leave_subsection();
   }
 
-  template <typename LATraits, int dim>
-  void PhaseFieldMonolithicSolve<LATraits, dim>::write_history_data()
+  template <typename LATraits, typename Tria>
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::write_history_data()
   {
     m_logfile << "\t\tWrite history data ... \n"<<std::endl;
 
@@ -5770,8 +5772,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
       m_logfile << "Unable to open file";
   }
 
-  template <typename LATraits, int dim>
-  double PhaseFieldMonolithicSolve<LATraits, dim>::calculate_energy_functional() const
+  template <typename LATraits, typename Tria>
+  double PhaseFieldMonolithicSolve<LATraits, Tria>::calculate_energy_functional() const
   {
     double energy_functional = 0.0;
 
@@ -5796,9 +5798,9 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
     return energy_functional;
   }
 
-  template <typename LATraits, int dim>
+  template <typename LATraits, typename Tria>
   std::pair<double, double>
-    PhaseFieldMonolithicSolve<LATraits, dim>::calculate_total_strain_energy_and_crack_energy_dissipation() const
+    PhaseFieldMonolithicSolve<LATraits, Tria>::calculate_total_strain_energy_and_crack_energy_dissipation() const
   {
     double total_strain_energy = 0.0;
     double crack_energy_dissipation = 0.0;
@@ -5825,8 +5827,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
   }
 
 
-  template <typename LATraits, int dim>
-  bool PhaseFieldMonolithicSolve<LATraits, dim>::local_refine_and_solution_transfer(BVector & solution_delta,
+  template <typename LATraits, typename Tria>
+  bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transfer(BVector & solution_delta,
 									  BVector & LBFGS_update_refine)
   {
     // This is the solution at (n+1) obtained from the old (coarse) mesh
@@ -6018,8 +6020,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
     return mesh_is_same;
   }
 
-  template <typename LATraits, int dim>
-  void PhaseFieldMonolithicSolve<LATraits, dim>::print_parameter_information()
+  template <typename LATraits, typename Tria>
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::print_parameter_information()
   {
     m_logfile << "Scenario number = " << m_parameters.m_scenario << std::endl;
     m_logfile << "Log file = " << m_parameters.m_logfile_name << std::endl;
@@ -6085,8 +6087,8 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, dim>::BVector;
     m_logfile << "Time data file name = " << m_parameters.m_time_file_name << std::endl;
   }
 
-  template <typename LATraits, int dim>
-  void PhaseFieldMonolithicSolve<LATraits, dim>::run()
+  template <typename LATraits, typename Tria>
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::run()
   {
     print_parameter_information();
 
@@ -6227,10 +6229,20 @@ void init_dirs(PhaseField_monolithic::Parameters::AllParameters &parameters)
 
 
 
+template <int dim>
+using RTria = ::dealii::Triangulation<dim>;
+
+//template <int dim>
+//using DTria = ::dealii::Triangulation<dim>;
+
+template <int dim>
+using DTria = ::dealii::parallel::distributed::Triangulation<dim>;
+
+
 int main(int argc, char* argv[])
 {
 
-  using namespace dealii;
+  using namespace ::dealii;
   using namespace PhaseField_monolithic;
     
     
@@ -6283,13 +6295,13 @@ int main(int argc, char* argv[])
         // PETSc type mpi
         if (dim == 2 )
         {
-            PhaseFieldMonolithicSolve<la::Traits<la::TagPETSc>, 2> Phasefield2D(parameters,
+            PhaseFieldMonolithicSolve<la::Traits<la::TagPETSc>, DTria<2>> Phasefield2D(parameters,
                                                                                 mpiInfo);
             Phasefield2D.run();
         }
         else if (dim == 3)
         {
-            PhaseFieldMonolithicSolve<la::Traits<la::TagPETSc>, 3> Phasefield3D(parameters,
+            PhaseFieldMonolithicSolve<la::Traits<la::TagPETSc>, DTria<3>> Phasefield3D(parameters,
                                                                                 mpiInfo);
             Phasefield3D.run();
         }
@@ -6302,12 +6314,12 @@ int main(int argc, char* argv[])
         // Trilinos type mpi
         if (dim == 2 )
         {
-            PhaseFieldMonolithicSolve<la::Traits<la::TagTrilinos>,2> Phasefield2D(parameters, mpiInfo);
+            PhaseFieldMonolithicSolve<la::Traits<la::TagTrilinos>, DTria<2>> Phasefield2D(parameters, mpiInfo);
             Phasefield2D.run();
         }
         else if (dim == 3)
         {
-            PhaseFieldMonolithicSolve<la::Traits<la::TagTrilinos>,3> Phasefield3D(parameters, mpiInfo);
+            PhaseFieldMonolithicSolve<la::Traits<la::TagTrilinos>, DTria<3>> Phasefield3D(parameters, mpiInfo);
             Phasefield3D.run();
         }
         else
@@ -6319,12 +6331,12 @@ int main(int argc, char* argv[])
         // Serial type
         if (dim == 2 )
         {
-            PhaseFieldMonolithicSolve<la::Traits<la::TagSerial>, 2> Phasefield2D(parameters, mpiInfo);
+            PhaseFieldMonolithicSolve<la::Traits<la::TagSerial>, RTria<2>> Phasefield2D(parameters, mpiInfo);
             Phasefield2D.run();
         }
         else if (dim == 3)
         {
-            PhaseFieldMonolithicSolve<la::Traits<la::TagSerial>, 3> Phasefield3D(parameters, mpiInfo);
+            PhaseFieldMonolithicSolve<la::Traits<la::TagSerial>, RTria<3>> Phasefield3D(parameters, mpiInfo);
             Phasefield3D.run();
         }
         else
