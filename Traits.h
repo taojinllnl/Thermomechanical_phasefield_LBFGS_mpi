@@ -50,29 +50,32 @@ template <>
 struct Traits<TagSerial>
 {
     using TMTag    = TagSerial;
-    using Vector   = dealii::LinearAlgebraDealII::BlockVector;
-    using Matrix   = dealii::LinearAlgebraDealII::BlockSparseMatrix;
-    using IndexSet = dealii::IndexSet;
+    using Vector   = ::dealii::LinearAlgebraDealII::BlockVector;
+    using Matrix   = ::dealii::LinearAlgebraDealII::BlockSparseMatrix;
+    using IndexSet = ::dealii::IndexSet;
     
-    using MatrixBlock   = dealii::LinearAlgebraDealII::SparseMatrix;
+    using MatrixBlock   = ::dealii::LinearAlgebraDealII::SparseMatrix;
 };
-
+}
 
 
 #ifdef DEAL_II_WITH_PETSC
 #  define HAVE_PETSC 1
 #include <deal.II/lac/petsc_solver.h>
 #include <deal.II/lac/petsc_precondition.h>
+#include <deal.II/distributed/tria.h>
+namespace la {
 template <>
 struct Traits<TagPETSc>
 {
     using TMTag    = TagPETSc;
-    using Vector   = dealii::LinearAlgebraPETSc::MPI::BlockVector;
-    using Matrix   = dealii::LinearAlgebraPETSc::MPI::BlockSparseMatrix;
-    using IndexSet = dealii::IndexSet;
+    using Vector   = ::dealii::LinearAlgebraPETSc::MPI::BlockVector;
+    using Matrix   = ::dealii::LinearAlgebraPETSc::MPI::BlockSparseMatrix;
+    using IndexSet = ::dealii::IndexSet;
     
-    using MatrixBlock   = dealii::LinearAlgebraPETSc::MPI::SparseMatrix;
+    using MatrixBlock   = ::dealii::LinearAlgebraPETSc::MPI::SparseMatrix;
 };
+}
 #endif
 
 
@@ -82,19 +85,21 @@ struct Traits<TagPETSc>
 #  define HAVE_TRILINOS 1
 #include <deal.II/lac/trilinos_solver.h>
 #include <deal.II/lac/trilinos_precondition.h>
-
+#include <deal.II/distributed/tria.h>
+namespace la {
 template <>
 struct Traits<TagTrilinos>
 {
     using TMTag    = TagTrilinos;
-    using Vector   = dealii::LinearAlgebraTrilinos::MPI::BlockVector;
-    using Matrix   = dealii::LinearAlgebraTrilinos::MPI::BlockSparseMatrix;
-    using IndexSet = dealii::IndexSet;
+    using Vector   = ::dealii::LinearAlgebraTrilinos::MPI::BlockVector;
+    using Matrix   = ::dealii::LinearAlgebraTrilinos::MPI::BlockSparseMatrix;
+    using IndexSet = ::dealii::IndexSet;
     
-    using MatrixBlock   = dealii::LinearAlgebraTrilinos::MPI::SparseMatrix;
+    using MatrixBlock   = ::dealii::LinearAlgebraTrilinos::MPI::SparseMatrix;
 };
+}
 #endif
 
-}
+
 
 #endif /* Traits_h */
