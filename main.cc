@@ -6333,7 +6333,8 @@ int main(int argc, char* argv[])
             DTria<2> tria(*mpiInfo.mpiCommPtr(),
                           typename Triangulation<2>::MeshSmoothing(
                             Triangulation<2>::smoothing_on_refinement |
-                            Triangulation<2>::smoothing_on_coarsening));
+                            Triangulation<2>::smoothing_on_coarsening),
+                          DTria<2>::no_automatic_repartitioning);
             
             PhaseFieldMonolithicSolve<la::Traits<la::TagPETSc>, DTria<2>> Phasefield2D(parameters, mpiInfo, tria);
             Phasefield2D.run();
@@ -6343,7 +6344,8 @@ int main(int argc, char* argv[])
             DTria<3> tria(*mpiInfo.mpiCommPtr(),
                           typename Triangulation<3>::MeshSmoothing(
                             Triangulation<3>::smoothing_on_refinement |
-                            Triangulation<3>::smoothing_on_coarsening));
+                            Triangulation<3>::smoothing_on_coarsening),
+                          DTria<3>::no_automatic_repartitioning);
             
             PhaseFieldMonolithicSolve<la::Traits<la::TagPETSc>, DTria<3>> Phasefield3D(parameters, mpiInfo, tria);
             Phasefield3D.run();
@@ -6360,7 +6362,8 @@ int main(int argc, char* argv[])
             DTria<2> tria(*mpiInfo.mpiCommPtr(),
                           typename Triangulation<2>::MeshSmoothing(
                             Triangulation<2>::smoothing_on_refinement |
-                            Triangulation<2>::smoothing_on_coarsening));
+                            Triangulation<2>::smoothing_on_coarsening),
+                          DTria<2>::no_automatic_repartitioning);
             
             PhaseFieldMonolithicSolve<la::Traits<la::TagTrilinos>, DTria<2>> Phasefield2D(parameters, mpiInfo, tria);
             Phasefield2D.run();
@@ -6370,7 +6373,8 @@ int main(int argc, char* argv[])
             DTria<3> tria(*mpiInfo.mpiCommPtr(),
                           typename Triangulation<3>::MeshSmoothing(
                             Triangulation<3>::smoothing_on_refinement |
-                            Triangulation<3>::smoothing_on_coarsening));
+                            Triangulation<3>::smoothing_on_coarsening),
+                          DTria<3>::no_automatic_repartitioning);
             
             PhaseFieldMonolithicSolve<la::Traits<la::TagTrilinos>, DTria<3>> Phasefield3D(parameters, mpiInfo, tria);
             Phasefield3D.run();
