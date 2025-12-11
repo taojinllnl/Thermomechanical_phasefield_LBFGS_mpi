@@ -4146,27 +4146,47 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
     PerTaskData_ASM per_task_data(m_fe.n_dofs_per_cell());
     ScratchData_ASM scratch_data(m_fe, m_qf_cell, uf_cell, m_qf_face, uf_face);
 
-    auto worker =
-      [this](const typename DoFHandler<dim>::active_cell_iterator &cell,
-	     ScratchData_ASM & scratch,
-	     PerTaskData_ASM & data)
-      {
-        this->assemble_system_B0_one_cell(cell, scratch, data);
-      };
-
-    auto copier = [this](const PerTaskData_ASM &data)
-      {
-        this->m_constraints.distribute_local_to_global(data.m_cell_matrix,
-                                                       data.m_local_dof_indices,
-						       m_tangent_matrix.base());
-      };
-
-    WorkStream::run(
-      m_dof_handler.active_cell_iterators(),
-      worker,
-      copier,
-      scratch_data,
-      per_task_data);
+      if constexpr (!is_mpi){
+          // non-mpi mode
+          
+          auto worker =
+          [this](const typename DoFHandler<dim>::active_cell_iterator &cell,
+                 ScratchData_ASM & scratch,
+                 PerTaskData_ASM & data)
+          {
+              this->assemble_system_B0_one_cell(cell, scratch, data);
+          };
+          
+          auto copier = [this](const PerTaskData_ASM &data)
+          {
+              this->m_constraints.distribute_local_to_global(data.m_cell_matrix,
+                                                             data.m_local_dof_indices,
+                                                             m_tangent_matrix.base());
+          };
+          
+          WorkStream::run(
+                          m_dof_handler.active_cell_iterators(),
+                          worker,
+                          copier,
+                          scratch_data,
+                          per_task_data);
+      } else {
+          // mpi mode
+          for (const auto &cell : m_dof_handler.active_cell_iterators())
+              if (cell->is_locally_owned())
+              {
+                  assemble_system_B0_one_cell(cell, scratch_data, per_task_data);
+                  
+                  m_constraints.distribute_local_to_global(per_task_data.m_cell_matrix,
+                                                           per_task_data.m_local_dof_indices,
+                                                           m_tangent_matrix.base());
+              }
+          
+          /*  *  *  *   *   *   *   *   *  MPI  *   *   *   *   *   *   *   *   */
+          m_tangent_matrix.compress(VectorOperation::add);
+          /*  *  *  *   *   *   *   *   *  MPI  *   *   *   *   *   *   *   *   */
+          
+      }
 
     m_timer.leave_subsection();
   }
@@ -4189,6 +4209,9 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
     PerTaskData_ASM_RHS_BFGS per_task_data(m_fe.n_dofs_per_cell());
     ScratchData_ASM_RHS_BFGS scratch_data(m_fe, m_qf_cell, uf_cell, m_qf_face, uf_face, solution_old);
 
+      if constexpr (!is_mpi){
+          // non-mpi mode
+          
     auto worker =
       [this](const typename DoFHandler<dim>::active_cell_iterator &cell,
 	     ScratchData_ASM_RHS_BFGS & scratch,
@@ -4210,6 +4233,26 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
       copier,
       scratch_data,
       per_task_data);
+          
+          
+      } else {
+          // mpi mode
+          
+          for (const auto &cell : m_dof_handler.active_cell_iterators())
+              if (cell->is_locally_owned())
+              {
+                  assemble_system_rhs_LBFGS_one_cell(cell, scratch_data, per_task_data);
+                  
+                  m_constraints.distribute_local_to_global(per_task_data.m_cell_rhs,
+                                                           per_task_data.m_local_dof_indices,
+                                                           system_rhs.base());
+              }
+          
+
+          /*  *  *  *   *   *   *   *   *  MPI  *   *   *   *   *   *   *   *   */
+          system_rhs.compress(VectorOperation::add);
+          /*  *  *  *   *   *   *   *   *  MPI  *   *   *   *   *   *   *   *   */
+      }
 
     m_timer.leave_subsection();
   }
@@ -4219,236 +4262,231 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
       const typename DoFHandler<dim>::active_cell_iterator &cell,
       ScratchData_ASM_RHS_BFGS & scratch,
       PerTaskData_ASM_RHS_BFGS & data) const
-  {
-      if constexpr (PhaseFieldMonolithicSolve<LATraits, Tria>::is_mpi)
-      {
-          if (!cell->is_locally_owned()) {
-              return;
-          }
-      }
-      
+{
     data.reset();
     scratch.reset();
     scratch.m_fe_values.reinit(cell);
     cell->get_dof_indices(data.m_local_dof_indices);
-
+    
     scratch.m_fe_values[m_u_fe].get_function_symmetric_gradients(
-      scratch.m_solution_previous_step, scratch.m_strain_previous_step_cell);
-
+                                                                 scratch.m_solution_previous_step, scratch.m_strain_previous_step_cell);
+    
     scratch.m_fe_values[m_d_fe].get_function_values(
-      scratch.m_solution_previous_step, scratch.m_phasefield_previous_step_cell);
-
+                                                    scratch.m_solution_previous_step, scratch.m_phasefield_previous_step_cell);
+    
     scratch.m_fe_values[m_t_fe].get_function_values(
-      scratch.m_solution_previous_step, scratch.m_temperature_previous_step_cell);
-
+                                                    scratch.m_solution_previous_step, scratch.m_temperature_previous_step_cell);
+    
     const std::vector<std::shared_ptr<const PointHistory<dim>>> lqph =
-      m_quadrature_point_history.get_data(cell);
+    m_quadrature_point_history.get_data(cell);
     Assert(lqph.size() == m_n_q_points, ExcInternalError());
-
+    
     const double time_ramp = (m_time.current() / m_time.end());
     std::vector<Tensor<1, dim>> rhs_values(m_n_q_points);
-
+    
     right_hand_side(scratch.m_fe_values.get_quadrature_points(),
-		    rhs_values,
-		    m_parameters.m_x_component*1.0,
-		    m_parameters.m_y_component*1.0,
-		    m_parameters.m_z_component*1.0);
-
+                    rhs_values,
+                    m_parameters.m_x_component*1.0,
+                    m_parameters.m_y_component*1.0,
+                    m_parameters.m_z_component*1.0);
+    
     std::vector<double> heat_supply_values(m_n_q_points);
-
+    
     heat_supply(scratch.m_fe_values.get_quadrature_points(),
-		heat_supply_values,
-		m_parameters.m_heat_supply*1.0);
-
+                heat_supply_values,
+                m_parameters.m_heat_supply*1.0);
+    
     const double delta_time = m_time.get_delta_t();
-
+    
     for (const unsigned int q_point : scratch.m_fe_values.quadrature_point_indices())
-      {
+    {
         for (const unsigned int k : scratch.m_fe_values.dof_indices())
-          {
+        {
             const unsigned int k_group = m_fe.system_to_base_index(k).first.first;
-
+            
             if (k_group == m_u_dof)
-              {
+            {
                 scratch.m_Nx_disp[q_point][k] =
-                  scratch.m_fe_values[m_u_fe].value(k, q_point);
+                scratch.m_fe_values[m_u_fe].value(k, q_point);
                 scratch.m_grad_Nx_disp[q_point][k] =
-                  scratch.m_fe_values[m_u_fe].gradient(k, q_point);
+                scratch.m_fe_values[m_u_fe].gradient(k, q_point);
                 scratch.m_symm_grad_Nx_disp[q_point][k] =
-                  symmetrize(scratch.m_grad_Nx_disp[q_point][k]);
-              }
+                symmetrize(scratch.m_grad_Nx_disp[q_point][k]);
+            }
             else if (k_group == m_d_dof)
-              {
-		scratch.m_Nx_phasefield[q_point][k] =
-		  scratch.m_fe_values[m_d_fe].value(k, q_point);
-		scratch.m_grad_Nx_phasefield[q_point][k] =
-		  scratch.m_fe_values[m_d_fe].gradient(k, q_point);
-              }
+            {
+                scratch.m_Nx_phasefield[q_point][k] =
+                scratch.m_fe_values[m_d_fe].value(k, q_point);
+                scratch.m_grad_Nx_phasefield[q_point][k] =
+                scratch.m_fe_values[m_d_fe].gradient(k, q_point);
+            }
             else if (k_group == m_t_dof)
-              {
-		scratch.m_Nx_temperature[q_point][k] =
-		  scratch.m_fe_values[m_t_fe].value(k, q_point);
-		scratch.m_grad_Nx_temperature[q_point][k] =
-		  scratch.m_fe_values[m_t_fe].gradient(k, q_point);
-              }
+            {
+                scratch.m_Nx_temperature[q_point][k] =
+                scratch.m_fe_values[m_t_fe].value(k, q_point);
+                scratch.m_grad_Nx_temperature[q_point][k] =
+                scratch.m_fe_values[m_t_fe].gradient(k, q_point);
+            }
             else
-              Assert(k_group <= m_t_dof, ExcInternalError());
-          }
-      }
-
+                Assert(k_group <= m_t_dof, ExcInternalError());
+        }
+    }
+    
     for (const unsigned int q_point : scratch.m_fe_values.quadrature_point_indices())
-      {
-	const double length_scale            = lqph[q_point]->get_length_scale();
-	// temperature-dependent critical energy release rate
-	const double gc_t                    = lqph[q_point]->get_critical_energy_release_rate();
-	const double eta                     = lqph[q_point]->get_viscosity();
-	const double history_strain_energy   = lqph[q_point]->get_history_max_positive_strain_energy();
-	const double current_positive_strain_energy = lqph[q_point]->get_current_positive_strain_energy();
-	const double heat_capacity           = lqph[q_point]->get_heat_capacity();
+    {
+        const double length_scale            = lqph[q_point]->get_length_scale();
+        // temperature-dependent critical energy release rate
+        const double gc_t                    = lqph[q_point]->get_critical_energy_release_rate();
+        const double eta                     = lqph[q_point]->get_viscosity();
+        const double history_strain_energy   = lqph[q_point]->get_history_max_positive_strain_energy();
+        const double current_positive_strain_energy = lqph[q_point]->get_current_positive_strain_energy();
+        const double heat_capacity           = lqph[q_point]->get_heat_capacity();
         const double ref_t                   = lqph[q_point]->get_ref_temperature();
         const double thermal_expansion       = lqph[q_point]->get_thermal_expansion_coeff();
         const double lame_lambda             = lqph[q_point]->get_lame_lambda();
         const double lame_mu                 = lqph[q_point]->get_lame_mu();
         const bool   coupling_on_heat_eq     = lqph[q_point]->get_heat_coupling_flag();
-
+        
         double coupling_tensor_coeff = thermal_expansion
-             * (trace(Physics::Elasticity::StandardTensors<dim>::I)*lame_lambda + 2.0*lame_mu);
-
+        * (trace(Physics::Elasticity::StandardTensors<dim>::I)*lame_lambda + 2.0*lame_mu);
+        
         if (!coupling_on_heat_eq)
-          coupling_tensor_coeff = 0.0;
-
+            coupling_tensor_coeff = 0.0;
+        
         const SymmetricTensor<2, dim> ut_coupling_tensor
-             = coupling_tensor_coeff * Physics::Elasticity::StandardTensors<dim>::I;
-
-	double history_value = history_strain_energy;
-	if (current_positive_strain_energy > history_strain_energy)
-	  history_value = current_positive_strain_energy;
-
-	const double phasefield_value        = lqph[q_point]->get_phase_field_value();
-	const Tensor<1, dim> phasefield_grad = lqph[q_point]->get_phase_field_gradient();
-
-	const double temperature_value        = lqph[q_point]->get_temperature_value();
-
-	// current total strain
-	const SymmetricTensor<2, dim> & current_strain = lqph[q_point]->get_strain();
+        = coupling_tensor_coeff * Physics::Elasticity::StandardTensors<dim>::I;
+        
+        double history_value = history_strain_energy;
+        if (current_positive_strain_energy > history_strain_energy)
+            history_value = current_positive_strain_energy;
+        
+        const double phasefield_value        = lqph[q_point]->get_phase_field_value();
+        const Tensor<1, dim> phasefield_grad = lqph[q_point]->get_phase_field_gradient();
+        
+        const double temperature_value        = lqph[q_point]->get_temperature_value();
+        
+        // current total strain
+        const SymmetricTensor<2, dim> & current_strain = lqph[q_point]->get_strain();
         // previous total strain
-	const SymmetricTensor<2, dim> & old_strain = scratch.m_strain_previous_step_cell[q_point];
-
+        const SymmetricTensor<2, dim> & old_strain = scratch.m_strain_previous_step_cell[q_point];
+        
         const std::vector<double>         &      N_phasefield = scratch.m_Nx_phasefield[q_point];
         const std::vector<Tensor<1, dim>> & grad_N_phasefield = scratch.m_grad_Nx_phasefield[q_point];
         const double                old_phasefield = scratch.m_phasefield_previous_step_cell[q_point];
-
+        
         const std::vector<double>         &      N_temperature = scratch.m_Nx_temperature[q_point];
         const std::vector<Tensor<1, dim>> & grad_N_temperature = scratch.m_grad_Nx_temperature[q_point];
         const double                old_temperature = scratch.m_temperature_previous_step_cell[q_point];
-
+        
         const SymmetricTensor<2, dim> & cauchy_stress = lqph[q_point]->get_cauchy_stress();
         const Tensor<1, dim> & heat_flux = lqph[q_point]->get_heat_flux();
-
+        
         const std::vector<Tensor<1,dim>> & N_disp = scratch.m_Nx_disp[q_point];
         const std::vector<SymmetricTensor<2, dim>> & symm_grad_N_disp =
-          scratch.m_symm_grad_Nx_disp[q_point];
+        scratch.m_symm_grad_Nx_disp[q_point];
         const double JxW = scratch.m_fe_values.JxW(q_point);
-
+        
         SymmetricTensor<2, dim> symm_grad_Nx_i_x_C;
-
+        
         for (const unsigned int i : scratch.m_fe_values.dof_indices())
-          {
+        {
             const unsigned int i_group = m_fe.system_to_base_index(i).first.first;
-
+            
             if (i_group == m_u_dof)
-              {
+            {
                 data.m_cell_rhs(i) += (symm_grad_N_disp[i] * cauchy_stress) * JxW;
-
-		// contributions from the body force to right-hand side
-		data.m_cell_rhs(i) -= N_disp[i] * rhs_values[q_point] * JxW;
-              }
+                
+                // contributions from the body force to right-hand side
+                data.m_cell_rhs(i) -= N_disp[i] * rhs_values[q_point] * JxW;
+            }
             else if (i_group == m_d_dof)
-              {
-    	        data.m_cell_rhs(i) += (    gc_t * length_scale * grad_N_phasefield[i] * phasefield_grad
-    	                                +  (   gc_t / length_scale * phasefield_value
-					     + eta / delta_time  * (phasefield_value - old_phasefield)
-					     + degradation_function_derivative(phasefield_value) * history_value )
-					  * N_phasefield[i]
-				      ) * JxW;
-              }
+            {
+                data.m_cell_rhs(i) += (    gc_t * length_scale * grad_N_phasefield[i] * phasefield_grad
+                                       +  (   gc_t / length_scale * phasefield_value
+                                           + eta / delta_time  * (phasefield_value - old_phasefield)
+                                           + degradation_function_derivative(phasefield_value) * history_value )
+                                       * N_phasefield[i]
+                                       ) * JxW;
+            }
             else if (i_group == m_t_dof)
-              {
-        	data.m_cell_rhs(i) += (heat_capacity * N_temperature[i]
-					             * (temperature_value - old_temperature) / ref_t) * JxW;
-        	data.m_cell_rhs(i) -= (grad_N_temperature[i] * heat_flux * delta_time / ref_t) * JxW;
-        	data.m_cell_rhs(i) -= N_temperature[i] * heat_supply_values[q_point] * delta_time /ref_t * JxW;
-
-        	// the mechanical-thermal coupling term
-        	data.m_cell_rhs(i) += N_temperature[i]
-				   * ut_coupling_tensor
-				   * (current_strain - old_strain)
-				   * JxW;
-
-              }
+            {
+                data.m_cell_rhs(i) += (heat_capacity * N_temperature[i]
+                                       * (temperature_value - old_temperature) / ref_t) * JxW;
+                data.m_cell_rhs(i) -= (grad_N_temperature[i] * heat_flux * delta_time / ref_t) * JxW;
+                data.m_cell_rhs(i) -= N_temperature[i] * heat_supply_values[q_point] * delta_time /ref_t * JxW;
+                
+                // the mechanical-thermal coupling term
+                data.m_cell_rhs(i) += N_temperature[i]
+                * ut_coupling_tensor
+                * (current_strain - old_strain)
+                * JxW;
+                
+            }
             else
-              Assert(i_group <= m_t_dof, ExcInternalError());
-          }  // i
-      }  // q_point
-
+                Assert(i_group <= m_t_dof, ExcInternalError());
+        }  // i
+    }  // q_point
+    
     // if there is surface pressure, this surface pressure always applied to the
     // reference configuration
     const unsigned int face_pressure_id = 100;
     const double p0 = 0.0;
-
-    for (const auto &face : cell->face_iterators())
-      if (face->at_boundary() && face->boundary_id() == face_pressure_id)
+    
+    for (const auto &face : cell->face_iterators()) {
+        if (face->at_boundary() && face->boundary_id() == face_pressure_id)
         {
-          scratch.m_fe_face_values.reinit(cell, face);
-
-          for (const unsigned int f_q_point : scratch.m_fe_face_values.quadrature_point_indices())
+            scratch.m_fe_face_values.reinit(cell, face);
+            
+            for (const unsigned int f_q_point : scratch.m_fe_face_values.quadrature_point_indices())
             {
-              const Tensor<1, dim> &N = scratch.m_fe_face_values.normal_vector(f_q_point);
-
-              const double         pressure  = p0 * time_ramp;
-              const Tensor<1, dim> traction  = pressure * N;
-
-              for (const unsigned int i : scratch.m_fe_values.dof_indices())
+                const Tensor<1, dim> &N = scratch.m_fe_face_values.normal_vector(f_q_point);
+                
+                const double         pressure  = p0 * time_ramp;
+                const Tensor<1, dim> traction  = pressure * N;
+                
+                for (const unsigned int i : scratch.m_fe_values.dof_indices())
                 {
-                  const unsigned int i_group = m_fe.system_to_base_index(i).first.first;
-
-                  if (i_group == m_u_dof)
+                    const unsigned int i_group = m_fe.system_to_base_index(i).first.first;
+                    
+                    if (i_group == m_u_dof)
                     {
-    		      const unsigned int component_i = m_fe.system_to_component_index(i).first;
-    		      const double Ni = scratch.m_fe_face_values.shape_value(i, f_q_point);
-    		      const double JxW = scratch.m_fe_face_values.JxW(f_q_point);
-    		      data.m_cell_rhs(i) -= (Ni * traction[component_i]) * JxW;
+                        const unsigned int component_i = m_fe.system_to_component_index(i).first;
+                        const double Ni = scratch.m_fe_face_values.shape_value(i, f_q_point);
+                        const double JxW = scratch.m_fe_face_values.JxW(f_q_point);
+                        data.m_cell_rhs(i) -= (Ni * traction[component_i]) * JxW;
                     }
                 }
             }
         }
-
+    }
+    
     // surface heat flux (Neumann BC)
     const unsigned int face_flux_id = 100;
     const double h0 = 0.0;
-
-    for (const auto &face : cell->face_iterators())
-      if (face->at_boundary() && face->boundary_id() == face_flux_id)
+    
+    for (const auto &face : cell->face_iterators()){
+        if (face->at_boundary() && face->boundary_id() == face_flux_id)
         {
-          scratch.m_fe_face_values.reinit(cell, face);
-
-          for (const unsigned int f_q_point : scratch.m_fe_face_values.quadrature_point_indices())
+            scratch.m_fe_face_values.reinit(cell, face);
+            
+            for (const unsigned int f_q_point : scratch.m_fe_face_values.quadrature_point_indices())
             {
-              const double         flux  = h0 * time_ramp;
-
-              for (const unsigned int i : scratch.m_fe_values.dof_indices())
+                const double         flux  = h0 * time_ramp;
+                
+                for (const unsigned int i : scratch.m_fe_values.dof_indices())
                 {
-                  const unsigned int i_group = m_fe.system_to_base_index(i).first.first;
-
-                  if (i_group == m_t_dof)
+                    const unsigned int i_group = m_fe.system_to_base_index(i).first.first;
+                    
+                    if (i_group == m_t_dof)
                     {
-    		      const double Ni = scratch.m_fe_face_values.shape_value(i, f_q_point);
-    		      const double JxW = scratch.m_fe_face_values.JxW(f_q_point);
-    		      data.m_cell_rhs(i) -= Ni * flux * JxW;
+                        const double Ni = scratch.m_fe_face_values.shape_value(i, f_q_point);
+                        const double JxW = scratch.m_fe_face_values.JxW(f_q_point);
+                        data.m_cell_rhs(i) -= Ni * flux * JxW;
                     }
                 }
             }
         }
+    }
   }
 
   template <typename LATraits, typename Tria>
@@ -4457,12 +4495,6 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
       ScratchData_ASM & scratch,
       PerTaskData_ASM & data) const
   {
-      if constexpr (PhaseFieldMonolithicSolve<LATraits, Tria>::is_mpi)
-      {
-          if (!cell->is_locally_owned()) {
-              return;
-          }
-      }
     data.reset();
     scratch.reset();
     scratch.m_fe_values.reinit(cell);
