@@ -125,6 +125,16 @@
 
 #include "LASolver.h"
 
+
+
+template <int dim, int spacedim = dim>
+using RTria = ::dealii::Triangulation<dim, spacedim>;
+
+template <int dim, int spacedim = dim>
+using DTria = ::dealii::parallel::distributed::Triangulation<dim, spacedim>;
+
+
+
 namespace PhaseField_monolithic
 {
   using namespace dealii;
@@ -2236,6 +2246,15 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
     else
       Assert(false, ExcMessage("The scenario has not been implemented!"));
 
+      if constexpr (std::is_same_v<Tria, DTria<2>> ||
+                    std::is_same_v<Tria, DTria<3>>)
+      {
+          // TODO: flag for repartitioning
+          if(true) {
+              m_triangulation.repartition();
+          }
+      }
+      
     m_logfile << "\t\tTriangulation:"
               << "\n\t\t\tNumber of active cells: "
               << m_triangulation.n_active_cells()
@@ -6264,14 +6283,6 @@ void init_dirs(PhaseField_monolithic::Parameters::AllParameters &parameters)
 
 
 
-template <int dim>
-using RTria = ::dealii::Triangulation<dim>;
-
-//template <int dim>
-//using DTria = ::dealii::Triangulation<dim>;
-
-template <int dim>
-using DTria = ::dealii::parallel::distributed::Triangulation<dim>;
 
 
 int main(int argc, char* argv[])
