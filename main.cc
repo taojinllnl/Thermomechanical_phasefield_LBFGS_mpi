@@ -1250,7 +1250,8 @@ namespace PhaseField_monolithic
 //      using BVector  = BlockVector<double>;
       
       PhaseFieldMonolithicSolve(const Parameters::AllParameters& parameters,
-                                const MPIInfo& mpiInfo);
+                                const MPIInfo& mpiInfo,
+                                Tria& triangulation);
 
     virtual ~PhaseFieldMonolithicSolve() = default;
     void run();
@@ -1266,7 +1267,7 @@ namespace PhaseField_monolithic
     struct ScratchData_UQPH;
 
     const Parameters::AllParameters& m_parameters;
-    Tria m_triangulation;
+    Tria& m_triangulation;
 
     CellDataStorage<typename Triangulation<dim>::cell_iterator,
                     PointHistory<dim>>
@@ -2161,9 +2162,11 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
   template <typename LATraits, typename Tria>
   PhaseFieldMonolithicSolve<LATraits, Tria>
 ::PhaseFieldMonolithicSolve(const Parameters::AllParameters& parameters,
-                            const MPIInfo& mpiInfo)
+                            const MPIInfo& mpiInfo,
+                            Tria& triangulation)
     : m_parameters(parameters)
-    , m_triangulation(Triangulation<dim>::maximum_smoothing)
+//    , m_triangulation(Triangulation<dim>::maximum_smoothing)
+    , m_triangulation(triangulation)
     , m_time(m_parameters.m_end_time)
     , m_mpiInfo(mpiInfo)
 //    , m_logfile(mpiInfo, parameters.m_output_dir, parameters.m_logfile_name, 0)
@@ -6327,14 +6330,22 @@ int main(int argc, char* argv[])
         // PETSc type mpi
         if (dim == 2 )
         {
-            PhaseFieldMonolithicSolve<la::Traits<la::TagPETSc>, DTria<2>> Phasefield2D(parameters,
-                                                                                mpiInfo);
+            DTria<2> tria(*mpiInfo.mpiCommPtr(),
+                          typename Triangulation<2>::MeshSmoothing(
+                            Triangulation<2>::smoothing_on_refinement |
+                            Triangulation<2>::smoothing_on_coarsening));
+            
+            PhaseFieldMonolithicSolve<la::Traits<la::TagPETSc>, DTria<2>> Phasefield2D(parameters, mpiInfo, tria);
             Phasefield2D.run();
         }
         else if (dim == 3)
         {
-            PhaseFieldMonolithicSolve<la::Traits<la::TagPETSc>, DTria<3>> Phasefield3D(parameters,
-                                                                                mpiInfo);
+            DTria<3> tria(*mpiInfo.mpiCommPtr(),
+                          typename Triangulation<3>::MeshSmoothing(
+                            Triangulation<3>::smoothing_on_refinement |
+                            Triangulation<3>::smoothing_on_coarsening));
+            
+            PhaseFieldMonolithicSolve<la::Traits<la::TagPETSc>, DTria<3>> Phasefield3D(parameters, mpiInfo, tria);
             Phasefield3D.run();
         }
         else
@@ -6346,12 +6357,22 @@ int main(int argc, char* argv[])
         // Trilinos type mpi
         if (dim == 2 )
         {
-            PhaseFieldMonolithicSolve<la::Traits<la::TagTrilinos>, DTria<2>> Phasefield2D(parameters, mpiInfo);
+            DTria<2> tria(*mpiInfo.mpiCommPtr(),
+                          typename Triangulation<2>::MeshSmoothing(
+                            Triangulation<2>::smoothing_on_refinement |
+                            Triangulation<2>::smoothing_on_coarsening));
+            
+            PhaseFieldMonolithicSolve<la::Traits<la::TagTrilinos>, DTria<2>> Phasefield2D(parameters, mpiInfo, tria);
             Phasefield2D.run();
         }
         else if (dim == 3)
         {
-            PhaseFieldMonolithicSolve<la::Traits<la::TagTrilinos>, DTria<3>> Phasefield3D(parameters, mpiInfo);
+            DTria<3> tria(*mpiInfo.mpiCommPtr(),
+                          typename Triangulation<3>::MeshSmoothing(
+                            Triangulation<3>::smoothing_on_refinement |
+                            Triangulation<3>::smoothing_on_coarsening));
+            
+            PhaseFieldMonolithicSolve<la::Traits<la::TagTrilinos>, DTria<3>> Phasefield3D(parameters, mpiInfo, tria);
             Phasefield3D.run();
         }
         else
@@ -6363,12 +6384,16 @@ int main(int argc, char* argv[])
         // Serial type
         if (dim == 2 )
         {
-            PhaseFieldMonolithicSolve<la::Traits<la::TagSerial>, RTria<2>> Phasefield2D(parameters, mpiInfo);
+            RTria<2> tria(Triangulation<2>::maximum_smoothing);
+            
+            PhaseFieldMonolithicSolve<la::Traits<la::TagSerial>, RTria<2>> Phasefield2D(parameters, mpiInfo, tria);
             Phasefield2D.run();
         }
         else if (dim == 3)
         {
-            PhaseFieldMonolithicSolve<la::Traits<la::TagSerial>, RTria<3>> Phasefield3D(parameters, mpiInfo);
+            RTria<3> tria(Triangulation<3>::maximum_smoothing);
+            
+            PhaseFieldMonolithicSolve<la::Traits<la::TagSerial>, RTria<3>> Phasefield3D(parameters, mpiInfo, tria);
             Phasefield3D.run();
         }
         else
