@@ -58,6 +58,12 @@ struct Traits<TagSerial>
 };
 }
 
+template <int dim, int spacedim = dim>
+using RTria = ::dealii::Triangulation<dim, spacedim>;
+
+
+
+
 
 #ifdef DEAL_II_WITH_PETSC
 #  define HAVE_PETSC 1
@@ -76,6 +82,14 @@ struct Traits<TagPETSc>
     using MatrixBlock   = ::dealii::LinearAlgebraPETSc::MPI::SparseMatrix;
 };
 }
+
+
+#ifndef DISTRIBUTED_TRIA
+#   define DISTRIBUTED_TRIA 1
+template <int dim, int spacedim = dim>
+using DTria = ::dealii::parallel::distributed::Triangulation<dim, spacedim>;
+#endif
+
 #endif
 
 
@@ -98,6 +112,14 @@ struct Traits<TagTrilinos>
     using MatrixBlock   = ::dealii::LinearAlgebraTrilinos::MPI::SparseMatrix;
 };
 }
+
+#ifndef DISTRIBUTED_TRIA
+#   define DISTRIBUTED_TRIA 1
+template <int dim, int spacedim = dim>
+using DTria = ::dealii::parallel::distributed::Triangulation<dim, spacedim>;
+#endif
+
+
 #endif
 
 
