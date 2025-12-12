@@ -125,13 +125,14 @@
 
 #include "LASolver.h"
 
+#include "OutputHelper.h"
 
 
-template <int dim, int spacedim = dim>
-using RTria = ::dealii::Triangulation<dim, spacedim>;
-
-template <int dim, int spacedim = dim>
-using DTria = ::dealii::parallel::distributed::Triangulation<dim, spacedim>;
+//template <int dim, int spacedim = dim>
+//using RTria = ::dealii::Triangulation<dim, spacedim>;
+//
+//template <int dim, int spacedim = dim>
+//using DTria = ::dealii::parallel::distributed::Triangulation<dim, spacedim>;
 
 
 
@@ -1243,6 +1244,9 @@ namespace PhaseField_monolithic
     bool   m_coupling_on_heat_eq;
   };
 
+
+ 
+
   template <typename LATraits, typename Tria>
   class PhaseFieldMonolithicSolve
   {
@@ -1346,6 +1350,9 @@ namespace PhaseField_monolithic
     std::vector<std::pair<double, std::array<double, 3>>> m_history_energy;
 
     LASolver<LATraits>     m_solver;
+      
+      
+    OutputHelper<LATraits, Tria, PointHistory<dim>>   m_output;
 
     struct Errors
     {
@@ -2206,7 +2213,8 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
     , m_qf_face(m_parameters.m_quad_order)
     , m_n_q_points(m_qf_cell.size())
     , m_vol_reference(0.0)
-    , m_tangent_matrix(m_mpiInfo, m_blocks_desc,
+    , m_tangent_matrix(m_mpiInfo, 
+                       m_blocks_desc,
                        [](unsigned int, unsigned int){return DoFTools::always;})
     , m_system_rhs(m_mpiInfo, m_blocks_desc, /*relevance=*/ true)
     , m_solution(m_mpiInfo, m_blocks_desc, /*relevance=*/ true)
@@ -2216,6 +2224,10 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
                m_parameters.m_cg_d_tol,
                m_parameters.m_cg_t_tol,
                m_blocks_desc)
+    , m_output(m_mpiInfo,
+               m_triangulation,
+               m_dof_handler,
+               m_qf_cell)
   {}
 
   template <typename LATraits, typename Tria>
@@ -5445,170 +5457,183 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
   {
     m_timer.enter_subsection("Output results");
 
-    DataOut<dim> data_out;
-
-    std::vector<DataComponentInterpretation::DataComponentInterpretation>
-      data_component_interpretation(
-        dim, DataComponentInterpretation::component_is_part_of_vector);
-
-    data_component_interpretation.push_back(
-      DataComponentInterpretation::component_is_scalar);
-
-    data_component_interpretation.push_back(
-      DataComponentInterpretation::component_is_scalar);
-
-    std::vector<std::string> solution_name(dim, "displacement");
-    solution_name.emplace_back("phasefield");
-    solution_name.emplace_back("temperature");
-
-    data_out.attach_dof_handler(m_dof_handler);
-    data_out.add_data_vector(m_solution.base(),
-                             solution_name,
-                             DataOut<dim>::type_dof_data,
-                             data_component_interpretation);
-
-    Vector<double> cell_material_id(m_triangulation.n_active_cells());
-    // output material ID for each cell
-    for (const auto &cell : m_triangulation.active_cell_iterators())
-      {
-	cell_material_id(cell->active_cell_index()) = cell->material_id();
-      }
-    data_out.add_data_vector(cell_material_id, "materialID");
-
-    //L2 projection
-    DoFHandler<dim> dof_handler_L2(m_triangulation);
-    FE_Q<dim>     fe_L2(m_parameters.m_poly_degree); //FE_Q element is continuous
-    dof_handler_L2.distribute_dofs(fe_L2);
-    AffineConstraints<double> constraints;
-    constraints.clear();
-    DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
-    constraints.close();
-    std::vector<DataComponentInterpretation::DataComponentInterpretation>
-	  data_component_interpretation_L2(1,
-				           DataComponentInterpretation::component_is_scalar);
-
-    //stress L2 projection
-    for (unsigned int i = 0; i < dim; ++i)
-      for (unsigned int j = i; j < dim; ++j)
-	{
-	  Vector<double> stress_field_L2;
-	  stress_field_L2.reinit(dof_handler_L2.n_dofs());
-
-	  MappingQ<dim> mapping(m_parameters.m_poly_degree + 1);
-	  VectorTools::project(mapping,
-			       dof_handler_L2,
-			       constraints,
-			       m_qf_cell,
-			       [&] (const typename DoFHandler<dim>::active_cell_iterator & cell,
-				    const unsigned int q) -> double
-			       {
-				 return m_quadrature_point_history.get_data(cell)[q]->get_cauchy_stress()[i][j];
-			       },
-			       stress_field_L2);
-
-	  std::string stress_name = "Cauchy_stress_" + std::to_string(i+1) + std::to_string(j+1)
-				  + "_L2";
-
-	  data_out.add_data_vector(dof_handler_L2,
-				   stress_field_L2,
-				   stress_name,
-				   data_component_interpretation_L2);
-	}
-
-    // Heat flux L2 projection
-    Vector<double> heat_flux_field_L2_x;
-    Vector<double> heat_flux_field_L2_y;
-    Vector<double> heat_flux_field_L2_z;
-
-    for (unsigned int i = 0; i < dim; ++i)
-      {
-	Vector<double> heat_flux_field_L2;
-	heat_flux_field_L2.reinit(dof_handler_L2.n_dofs());
-
-	MappingQ<dim> mapping(m_parameters.m_poly_degree + 1);
-	VectorTools::project(mapping,
-			     dof_handler_L2,
-			     constraints,
-			     m_qf_cell,
-			     [&] (const typename DoFHandler<dim>::active_cell_iterator & cell,
-				  const unsigned int q) -> double
-			     {
-			       return m_quadrature_point_history.get_data(cell)[q]->get_heat_flux()[i];
-			     },
-			     heat_flux_field_L2);
-
-	std::string heat_flux_name = "Heat_flux_" + std::to_string(i+1) + "_L2";
-
-	data_out.add_data_vector(dof_handler_L2,
-				 heat_flux_field_L2,
-				 heat_flux_name,
-				 data_component_interpretation_L2);
-	if (i == 0)
-	  heat_flux_field_L2_x = heat_flux_field_L2;
-	else if (i == 1)
-	  heat_flux_field_L2_y = heat_flux_field_L2;
-	else if (i == 2)
-	  heat_flux_field_L2_z = heat_flux_field_L2;
-	else
-	  AssertThrow(false,
-	      	      ExcMessage("Heat flux output is wrong!"));
-      }
-
-    // For 2D problems, let the flux in the third direction is zero
-    if (dim == 2)
-      {
-	Vector<double> heat_flux_field_L2;
-	heat_flux_field_L2.reinit(dof_handler_L2.n_dofs());
-	heat_flux_field_L2 = 0;
-	std::string heat_flux_name = "Heat_flux_" + std::to_string(3) + "_L2";
-	data_out.add_data_vector(dof_handler_L2,
-				 heat_flux_field_L2,
-				 heat_flux_name,
-	    			 data_component_interpretation_L2);
-	heat_flux_field_L2_z = 0;
-      }
-
-    DoFHandler<dim> dof_handler_L2_flux(m_triangulation);
-    FESystem<dim>   fe_flux_L2(FE_Q<dim>(m_parameters.m_poly_degree), dim);
-    dof_handler_L2_flux.distribute_dofs(fe_flux_L2);
-    std::vector<DataComponentInterpretation::DataComponentInterpretation>
-	  data_component_interpretation_flux_L2(dim,
-				                DataComponentInterpretation::component_is_part_of_vector);
-
-    Vector<double> heat_flux_field_L2;
-    heat_flux_field_L2.reinit(dof_handler_L2_flux.n_dofs());
-
-    if (dim == 2)
-      {
-	for (unsigned int i = 0; i < heat_flux_field_L2_x.size(); ++i)
-	  {
-	    heat_flux_field_L2(0+i*dim) = heat_flux_field_L2_x(i);
-	    heat_flux_field_L2(1+i*dim) = heat_flux_field_L2_y(i);
-	  }
-      }
-
-    if (dim == 3)
-      {
-	for (unsigned int i = 0; i < heat_flux_field_L2_x.size(); ++i)
-	  {
-	    heat_flux_field_L2(0+i*dim) = heat_flux_field_L2_x(i);
-	    heat_flux_field_L2(1+i*dim) = heat_flux_field_L2_y(i);
-	    heat_flux_field_L2(2+i*dim) = heat_flux_field_L2_z(i);
-	  }
-      }
-
-    std::vector<std::string> solution_name_flux(dim, "Heat_flux_vector");
-    data_out.add_data_vector(dof_handler_L2_flux,
-    		             heat_flux_field_L2,
-			     solution_name_flux,
-			     data_component_interpretation_flux_L2);
-
-    data_out.build_patches(m_parameters.m_poly_degree);
-
-    std::ofstream output(m_parameters.resultsDir + "Solution-" + std::to_string(dim) + "d-" +
-			 Utilities::int_to_string(m_time.get_timestep(),4) + ".vtu");
-
-    data_out.write_vtu(output);
+      m_output.output(m_time.get_timestep(),
+                      m_parameters.m_poly_degree,
+                      m_parameters.resultsDir,
+                      m_solution,
+                      m_quadrature_point_history);
+      
+//      if constexpr (!is_mpi) {
+//          
+//          DataOut<dim> data_out;
+//          
+//          std::vector<DataComponentInterpretation::DataComponentInterpretation>
+//          data_component_interpretation(
+//                                        dim, DataComponentInterpretation::component_is_part_of_vector);
+//          
+//          data_component_interpretation.push_back(
+//                                                  DataComponentInterpretation::component_is_scalar);
+//          
+//          data_component_interpretation.push_back(
+//                                                  DataComponentInterpretation::component_is_scalar);
+//          
+//          std::vector<std::string> solution_name(dim, "displacement");
+//          solution_name.emplace_back("phasefield");
+//          solution_name.emplace_back("temperature");
+//          
+//          data_out.attach_dof_handler(m_dof_handler);
+//          data_out.add_data_vector(m_solution.base(),
+//                                   solution_name,
+//                                   DataOut<dim>::type_dof_data,
+//                                   data_component_interpretation);
+//          
+//          Vector<double> cell_material_id(m_triangulation.n_active_cells());
+//          // output material ID for each cell
+//          for (const auto &cell : m_triangulation.active_cell_iterators())
+//          {
+//              cell_material_id(cell->active_cell_index()) = cell->material_id();
+//          }
+//          data_out.add_data_vector(cell_material_id, "materialID");
+//          
+//          //L2 projection
+//          DoFHandler<dim> dof_handler_L2(m_triangulation);
+//          FE_Q<dim>     fe_L2(m_parameters.m_poly_degree); //FE_Q element is continuous
+//          dof_handler_L2.distribute_dofs(fe_L2);
+//          AffineConstraints<double> constraints;
+//          constraints.clear();
+//          DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
+//          constraints.close();
+//          std::vector<DataComponentInterpretation::DataComponentInterpretation>
+//          data_component_interpretation_L2(1,
+//                                           DataComponentInterpretation::component_is_scalar);
+//          
+//          //stress L2 projection
+//          for (unsigned int i = 0; i < dim; ++i)
+//              for (unsigned int j = i; j < dim; ++j)
+//              {
+//                  Vector<double> stress_field_L2;
+//                  stress_field_L2.reinit(dof_handler_L2.n_dofs());
+//                  
+//                  MappingQ<dim> mapping(m_parameters.m_poly_degree + 1);
+//                  VectorTools::project(mapping,
+//                                       dof_handler_L2,
+//                                       constraints,
+//                                       m_qf_cell,
+//                                       [&] (const typename DoFHandler<dim>::active_cell_iterator & cell,
+//                                            const unsigned int q) -> double
+//                                       {
+//                      return m_quadrature_point_history.get_data(cell)[q]->get_cauchy_stress()[i][j];
+//                  },
+//                                       stress_field_L2);
+//                  
+//                  std::string stress_name = "Cauchy_stress_" + std::to_string(i+1) + std::to_string(j+1)
+//                  + "_L2";
+//                  
+//                  data_out.add_data_vector(dof_handler_L2,
+//                                           stress_field_L2,
+//                                           stress_name,
+//                                           data_component_interpretation_L2);
+//              }
+//          
+//          // Heat flux L2 projection
+//          Vector<double> heat_flux_field_L2_x;
+//          Vector<double> heat_flux_field_L2_y;
+//          Vector<double> heat_flux_field_L2_z;
+//          
+//          for (unsigned int i = 0; i < dim; ++i)
+//          {
+//              Vector<double> heat_flux_field_L2;
+//              heat_flux_field_L2.reinit(dof_handler_L2.n_dofs());
+//              
+//              MappingQ<dim> mapping(m_parameters.m_poly_degree + 1);
+//              VectorTools::project(mapping,
+//                                   dof_handler_L2,
+//                                   constraints,
+//                                   m_qf_cell,
+//                                   [&] (const typename DoFHandler<dim>::active_cell_iterator & cell,
+//                                        const unsigned int q) -> double
+//                                   {
+//                  return m_quadrature_point_history.get_data(cell)[q]->get_heat_flux()[i];
+//              },
+//                                   heat_flux_field_L2);
+//              
+//              std::string heat_flux_name = "Heat_flux_" + std::to_string(i+1) + "_L2";
+//              
+//              data_out.add_data_vector(dof_handler_L2,
+//                                       heat_flux_field_L2,
+//                                       heat_flux_name,
+//                                       data_component_interpretation_L2);
+//              if (i == 0)
+//                  heat_flux_field_L2_x = heat_flux_field_L2;
+//              else if (i == 1)
+//                  heat_flux_field_L2_y = heat_flux_field_L2;
+//              else if (i == 2)
+//                  heat_flux_field_L2_z = heat_flux_field_L2;
+//              else
+//                  AssertThrow(false,
+//                              ExcMessage("Heat flux output is wrong!"));
+//          }
+//          
+//          // For 2D problems, let the flux in the third direction is zero
+//          if (dim == 2)
+//          {
+//              Vector<double> heat_flux_field_L2;
+//              heat_flux_field_L2.reinit(dof_handler_L2.n_dofs());
+//              heat_flux_field_L2 = 0;
+//              std::string heat_flux_name = "Heat_flux_" + std::to_string(3) + "_L2";
+//              data_out.add_data_vector(dof_handler_L2,
+//                                       heat_flux_field_L2,
+//                                       heat_flux_name,
+//                                       data_component_interpretation_L2);
+//              heat_flux_field_L2_z = 0;
+//          }
+//          
+//          DoFHandler<dim> dof_handler_L2_flux(m_triangulation);
+//          FESystem<dim>   fe_flux_L2(FE_Q<dim>(m_parameters.m_poly_degree), dim);
+//          dof_handler_L2_flux.distribute_dofs(fe_flux_L2);
+//          std::vector<DataComponentInterpretation::DataComponentInterpretation>
+//          data_component_interpretation_flux_L2(dim,
+//                                                DataComponentInterpretation::component_is_part_of_vector);
+//          
+//          Vector<double> heat_flux_field_L2;
+//          heat_flux_field_L2.reinit(dof_handler_L2_flux.n_dofs());
+//          
+//          if (dim == 2)
+//          {
+//              for (unsigned int i = 0; i < heat_flux_field_L2_x.size(); ++i)
+//              {
+//                  heat_flux_field_L2(0+i*dim) = heat_flux_field_L2_x(i);
+//                  heat_flux_field_L2(1+i*dim) = heat_flux_field_L2_y(i);
+//              }
+//          }
+//          
+//          if (dim == 3)
+//          {
+//              for (unsigned int i = 0; i < heat_flux_field_L2_x.size(); ++i)
+//              {
+//                  heat_flux_field_L2(0+i*dim) = heat_flux_field_L2_x(i);
+//                  heat_flux_field_L2(1+i*dim) = heat_flux_field_L2_y(i);
+//                  heat_flux_field_L2(2+i*dim) = heat_flux_field_L2_z(i);
+//              }
+//          }
+//          
+//          std::vector<std::string> solution_name_flux(dim, "Heat_flux_vector");
+//          data_out.add_data_vector(dof_handler_L2_flux,
+//                                   heat_flux_field_L2,
+//                                   solution_name_flux,
+//                                   data_component_interpretation_flux_L2);
+//          
+//          data_out.build_patches(m_parameters.m_poly_degree);
+//          
+//          std::ofstream output(m_parameters.resultsDir + "Solution-" + std::to_string(dim) + "d-" +
+//                               Utilities::int_to_string(m_time.get_timestep(),4) + ".vtu");
+//          
+//          data_out.write_vtu(output);
+//      } else {
+//          
+//      }
+      
+      
     m_timer.leave_subsection();
   }
 
