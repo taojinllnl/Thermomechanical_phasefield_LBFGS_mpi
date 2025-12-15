@@ -38,14 +38,26 @@ public:
     
     using CellDataStorage = dealii::CellDataStorage<typename dealii::Triangulation<dim>::cell_iterator, PointHistory>;
     
-    
+    using DataComponentInterpretationList = std::vector<dealii::DataComponentInterpretation::DataComponentInterpretation>;
 private:
     const MPIInfo&                      __mpiInfo;
                 
     const Tria&                         __tria;
+    
     const dealii::DoFHandler<dim>&      __dof_handler;
     
     const dealii::QGauss<dim>&          __qf_cell;
+    
+    const std::vector<std::string>      __solution_name;
+    
+    const DataComponentInterpretationList __data_component_interpretation;
+    
+private:
+    static std::vector<std::string> __makeSolutionName();
+    
+    static DataComponentInterpretationList __makeDataComponentInterpretation();
+    
+    
 public:
     OutputHelper(const MPIInfo&                   mpiInfo,
                  const Tria&                      tria,
@@ -63,6 +75,30 @@ public:
 
 
 template <typename LATraits, typename Tria, typename PointHistory>
+std::vector<std::string>
+OutputHelper<LATraits, Tria, PointHistory>
+::__makeSolutionName()
+{
+    std::vector<std::string> solution_name(dim, "displacement");
+    solution_name.emplace_back("phasefield");
+    solution_name.emplace_back("temperature");
+    return solution_name;
+}
+
+template <typename LATraits, typename Tria, typename PointHistory>
+std::vector<dealii::DataComponentInterpretation::DataComponentInterpretation>
+OutputHelper<LATraits, Tria, PointHistory>
+::__makeDataComponentInterpretation()
+{
+    using namespace dealii;
+    std::vector<DataComponentInterpretation::DataComponentInterpretation>
+    data_component_interpretation(dim, DataComponentInterpretation::component_is_part_of_vector);
+    data_component_interpretation.push_back(DataComponentInterpretation::component_is_scalar);
+    data_component_interpretation.push_back(DataComponentInterpretation::component_is_scalar);
+    return data_component_interpretation;
+}
+
+template <typename LATraits, typename Tria, typename PointHistory>
 OutputHelper<LATraits, Tria, PointHistory>
 ::OutputHelper(const MPIInfo&                   mpiInfo,
                const Tria&                      tria,
@@ -72,6 +108,8 @@ OutputHelper<LATraits, Tria, PointHistory>
 , __tria(tria)
 , __dof_handler(dof_handler)
 , __qf_cell(qf_cell)
+, __solution_name(OutputHelper<LATraits, Tria, PointHistory>::__makeSolutionName())
+, __data_component_interpretation(OutputHelper<LATraits, Tria, PointHistory>::__makeDataComponentInterpretation())
 {}
 
 
@@ -86,21 +124,9 @@ void OutputHelper<LATraits, Tria, PointHistory>
 {
     using namespace dealii;
     
-    const std::string filename = "Solution-" + std::to_string(dim) + "d-" +
-    Utilities::int_to_string(ithTimeStep, 4) + ".vtu";
+    const std::string filename = "Solution-" + std::to_string(dim) + "d-";
     
     DataOut<dim> data_out;
-    
-    
-    std::vector<DataComponentInterpretation::DataComponentInterpretation>
-    data_component_interpretation(dim, DataComponentInterpretation::component_is_part_of_vector);
-    data_component_interpretation.push_back(DataComponentInterpretation::component_is_scalar);
-    data_component_interpretation.push_back(DataComponentInterpretation::component_is_scalar);
-    
-    std::vector<std::string> solution_name(dim, "displacement");
-    solution_name.emplace_back("phasefield");
-    solution_name.emplace_back("temperature");
-    
     data_out.attach_dof_handler(__dof_handler);
     
     
@@ -122,9 +148,9 @@ void OutputHelper<LATraits, Tria, PointHistory>
     
     if constexpr (!is_mpi) {
         data_out.add_data_vector(solution.base(),
-                                 solution_name,
+                                 __solution_name,
                                  DataOut<dim>::type_dof_data,
-                                 data_component_interpretation);
+                                 __data_component_interpretation);
         
         
         
@@ -258,14 +284,25 @@ void OutputHelper<LATraits, Tria, PointHistory>
         
         data_out.build_patches(polyDegree);
         
-        std::ofstream output(dir + filename);
+        std::ofstream output(dir + filename +
+                             Utilities::int_to_string(ithTimeStep, 4) + ".vtu");
         
         data_out.write_vtu(output);
     } else {
+        // solution
         data_out.add_data_vector(solution.relevance(),
-                                 solution_name,
+                                 __solution_name,
                                  DataOut<dim>::type_dof_data,
-                                 data_component_interpretation);
+                                 __data_component_interpretation);
+        
+        
+        // partitioning
+        Vector<float> subdomain(__tria.n_active_cells());
+        for (unsigned int i = 0; i < subdomain.size(); ++i)
+            subdomain(i) = __tria.locally_owned_subdomain();
+        data_out.add_data_vector(subdomain, "Partitioning");
+        
+        
         
         
         data_out.build_patches(polyDegree);
