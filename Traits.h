@@ -55,6 +55,7 @@ struct Traits<TagSerial>
     using IndexSet = ::dealii::IndexSet;
     
     using MatrixBlock   = ::dealii::LinearAlgebraDealII::SparseMatrix;
+    using VectorBlock   = ::dealii::LinearAlgebraDealII::Vector;
 };
 }
 
@@ -80,6 +81,7 @@ struct Traits<TagPETSc>
     using IndexSet = ::dealii::IndexSet;
     
     using MatrixBlock   = ::dealii::LinearAlgebraPETSc::MPI::SparseMatrix;
+    using VectorBlock   = ::dealii::LinearAlgebraPETSc::MPI::Vector;
 };
 }
 
@@ -110,6 +112,7 @@ struct Traits<TagTrilinos>
     using IndexSet = ::dealii::IndexSet;
     
     using MatrixBlock   = ::dealii::LinearAlgebraTrilinos::MPI::SparseMatrix;
+    using VectorBlock   = ::dealii::LinearAlgebraTrilinos::MPI::Vector;
 };
 }
 
