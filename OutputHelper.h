@@ -11,6 +11,9 @@
 #include "BlockVectorWrapper.h"
 #include "MPIInfo.h"
 
+#include <memory>
+#include <array>
+
 #include <deal.II/base/quadrature_point_data.h>
 
 
@@ -52,11 +55,36 @@ private:
     
     const DataComponentInterpretationList __data_component_interpretation;
     
+    const DataComponentInterpretationList __data_component_L2;
+    
+   
+    
 private:
     static std::vector<std::string> __makeSolutionName();
     
     static DataComponentInterpretationList __makeDataComponentInterpretation();
     
+    static DataComponentInterpretationList __makeL2DataComponentInterpretation();
+    
+    
+    void __stressL2(dealii::DataOut<dim>&       data_out,
+                    dealii::DoFHandler<dim>&    dof_handler_L2,
+                    dealii::AffineConstraints<double>&  constraints,
+                    const unsigned int polyDegree,
+                    const CellDataStorage& qPntHistory)   const;
+    
+    void __heatFluxL2(dealii::DataOut<dim>&         data_out,
+                      dealii::DoFHandler<dim>&      dof_handler_L2,
+                      dealii::AffineConstraints<double>&    constraints,
+                      const unsigned int polyDegree,
+                      const CellDataStorage& qPntHistory) const;
+    
+    void __materialIDs(dealii::DataOut<dim>& data_out) const;
+    
+    void __solution(dealii::DataOut<dim>& data_out,
+                    const BVector&     solution) const;
+    
+    void __partitioning(dealii::DataOut<dim>& data_out) const;
     
 public:
     OutputHelper(const MPIInfo&                   mpiInfo,
@@ -71,6 +99,14 @@ public:
                 const BVector&     solution,
                 const CellDataStorage& qPntHistory) const;
 };
+
+
+
+
+
+
+
+
 
 
 
@@ -98,6 +134,19 @@ OutputHelper<LATraits, Tria, PointHistory>
     return data_component_interpretation;
 }
 
+
+template <typename LATraits, typename Tria, typename PointHistory>
+std::vector<dealii::DataComponentInterpretation::DataComponentInterpretation>
+OutputHelper<LATraits, Tria, PointHistory>
+::__makeL2DataComponentInterpretation()
+{
+    using namespace dealii;
+    std::vector<DataComponentInterpretation::DataComponentInterpretation>
+    data_component_interpretation_L2(1,
+                                     DataComponentInterpretation::component_is_scalar);
+    return data_component_interpretation_L2;
+}
+
 template <typename LATraits, typename Tria, typename PointHistory>
 OutputHelper<LATraits, Tria, PointHistory>
 ::OutputHelper(const MPIInfo&                   mpiInfo,
@@ -110,8 +159,326 @@ OutputHelper<LATraits, Tria, PointHistory>
 , __qf_cell(qf_cell)
 , __solution_name(OutputHelper<LATraits, Tria, PointHistory>::__makeSolutionName())
 , __data_component_interpretation(OutputHelper<LATraits, Tria, PointHistory>::__makeDataComponentInterpretation())
+, __data_component_L2(OutputHelper<LATraits, Tria, PointHistory>::__makeL2DataComponentInterpretation())
 {}
 
+
+
+template <typename LATraits, typename Tria, typename PointHistory>
+void
+OutputHelper<LATraits, Tria, PointHistory>
+::__stressL2(dealii::DataOut<dim>& data_out,
+             dealii::DoFHandler<dim>& dof_handler_L2,
+             dealii::AffineConstraints<double>&  constraints,
+             const unsigned int polyDegree,
+             const CellDataStorage& qPntHistory) const
+{
+    using namespace dealii;
+    //L2 projection
+
+//    if constexpr (!is_mpi){
+//        //stress L2 projection
+//        for (unsigned int i = 0; i < dim; ++i)
+//            for (unsigned int j = i; j < dim; ++j)
+//            {
+//                Vector<double> stress_field_L2;
+//                stress_field_L2.reinit(dof_handler_L2.n_dofs());
+//                
+//                MappingQ<dim> mapping(polyDegree + 1);
+//                VectorTools::project(mapping,
+//                                     dof_handler_L2,
+//                                     constraints,
+//                                     __qf_cell,
+//                                     [&] (const typename DoFHandler<dim>::active_cell_iterator & cell,
+//                                          const unsigned int q) -> double
+//                                     {
+//                    return qPntHistory.get_data(cell)[q]->get_cauchy_stress()[i][j];
+//                },
+//                                     stress_field_L2);
+//                
+//                std::string stress_name = "Cauchy_stress_" + std::to_string(i+1) + std::to_string(j+1)
+//                + "_L2";
+//                
+//                data_out.add_data_vector(dof_handler_L2,
+//                                         stress_field_L2,
+//                                         stress_name,
+//                                         __data_component_L2);
+//            }
+//    } else {
+//        //stress L2 projection
+//        for (unsigned int i = 0; i < dim; ++i)
+//            for (unsigned int j = i; j < dim; ++j)
+//            {
+//                typename LATraits::VectorBlock stress_field_L2{};
+//
+//                const auto &locally_owned   = dof_handler_L2.locally_owned_dofs();
+//                const auto  locally_relevant =
+//                DoFTools::extract_locally_relevant_dofs(dof_handler_L2);
+//                
+//                stress_field_L2.reinit(locally_owned,
+//                                       locally_relevant,
+//                                       *__mpiInfo.mpiCommPtr());
+//                
+//                MappingQ<dim> mapping(polyDegree + 1);
+//                VectorTools::project(mapping,
+//                                     dof_handler_L2,
+//                                     constraints,
+//                                     __qf_cell,
+//                                     [&] (const typename DoFHandler<dim>::active_cell_iterator & cell,
+//                                          const unsigned int q) -> double
+//                                     {
+//                    return qPntHistory.get_data(cell)[q]->get_cauchy_stress()[i][j];
+//                },
+//                                     stress_field_L2);
+//                
+//                std::string stress_name = "Cauchy_stress_" + std::to_string(i+1) + std::to_string(j+1)
+//                + "_L2";
+//                
+//                data_out.add_data_vector(dof_handler_L2,
+//                                         stress_field_L2,
+//                                         stress_name,
+//                                         __data_component_L2);
+//            }
+//    }
+
+    MappingQ<dim> mapping(polyDegree + 1);
+    
+    for (unsigned int i = 0; i < dim; ++i)
+        for (unsigned int j = i; j < dim; ++j)
+        {
+            typename LATraits::VectorBlock stress_field_L2;
+            
+            if constexpr (is_mpi)
+            {
+                const IndexSet &locally_owned_dofs = dof_handler_L2.locally_owned_dofs();
+                const IndexSet locally_relevant_dofs =
+                    DoFTools::extract_locally_relevant_dofs(dof_handler_L2);
+                
+                stress_field_L2.reinit(locally_owned_dofs,
+                                       locally_relevant_dofs,
+                                       *__mpiInfo.mpiCommPtr());
+            }
+            else
+            {
+                stress_field_L2.reinit(dof_handler_L2.n_dofs());
+            }
+            
+            VectorTools
+            ::project(mapping,
+                      dof_handler_L2,
+                      constraints,
+                      __qf_cell,
+                      [&qPntHistory, i, j](const auto &cell, const unsigned int q) -> double {
+                return qPntHistory.get_data(cell)[q]->get_cauchy_stress()[i][j];
+            },
+                                 stress_field_L2);
+            
+            if constexpr (is_mpi)
+                stress_field_L2.update_ghost_values();
+            
+            const std::string stress_name =
+            "Cauchy_stress_" + std::to_string(i + 1) + std::to_string(j + 1) + "_L2";
+            
+            data_out.add_data_vector(dof_handler_L2,
+                                     stress_field_L2,
+                                     stress_name,
+                                     __data_component_L2);
+        }
+}
+
+
+template <typename LATraits, typename Tria, typename PointHistory>
+void
+OutputHelper<LATraits, Tria, PointHistory>
+::__heatFluxL2(dealii::DataOut<dim>& data_out,
+               dealii::DoFHandler<dim>& dof_handler_L2,
+               dealii::AffineConstraints<double>&  constraints,
+               const unsigned int polyDegree,
+               const CellDataStorage& qPntHistory) const
+{
+    using namespace dealii;
+    // Heat flux L2 projection
+    
+    std::array<typename LATraits::VectorBlock, dim> heat_flux_L2_list;
+    
+//    Vector<double> heat_flux_field_L2_x;
+//    Vector<double> heat_flux_field_L2_y;
+//    Vector<double> heat_flux_field_L2_z;
+    
+    for (unsigned int i = 0; i < dim; ++i)
+    {
+//        typename LATraits::VectorBlock heat_flux_field_L2;
+        
+        if constexpr (is_mpi){
+            const IndexSet &locally_owned_dofs = dof_handler_L2.locally_owned_dofs();
+            const IndexSet locally_relevant_dofs =
+                DoFTools::extract_locally_relevant_dofs(dof_handler_L2);
+            
+            heat_flux_L2_list[i].reinit(locally_owned_dofs,
+                                        locally_relevant_dofs,
+                                        *__mpiInfo.mpiCommPtr());
+        } else {
+            heat_flux_L2_list[i].reinit(dof_handler_L2.n_dofs());
+        }
+        
+        MappingQ<dim> mapping(polyDegree + 1);
+        VectorTools::project(mapping,
+                             dof_handler_L2,
+                             constraints,
+                             __qf_cell,
+                             [&] (const typename DoFHandler<dim>::active_cell_iterator & cell,
+                                  const unsigned int q) -> double
+                             {
+            return qPntHistory.get_data(cell)[q]->get_heat_flux()[i];
+        },
+                             heat_flux_L2_list[i]);
+        
+        if constexpr (is_mpi)
+            heat_flux_L2_list[i].update_ghost_values();
+        
+        std::string heat_flux_name = "Heat_flux_" + std::to_string(i+1) + "_L2";
+        
+        data_out.add_data_vector(dof_handler_L2,
+                                 heat_flux_L2_list[i],
+                                 heat_flux_name,
+                                 __data_component_L2);
+        
+//        heat_flux_L2_list[i] = heat_flux_field_L2;
+    }
+    
+//    // For 2D problems, let the flux in the third direction is zero
+//    if (dim == 2)
+//    {
+//        typename LATraits::VectorBlock heat_flux_field_L2;
+//        
+//        if constexpr (is_mpi){
+//            heat_flux_field_L2.reinit(*__locally_owned_dofs,
+//                                      *__locally_relevant_dofs,
+//                                      *__mpiInfo.mpiCommPtr());
+//        } else {
+//            heat_flux_field_L2.reinit(dof_handler_L2.n_dofs());
+//        }
+//        
+//        heat_flux_field_L2 = 0;
+//        std::string heat_flux_name = "Heat_flux_" + std::to_string(3) + "_L2";
+//        data_out.add_data_vector(dof_handler_L2,
+//                                 heat_flux_field_L2,
+//                                 heat_flux_name,
+//                                 __data_component_L2);
+////        heat_flux_L2_list[2] = 0;
+//    }
+    
+    DoFHandler<dim> dof_handler_L2_flux(__tria);
+    FESystem<dim>   fe_flux_L2(FE_Q<dim>(polyDegree), dim);
+    dof_handler_L2_flux.distribute_dofs(fe_flux_L2);
+    std::vector<DataComponentInterpretation::DataComponentInterpretation>
+    data_component_interpretation_flux_L2(dim,
+                                          DataComponentInterpretation::component_is_part_of_vector);
+    
+    typename LATraits::VectorBlock heat_flux_field_L2;
+    
+    if constexpr (is_mpi){
+        
+        const IndexSet& locally_owned_dofs = dof_handler_L2_flux.locally_owned_dofs();
+        const IndexSet locally_relevant_dofs =
+            DoFTools::extract_locally_relevant_dofs(dof_handler_L2_flux);
+        
+        
+        heat_flux_field_L2.reinit(locally_owned_dofs,
+                                  locally_relevant_dofs,
+                                  *__mpiInfo.mpiCommPtr());
+        
+        for (unsigned int d = 0; d < dim; ++d)
+            for (auto i = locally_owned_dofs.begin(); i != locally_owned_dofs.end(); ++i)
+                heat_flux_field_L2(d + (*i) * dim) = heat_flux_L2_list[d](*i);
+        
+        heat_flux_field_L2.compress(dealii::VectorOperation::insert);
+        
+        heat_flux_field_L2.update_ghost_values();
+        
+    } else {
+        heat_flux_field_L2.reinit(dof_handler_L2_flux.n_dofs());
+        
+        for (unsigned int d = 0; d < dim; ++d) {
+            for (unsigned int i = 0; i < heat_flux_L2_list[0].size(); ++i)
+            {
+                heat_flux_field_L2(d+i*dim) = heat_flux_L2_list[d](i);
+            }
+        }
+    }
+    
+    
+    std::vector<std::string> solution_name_flux(dim, "Heat_flux_vector");
+    data_out.add_data_vector(dof_handler_L2_flux,
+                             heat_flux_field_L2,
+                             solution_name_flux,
+                             data_component_interpretation_flux_L2);
+    
+}
+
+
+
+template <typename LATraits, typename Tria, typename PointHistory>
+void
+OutputHelper<LATraits, Tria, PointHistory>
+::__materialIDs(dealii::DataOut<dim>& data_out) const
+{
+    using namespace dealii;
+    Vector<float> cell_material_id(__tria.n_active_cells());
+    // output material ID for each cell
+    
+    for (auto cell = __tria.begin_active(); cell != __tria.end(); ++cell)
+    {
+        if constexpr (is_mpi)
+        {
+            if(!cell->is_locally_owned())
+            {
+                continue;
+            }
+        }
+        cell_material_id(cell->active_cell_index()) = cell->material_id();
+    }
+    data_out.add_data_vector(cell_material_id, "materialID");
+}
+
+
+
+template <typename LATraits, typename Tria, typename PointHistory>
+void
+OutputHelper<LATraits, Tria, PointHistory>
+::__solution(dealii::DataOut<dim>& data_out,
+             const BVector&         solution) const
+{
+    using namespace dealii;
+    if constexpr (is_mpi) {
+        // solution
+        data_out.add_data_vector(solution.relevance(),
+                                 __solution_name,
+                                 DataOut<dim>::type_dof_data,
+                                 __data_component_interpretation);
+    } else {
+        data_out.add_data_vector(solution.base(),
+                                 __solution_name,
+                                 DataOut<dim>::type_dof_data,
+                                 __data_component_interpretation);
+    }
+}
+
+
+template <typename LATraits, typename Tria, typename PointHistory>
+void
+OutputHelper<LATraits, Tria, PointHistory>
+::__partitioning(dealii::DataOut<dim>& data_out) const
+{
+    using namespace dealii;
+    if constexpr (is_mpi) {
+        // partitioning
+        Vector<float> subdomain(__tria.n_active_cells());
+        for (unsigned int i = 0; i < subdomain.size(); ++i)
+          subdomain(i) = __tria.locally_owned_subdomain();
+        data_out.add_data_vector(subdomain, "partitioning");
+    }
+}
 
 
 template <typename LATraits, typename Tria, typename PointHistory>
@@ -130,188 +497,55 @@ void OutputHelper<LATraits, Tria, PointHistory>
     data_out.attach_dof_handler(__dof_handler);
     
     
-    Vector<double> cell_material_id(__tria.n_active_cells());
-    // output material ID for each cell
-    for (const auto &cell : __dof_handler.active_cell_iterators())
-    {
-        if constexpr (is_mpi)
-        {
-            if(!cell->is_locally_owned())
-            {
-                continue;
-            }
-        }
-        cell_material_id(cell->active_cell_index()) = cell->material_id();
-    }
-    data_out.add_data_vector(cell_material_id, "materialID");
+    __materialIDs(data_out);
     
+    
+    DoFHandler<dim> dof_handler_L2(__tria);
+    FE_Q<dim>     fe_L2(polyDegree); //FE_Q element is continuous
+    dof_handler_L2.distribute_dofs(fe_L2);
+    
+    
+    AffineConstraints<double> constraints;
+    constraints.clear();
+    if constexpr (is_mpi)
+    {
+        const IndexSet &locally_owned_dofs = dof_handler_L2.locally_owned_dofs();
+        const IndexSet locally_relevant_dofs =
+            DoFTools::extract_locally_relevant_dofs(dof_handler_L2);
+        
+        constraints.reinit(locally_owned_dofs, locally_relevant_dofs);
+    }
+    DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
+    constraints.close();
+    
+    
+    
+    __solution(data_out, solution);
+    
+    __stressL2(data_out,
+               dof_handler_L2,
+               constraints,
+               polyDegree,
+               qPntHistory);
+    
+    __heatFluxL2(data_out,
+                 dof_handler_L2,
+                 constraints,
+                 polyDegree,
+                 qPntHistory);
+    
+    
+    __partitioning(data_out);
+    
+    
+    data_out.build_patches(polyDegree);
     
     if constexpr (!is_mpi) {
-        data_out.add_data_vector(solution.base(),
-                                 __solution_name,
-                                 DataOut<dim>::type_dof_data,
-                                 __data_component_interpretation);
-        
-        
-        
-        //L2 projection
-        DoFHandler<dim> dof_handler_L2(__tria);
-        FE_Q<dim>     fe_L2(polyDegree); //FE_Q element is continuous
-        dof_handler_L2.distribute_dofs(fe_L2);
-        AffineConstraints<double> constraints;
-        constraints.clear();
-        DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
-        constraints.close();
-        std::vector<DataComponentInterpretation::DataComponentInterpretation>
-        data_component_interpretation_L2(1,
-                                         DataComponentInterpretation::component_is_scalar);
-        
-        //stress L2 projection
-        for (unsigned int i = 0; i < dim; ++i)
-            for (unsigned int j = i; j < dim; ++j)
-            {
-                Vector<double> stress_field_L2;
-                stress_field_L2.reinit(dof_handler_L2.n_dofs());
-                
-                MappingQ<dim> mapping(polyDegree + 1);
-                VectorTools::project(mapping,
-                                     dof_handler_L2,
-                                     constraints,
-                                     __qf_cell,
-                                     [&] (const typename DoFHandler<dim>::active_cell_iterator & cell,
-                                          const unsigned int q) -> double
-                                     {
-                    return qPntHistory.get_data(cell)[q]->get_cauchy_stress()[i][j];
-                },
-                                     stress_field_L2);
-                
-                std::string stress_name = "Cauchy_stress_" + std::to_string(i+1) + std::to_string(j+1)
-                + "_L2";
-                
-                data_out.add_data_vector(dof_handler_L2,
-                                         stress_field_L2,
-                                         stress_name,
-                                         data_component_interpretation_L2);
-            }
-        
-        // Heat flux L2 projection
-        Vector<double> heat_flux_field_L2_x;
-        Vector<double> heat_flux_field_L2_y;
-        Vector<double> heat_flux_field_L2_z;
-        
-        for (unsigned int i = 0; i < dim; ++i)
-        {
-            Vector<double> heat_flux_field_L2;
-            heat_flux_field_L2.reinit(dof_handler_L2.n_dofs());
-            
-            MappingQ<dim> mapping(polyDegree + 1);
-            VectorTools::project(mapping,
-                                 dof_handler_L2,
-                                 constraints,
-                                 __qf_cell,
-                                 [&] (const typename DoFHandler<dim>::active_cell_iterator & cell,
-                                      const unsigned int q) -> double
-                                 {
-                return qPntHistory.get_data(cell)[q]->get_heat_flux()[i];
-            },
-                                 heat_flux_field_L2);
-            
-            std::string heat_flux_name = "Heat_flux_" + std::to_string(i+1) + "_L2";
-            
-            data_out.add_data_vector(dof_handler_L2,
-                                     heat_flux_field_L2,
-                                     heat_flux_name,
-                                     data_component_interpretation_L2);
-            if (i == 0)
-                heat_flux_field_L2_x = heat_flux_field_L2;
-            else if (i == 1)
-                heat_flux_field_L2_y = heat_flux_field_L2;
-            else if (i == 2)
-                heat_flux_field_L2_z = heat_flux_field_L2;
-            else
-                AssertThrow(false,
-                            ExcMessage("Heat flux output is wrong!"));
-        }
-        
-        // For 2D problems, let the flux in the third direction is zero
-        if (dim == 2)
-        {
-            Vector<double> heat_flux_field_L2;
-            heat_flux_field_L2.reinit(dof_handler_L2.n_dofs());
-            heat_flux_field_L2 = 0;
-            std::string heat_flux_name = "Heat_flux_" + std::to_string(3) + "_L2";
-            data_out.add_data_vector(dof_handler_L2,
-                                     heat_flux_field_L2,
-                                     heat_flux_name,
-                                     data_component_interpretation_L2);
-            heat_flux_field_L2_z = 0;
-        }
-        
-        DoFHandler<dim> dof_handler_L2_flux(__tria);
-        FESystem<dim>   fe_flux_L2(FE_Q<dim>(polyDegree), dim);
-        dof_handler_L2_flux.distribute_dofs(fe_flux_L2);
-        std::vector<DataComponentInterpretation::DataComponentInterpretation>
-        data_component_interpretation_flux_L2(dim,
-                                              DataComponentInterpretation::component_is_part_of_vector);
-        
-        Vector<double> heat_flux_field_L2;
-        heat_flux_field_L2.reinit(dof_handler_L2_flux.n_dofs());
-        
-        if (dim == 2)
-        {
-            for (unsigned int i = 0; i < heat_flux_field_L2_x.size(); ++i)
-            {
-                heat_flux_field_L2(0+i*dim) = heat_flux_field_L2_x(i);
-                heat_flux_field_L2(1+i*dim) = heat_flux_field_L2_y(i);
-            }
-        }
-        
-        if (dim == 3)
-        {
-            for (unsigned int i = 0; i < heat_flux_field_L2_x.size(); ++i)
-            {
-                heat_flux_field_L2(0+i*dim) = heat_flux_field_L2_x(i);
-                heat_flux_field_L2(1+i*dim) = heat_flux_field_L2_y(i);
-                heat_flux_field_L2(2+i*dim) = heat_flux_field_L2_z(i);
-            }
-        }
-        
-        std::vector<std::string> solution_name_flux(dim, "Heat_flux_vector");
-        data_out.add_data_vector(dof_handler_L2_flux,
-                                 heat_flux_field_L2,
-                                 solution_name_flux,
-                                 data_component_interpretation_flux_L2);
-        
-        data_out.build_patches(polyDegree);
-        
         std::ofstream output(dir + filename +
                              Utilities::int_to_string(ithTimeStep, 4) + ".vtu");
-        
+         
         data_out.write_vtu(output);
     } else {
-        // solution
-        data_out.add_data_vector(solution.relevance(),
-                                 __solution_name,
-                                 DataOut<dim>::type_dof_data,
-                                 __data_component_interpretation);
-        
-        
-        // partitioning
-        Vector<float> subdomain(__tria.n_active_cells());
-        for (unsigned int i = 0; i < subdomain.size(); ++i)
-            subdomain(i) = __tria.locally_owned_subdomain();
-        data_out.add_data_vector(subdomain, "Partitioning");
-        
-        
-        
-        
-        data_out.build_patches(polyDegree);
-        
-//        const std::string pvtu_filename = data_out.write_vtu_with_pvtu_record(
-//              dir, filename, cycle, mpi_communicator, 4 /*n_digits*/, 0 /*n_groups*/);
-//
-//        m_logfile << "\t\tVTU file: " << pvtu_filename << std::endl;
-        
         data_out.write_vtu_with_pvtu_record(dir,
                                             filename, 
                                             ithTimeStep,
