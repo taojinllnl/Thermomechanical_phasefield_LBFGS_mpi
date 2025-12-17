@@ -4333,14 +4333,19 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
     scratch.m_fe_values.reinit(cell);
     cell->get_dof_indices(data.m_local_dof_indices);
     
-    scratch.m_fe_values[m_u_fe].get_function_symmetric_gradients(
-                                                                 scratch.m_solution_previous_step, scratch.m_strain_previous_step_cell);
+    const auto& solution_previous_step_relevance = scratch.m_solution_previous_step.relevance();
     
-    scratch.m_fe_values[m_d_fe].get_function_values(
-                                                    scratch.m_solution_previous_step, scratch.m_phasefield_previous_step_cell);
+    scratch.m_fe_values[m_u_fe]
+        .get_function_symmetric_gradients(solution_previous_step_relevance,
+                                          scratch.m_strain_previous_step_cell);
     
-    scratch.m_fe_values[m_t_fe].get_function_values(
-                                                    scratch.m_solution_previous_step, scratch.m_temperature_previous_step_cell);
+    scratch.m_fe_values[m_d_fe]
+        .get_function_values(solution_previous_step_relevance,
+                             scratch.m_phasefield_previous_step_cell);
+    
+    scratch.m_fe_values[m_t_fe]
+        .get_function_values(solution_previous_step_relevance,
+                             scratch.m_temperature_previous_step_cell);
     
     const std::vector<std::shared_ptr<const PointHistory<dim>>> lqph =
     m_quadrature_point_history.get_data(cell);
