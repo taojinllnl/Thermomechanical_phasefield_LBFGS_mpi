@@ -26,7 +26,7 @@ class BlockVectorWrapper
 {
 private:
     using VecType = typename TraitsType::Vector;
-    mutable bool __hasRelevance;
+    const bool __hasRelevance;
     mutable std::unique_ptr<VecType> __relevancePtr{};
     
     const MPIInfo&      __mpiInfo;
