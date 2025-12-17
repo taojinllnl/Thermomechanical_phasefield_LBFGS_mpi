@@ -1688,19 +1688,23 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, Tria>::BVector;
       }
   }
 
-  template <typename LATraits, typename Tria>
-  void PhaseFieldMonolithicSolve<LATraits, Tria>::setup_qph()
-  {
+template <typename LATraits, typename Tria>
+void PhaseFieldMonolithicSolve<LATraits, Tria>::setup_qph()
+{
     m_logfile << "\t\tSetting up quadrature point data ("
-	      << m_n_q_points
-	      << " points per cell)" << std::endl;
-
+    << m_n_q_points
+    << " points per cell)" << std::endl;
+    
     m_quadrature_point_history.clear();
     for (auto const & cell : m_triangulation.active_cell_iterators())
-      {
-	m_quadrature_point_history.initialize(cell, m_n_q_points);
-      }
-
+    {
+        // skip cells owned by other ranks in mpi mode
+        if constexpr (is_mpi)
+            if (!cell->is_locally_owned())
+                continue;
+        m_quadrature_point_history.initialize(cell, m_n_q_points);
+    }
+    
     unsigned int material_id;
     double lame_lambda = 0.0;
     double lame_mu = 0.0;
@@ -1715,12 +1719,17 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, Tria>::BVector;
     double max_temperature = 0.0;
     double b_1 = 0.0;
     double b_2 = 0.0;
-
+    
     for (const auto &cell : m_triangulation.active_cell_iterators())
-      {
+    {
+        // skip cells owned by other ranks in mpi mode
+        if constexpr (is_mpi)
+            if (!cell->is_locally_owned())
+                continue;
+        
         material_id = cell->material_id();
         if (m_material_data.find(material_id) != m_material_data.end())
-          {
+        {
             lame_lambda                = m_material_data[material_id][0];
             lame_mu                    = m_material_data[material_id][1];
             length_scale               = m_material_data[material_id][2];
@@ -1734,7 +1743,7 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, Tria>::BVector;
             max_temperature            = m_material_data[material_id][10];
             b_1                        = m_material_data[material_id][11];
             b_2                        = m_material_data[material_id][12];
-	  }
+        }
         else
           {
             m_logfile << "Could not find material data for material id: " << material_id << std::endl;
