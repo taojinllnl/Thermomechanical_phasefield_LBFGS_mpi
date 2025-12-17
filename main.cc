@@ -4201,6 +4201,7 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
   {
     m_timer.enter_subsection("Assemble B0");
 
+      m_solution.updateRelevance();
     m_tangent_matrix = 0.0;
 
     const UpdateFlags uf_cell(update_values | update_gradients |
@@ -4264,6 +4265,7 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
 
     //m_logfile << " A_RHS " << std::flush;
 
+      m_solution.updateRelevance();
     system_rhs = 0.0;
 
     const UpdateFlags uf_cell(update_values | update_gradients |
