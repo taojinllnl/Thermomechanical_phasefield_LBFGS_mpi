@@ -6420,6 +6420,7 @@ int main(int argc, char* argv[])
     // dimension by prm setting
     const unsigned int dim = parameters.m_dim;
     if(parameters.m_mpi_type == "PETSc") {
+#ifdef HAVE_PETSC
         // PETSc type mpi
         if (dim == 2 )
         {
@@ -6448,7 +6449,9 @@ int main(int argc, char* argv[])
             AssertThrow(false,
                         ExcMessage("Dimension has to be either 2 or 3"));
         }
+#endif
     } else if(parameters.m_mpi_type == "Trilinos") {
+#ifdef HAVE_TRILINOS
         // Trilinos type mpi
         if (dim == 2 )
         {
@@ -6477,6 +6480,7 @@ int main(int argc, char* argv[])
             AssertThrow(false,
                         ExcMessage("Dimension has to be either 2 or 3"));
         }
+#endif
     } else {
         // Serial type
         if (dim == 2 )
