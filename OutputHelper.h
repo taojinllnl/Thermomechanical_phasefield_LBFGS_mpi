@@ -39,13 +39,13 @@ public:
 
     using BVector  = ::la::BlockVectorWrapper<LATraits>;
     
-    using CellDataStorage = dealii::CellDataStorage<typename dealii::Triangulation<dim>::cell_iterator, PointHistory>;
+    using CellDataStorage = dealii::CellDataStorage<typename Tria::cell_iterator, PointHistory>;
     
     using DataComponentInterpretationList = std::vector<dealii::DataComponentInterpretation::DataComponentInterpretation>;
 private:
     const MPIInfo&                      __mpiInfo;
                 
-    const Tria&                         __tria;
+    Tria&                               __tria;
     
     const dealii::DoFHandler<dim>&      __dof_handler;
     
@@ -88,7 +88,7 @@ private:
     
 public:
     OutputHelper(const MPIInfo&                   mpiInfo,
-                 const Tria&                      tria,
+                 Tria&                            tria,
                  const dealii::DoFHandler<dim>&   dof_handler,
                  const dealii::QGauss<dim>&       qf_cell);
     
@@ -150,7 +150,7 @@ OutputHelper<LATraits, Tria, PointHistory>
 template <typename LATraits, typename Tria, typename PointHistory>
 OutputHelper<LATraits, Tria, PointHistory>
 ::OutputHelper(const MPIInfo&                   mpiInfo,
-               const Tria&                      tria,
+               Tria&                            tria,
                const dealii::DoFHandler<dim>&   dof_handler,
                const dealii::QGauss<dim>&       qf_cell)
 : __mpiInfo(mpiInfo)
@@ -379,22 +379,51 @@ OutputHelper<LATraits, Tria, PointHistory>
     
     if constexpr (is_mpi){
         
-        const IndexSet& locally_owned_dofs = dof_handler_L2_flux.locally_owned_dofs();
-        const IndexSet locally_relevant_dofs =
+        const IndexSet& owned_dofs = dof_handler_L2_flux.locally_owned_dofs();
+        const IndexSet  relevant_dofs =
             DoFTools::extract_locally_relevant_dofs(dof_handler_L2_flux);
         
         
-        heat_flux_field_L2.reinit(locally_owned_dofs,
-                                  locally_relevant_dofs,
+        heat_flux_field_L2.reinit(owned_dofs,
+                                  relevant_dofs,
                                   *__mpiInfo.mpiCommPtr());
         
-        for (unsigned int d = 0; d < dim; ++d)
-            for (auto i = locally_owned_dofs.begin(); i != locally_owned_dofs.end(); ++i)
-                heat_flux_field_L2(d + (*i) * dim) = heat_flux_L2_list[d](*i);
+        // copy values by dim and indices
+//        for (unsigned int d = 0; d < dim; ++d)
+//            for (auto i = owned_dofs.begin(); i != owned_dofs.end(); ++i)
+//                heat_flux_field_L2(d + (*i) * dim) = heat_flux_L2_list[d](*i);
+//        
+//        heat_flux_field_L2.compress(dealii::VectorOperation::insert);
+//        
+//        heat_flux_field_L2.update_ghost_values();
+//        
         
+        std::vector<types::global_dof_index> scalar_dof_indices(1);
+        std::vector<types::global_dof_index> vector_dof_indices(dim);
+
+        for (auto cell = dof_handler_L2.begin_active();
+             cell != dof_handler_L2.end(); ++cell)
+        {
+          if (!cell->is_locally_owned())
+            continue;
+
+          auto flux_cell = typename DoFHandler<dim>::active_cell_iterator(
+              &dof_handler_L2_flux.get_triangulation(),
+              cell->level(),
+              cell->index(),
+              &dof_handler_L2_flux);
+
+          cell->get_dof_indices(scalar_dof_indices);
+          flux_cell->get_dof_indices(vector_dof_indices);
+
+          for (unsigned int d = 0; d < dim; ++d)
+            heat_flux_field_L2(vector_dof_indices[d]) =
+                heat_flux_L2_list[d](scalar_dof_indices[0]);
+        }
+
         heat_flux_field_L2.compress(dealii::VectorOperation::insert);
-        
         heat_flux_field_L2.update_ghost_values();
+        
         
     } else {
         heat_flux_field_L2.reinit(dof_handler_L2_flux.n_dofs());
@@ -429,13 +458,13 @@ OutputHelper<LATraits, Tria, PointHistory>
     
     for (auto cell = __tria.begin_active(); cell != __tria.end(); ++cell)
     {
-        if constexpr (is_mpi)
-        {
-            if(!cell->is_locally_owned())
-            {
-                continue;
-            }
-        }
+//        if constexpr (is_mpi)
+//        {
+//            if(!cell->is_locally_owned())
+//            {
+//                continue;
+//            }
+//        }
         cell_material_id(cell->active_cell_index()) = cell->material_id();
     }
     data_out.add_data_vector(cell_material_id, "materialID");
@@ -472,11 +501,18 @@ OutputHelper<LATraits, Tria, PointHistory>
 {
     using namespace dealii;
     if constexpr (is_mpi) {
-        // partitioning
+        // partitioning 1
         Vector<float> subdomain(__tria.n_active_cells());
         for (unsigned int i = 0; i < subdomain.size(); ++i)
-          subdomain(i) = __tria.locally_owned_subdomain();
-        data_out.add_data_vector(subdomain, "partitioning");
+            subdomain(i) = __tria.locally_owned_subdomain();
+        data_out.add_data_vector(subdomain, "subdomain");
+        
+        // partitioning 2
+        Vector<float> subdomain_cell(__tria.n_active_cells());
+        for (auto cell = __tria.begin_active(); cell != __tria.end(); ++cell)
+            subdomain_cell(cell->active_cell_index()) = cell->subdomain_id();
+        data_out.add_data_vector(subdomain_cell, "partitioning");
+
     }
 }
 
