@@ -6386,7 +6386,28 @@ int main(int argc, char* argv[])
                     parameters.m_mpi_type == "Trilinos",
                     argc, argv);
 
-    // print MPI / non-MPI info at rank 0
+    /**
+     *
+     * Print MPI / non-MPI runtime information at rank 0.
+     *
+     * In serial mode, only non-MPI information is printed to the terminal.
+     * In MPI mode, runtime MPI configuration information is printed.
+     *
+     * [ Warning ]
+     * Whether the MPI functionality is initialized is only determined by the
+     * settings in prm via `MPIInfo`.
+     * If `Serial` is specified in the parameter file but the executable is
+     * launched via `srun` or `mpirun`, MPI will NOT be initialized inside the
+     * program. In this case, the launcher will start multiple independent
+     * instances of the same executable.
+     *
+     * As a consequence, the program is executed repeatedly for `n` times,
+     * where `n` is the number of processes requested by `srun` or `mpirun`.
+     * The program has no reliable way to detect this situation, and all
+     * terminal outputs (non-MPI) will appear multiple times. If it's not what
+     * you want, please teminate the progam immediatedly.
+     *
+     */
     if(mpiInfo.rank() == 0)
         mpiInfo.summary(std::cout);
     
