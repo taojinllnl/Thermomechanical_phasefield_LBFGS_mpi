@@ -4720,6 +4720,10 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
     // take a full step size 1.0
     solution_delta_trial.add(1.0, BFGS_p_vector);
 
+      
+      solution_delta_trial.updateRelevance();
+      m_solution.updateRelevance();
+      
     update_qph_incremental(solution_delta_trial, m_solution, false);
 
     BVector g_new(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
@@ -4761,6 +4765,10 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
         // BFGS_p_vector is the search direction
         solution_delta_trial = solution_delta;
         solution_delta_trial.add(alpha, BFGS_p_vector);
+          
+          solution_delta_trial.updateRelevance();
+          m_solution.updateRelevance();
+          
         update_qph_incremental(solution_delta_trial, m_solution, false);
         assemble_system_rhs_LBFGS_parallel(m_solution, g_new);
 
@@ -5048,6 +5056,9 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
     BVector solution_delta_trial(solution_delta);
     solution_delta_trial.add(alpha, BFGS_p_vector);
 
+        solution_delta_trial.updateRelevance();
+        m_solution.updateRelevance();
+        
     update_qph_incremental(solution_delta_trial, m_solution, false);
 
         BVector system_rhs(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
@@ -5072,6 +5083,9 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
     BVector solution_delta_trial(solution_delta);
     solution_delta_trial.add(alpha, BFGS_p_vector);
 
+        solution_delta_trial.updateRelevance();
+        m_solution.updateRelevance();
+        
     update_qph_incremental(solution_delta_trial, m_solution, false);
 
 //    BVector system_rhs(m_dofs_per_block);
@@ -5191,6 +5205,9 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
                 m_logfile << " --- " << std::flush;
                 m_logfile << " --- " << std::flush;
               }
+              
+              solution_delta.updateRelevance();
+              m_solution.updateRelevance();
             update_qph_incremental(solution_delta, m_solution, false);
             if (m_parameters.m_output_iteration_history)
               {
@@ -5428,6 +5445,9 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
           m_error_update_norm.normalize(m_error_update_0);
 
         solution_delta += LBFGS_update;
+          
+          solution_delta.updateRelevance();
+          m_solution.updateRelevance();
         update_qph_incremental(solution_delta, m_solution, false);
 
         LBFGS_y_vector = m_system_rhs;
@@ -6162,6 +6182,9 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
           temp_solution_delta.initalize();
 //	temp_previous_solution = 0.0;
           temp_previous_solution.initalize();
+          
+          temp_solution_delta.updateRelevance();
+          temp_previous_solution.updateRelevance();
 	update_qph_incremental(temp_solution_delta, temp_previous_solution, false);
 	update_history_field_step();
 
