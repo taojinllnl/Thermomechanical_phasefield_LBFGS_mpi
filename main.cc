@@ -5489,6 +5489,7 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
                       m_solution,
                       m_quadrature_point_history);
       
+      // TODO: 
 //      if constexpr (!is_mpi) {
 //          
 //          DataOut<dim> data_out;
@@ -5978,6 +5979,7 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
       {
 	cell_refine_flag = false;
 
+          // TODO:
 	std::vector<types::global_dof_index> local_dof_indices(m_fe.dofs_per_cell);
 	for (const auto &cell : m_dof_handler.active_cell_iterators())
 	  {
@@ -6011,6 +6013,7 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
 	      }
 	  }
 
+          // TODO: 
 	for (const auto &cell : m_dof_handler.active_cell_iterators())
 	  {
 	    if (cell->refine_flag_set())
