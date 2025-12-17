@@ -41,9 +41,9 @@ public:
     
     BlockVectorWrapper(const MPIInfo& mpiInfo,
                        const BlockDesc& blockDesc,
-                       const bool hasRelevance=true);
+                       const bool hasRelevance=false);
     
-    
+    const typename TraitsType::Vector& updateRelevance();
     const typename TraitsType::Vector& relevance() const;
     bool hasRelevance() const;
     

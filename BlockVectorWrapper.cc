@@ -38,7 +38,7 @@ BlockVectorWrapper<TraitsType>
                      const BlockDesc& blockDesc,
                      const bool hasRelevance)
 : TraitsType::Vector()
-, __hasRelevance(hasRelevance)
+, __hasRelevance(mpiInfo.isMPI() ? hasRelevance : false)
 , __relevancePtr(__hasRelevance? std::make_unique<VecType>() : nullptr)
 , __mpiInfo(mpiInfo)
 , __blockDesc(blockDesc)
@@ -48,13 +48,36 @@ BlockVectorWrapper<TraitsType>
 template <typename TraitsType>
 const typename TraitsType::Vector&
 BlockVectorWrapper<TraitsType>
+::updateRelevance()
+{
+    if (__hasRelevance) {
+        if (!__relevancePtr) {
+            __relevancePtr = std::make_unique<VecType>();
+        }
+        
+
+        
+        (*__relevancePtr) = base();
+        __relevancePtr->update_ghost_values();
+        
+        return *__relevancePtr;
+    } else {
+        return base();
+    }
+    
+}
+
+template <typename TraitsType>
+const typename TraitsType::Vector&
+BlockVectorWrapper<TraitsType>
 ::relevance() const
 {
-    if(!__hasRelevance)
-    {
-        __hasRelevance = true;
+    if (__hasRelevance) {
+        return *__relevancePtr;
+    } else {
+        return base();
     }
-    return *__relevancePtr;
+    
 }
 
 
