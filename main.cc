@@ -1745,24 +1745,24 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::setup_qph()
             b_2                        = m_material_data[material_id][12];
         }
         else
-          {
+        {
             m_logfile << "Could not find material data for material id: " << material_id << std::endl;
             AssertThrow(false, ExcMessage("Could not find material data for material id."));
-          }
-
+        }
+        
         const std::vector<std::shared_ptr<PointHistory<dim>>> lqph =
-          m_quadrature_point_history.get_data(cell);
+        m_quadrature_point_history.get_data(cell);
         Assert(lqph.size() == m_n_q_points, ExcInternalError());
-
+        
         for (unsigned int q_point = 0; q_point < m_n_q_points; ++q_point)
-          lqph[q_point]->setup_lqp(lame_lambda, lame_mu, length_scale,
-				   gc_0, viscosity, residual_k,
-				   heat_capacity, thermal_conductivity_0,
-				   thermal_expansion_coeff, reference_temperature,
-				   max_temperature, b_1, b_2,
-				   m_parameters.m_coupling_on_heat_eq);
-      }
-  }
+            lqph[q_point]->setup_lqp(lame_lambda, lame_mu, length_scale,
+                                     gc_0, viscosity, residual_k,
+                                     heat_capacity, thermal_conductivity_0,
+                                     thermal_expansion_coeff, reference_temperature,
+                                     max_temperature, b_1, b_2,
+                                     m_parameters.m_coupling_on_heat_eq);
+    }
+}
 
   template <typename LATraits, typename Tria>
 typename PhaseFieldMonolithicSolve<LATraits, Tria>::BVector
