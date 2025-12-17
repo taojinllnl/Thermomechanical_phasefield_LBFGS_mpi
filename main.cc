@@ -1531,6 +1531,7 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, Tria>::BVector;
     BVector error_res(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
       error_res.initalize();
       
+      // TODO: may not work in MPI mode
     for (unsigned int i = 0; i < m_dof_handler.n_dofs(); ++i)
       if (!m_constraints.is_constrained(i))
         error_res(i) = m_system_rhs(i);
@@ -1548,6 +1549,7 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, Tria>::BVector;
     BVector error_ud(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
       error_ud.initalize();
       
+      // TODO: may not work in MPI mode
     for (unsigned int i = 0; i < m_dof_handler.n_dofs(); ++i)
       if (!m_constraints.is_constrained(i))
         error_ud(i) = soln_update(i);
@@ -5100,6 +5102,7 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
         BVector error_res(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
         error_res.initalize();
 
+        // TODO: may not work in MPI mode
     for (unsigned int i = 0; i < m_dof_handler.n_dofs(); ++i)
       if (!m_constraints.is_constrained(i))
         error_res(i) = system_rhs(i);
