@@ -1924,19 +1924,28 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
       m_quadrature_point_history.get_data(cell);
     Assert(lqph.size() == m_n_q_points, ExcInternalError());
 
-    scratch.m_fe_values[m_u_fe].get_function_symmetric_gradients(
-      scratch.m_solution_UQPH, scratch.m_solution_symm_grads_u_cell);
-    scratch.m_fe_values[m_d_fe].get_function_values(
-      scratch.m_solution_UQPH, scratch.m_solution_values_phasefield_cell);
-    scratch.m_fe_values[m_d_fe].get_function_gradients(
-      scratch.m_solution_UQPH, scratch.m_solution_grad_phasefield_cell);
-    scratch.m_fe_values[m_t_fe].get_function_values(
-      scratch.m_solution_UQPH, scratch.m_solution_values_temperature_cell);
-    scratch.m_fe_values[m_t_fe].get_function_gradients(
-      scratch.m_solution_UQPH, scratch.m_solution_grad_temperature_cell);
+      const auto& solution_relevance = scratch.m_solution_UQPH.relevance();
+      const auto& solution_previous_step_relevance = scratch.m_solution_previous_step.relevance();
+      
+      scratch.m_fe_values[m_u_fe]
+          .get_function_symmetric_gradients(solution_relevance,
+                                            scratch.m_solution_symm_grads_u_cell);
+      scratch.m_fe_values[m_d_fe]
+          .get_function_values(solution_relevance,
+                               scratch.m_solution_values_phasefield_cell);
+      scratch.m_fe_values[m_d_fe]
+          .get_function_gradients(solution_relevance,
+                                  scratch.m_solution_grad_phasefield_cell);
+      scratch.m_fe_values[m_t_fe]
+          .get_function_values(solution_relevance,
+                               scratch.m_solution_values_temperature_cell);
+      scratch.m_fe_values[m_t_fe]
+          .get_function_gradients(solution_relevance,
+                                  scratch.m_solution_grad_temperature_cell);
 
-    scratch.m_fe_values[m_d_fe].get_function_values(
-      scratch.m_solution_previous_step, scratch.m_phasefield_previous_step_cell);
+    scratch.m_fe_values[m_d_fe]
+          .get_function_values(solution_previous_step_relevance,
+                               scratch.m_phasefield_previous_step_cell);
 
     for (const unsigned int q_point :
          scratch.m_fe_values.quadrature_point_indices())
