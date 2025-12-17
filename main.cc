@@ -5911,6 +5911,10 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
           }
       }
 
+      // sync energy_functional with all ranks
+      if constexpr (is_mpi)
+          energy_functional = Utilities::MPI::sum(energy_functional,
+                                                  *m_mpiInfo.mpiCommPtr());
     return energy_functional;
   }
 
@@ -5944,6 +5948,14 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
           }
       }
 
+      // sync total_strain_energy and crack_energy_dissipation with all ranks
+      if constexpr (is_mpi) {
+          total_strain_energy = Utilities::MPI::sum(total_strain_energy,
+                                                    *m_mpiInfo.mpiCommPtr());
+          crack_energy_dissipation = Utilities::MPI::sum(crack_energy_dissipation,
+                                                         *m_mpiInfo.mpiCommPtr());
+      }
+      
     return std::make_pair(total_strain_energy, crack_energy_dissipation);
   }
 
