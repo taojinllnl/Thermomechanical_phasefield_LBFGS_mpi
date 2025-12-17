@@ -4676,15 +4676,19 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
   {
     m_logfile << "\t\tUpdate history variable" << std::endl;
 
-    for (const auto &cell : m_triangulation.active_cell_iterators())
+      for (const auto &cell : m_triangulation.active_cell_iterators())
       {
-        std::vector<std::shared_ptr< PointHistory<dim>>> lqph =
+          // skip cells owned by other ranks in mpi mode
+          if constexpr (is_mpi)
+              if (!cell->is_locally_owned())
+                  continue;
+          std::vector<std::shared_ptr< PointHistory<dim>>> lqph =
           m_quadrature_point_history.get_data(cell);
-        Assert(lqph.size() == m_n_q_points, ExcInternalError());
-
-        for (unsigned int q_point = 0; q_point < m_n_q_points; ++q_point)
+          Assert(lqph.size() == m_n_q_points, ExcInternalError());
+          
+          for (unsigned int q_point = 0; q_point < m_n_q_points; ++q_point)
           {
-            lqph[q_point]->update_history_variable();
+              lqph[q_point]->update_history_variable();
           }
       }
   }
