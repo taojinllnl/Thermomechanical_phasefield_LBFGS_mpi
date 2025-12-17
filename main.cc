@@ -1796,25 +1796,37 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
 					m_time.get_delta_t(),
 					m_parameters.m_degrade_conductivity);
 
-    auto worker = [this](const typename DoFHandler<dim>::active_cell_iterator &cell,
-	                 ScratchData_UQPH & scratch,
-	                 PerTaskData_UQPH & data)
-      {
-        this->update_qph_incremental_one_cell(cell, scratch, data);
-      };
-
-    auto copier = [this](const PerTaskData_UQPH &data)
-      {
-        this->copy_local_to_global_UQPH(data);
-      };
-
-    WorkStream::run(
-	m_dof_handler.begin_active(),
-	m_dof_handler.end(),
-	worker,
-	copier,
-	scratch_data_UQPH,
-	per_task_data_UQPH);
+      if constexpr (!is_mpi){
+          // non-mpi mode
+          auto worker = [this](const typename DoFHandler<dim>::active_cell_iterator &cell,
+                               ScratchData_UQPH & scratch,
+                               PerTaskData_UQPH & data)
+          {
+              this->update_qph_incremental_one_cell(cell, scratch, data);
+          };
+          
+          auto copier = [this](const PerTaskData_UQPH &data)
+          {
+              this->copy_local_to_global_UQPH(data);
+          };
+          
+          WorkStream::run(
+                          m_dof_handler.begin_active(),
+                          m_dof_handler.end(),
+                          worker,
+                          copier,
+                          scratch_data_UQPH,
+                          per_task_data_UQPH);
+      } else {
+          // mpi mode
+          for (const auto &cell : m_dof_handler.active_cell_iterators())
+              if (cell->is_locally_owned()) {
+                  update_qph_incremental_one_cell(cell,
+                                                  scratch_data_UQPH,
+                                                  per_task_data_UQPH);
+                  copy_local_to_global_UQPH(per_task_data_UQPH);
+              }
+      }
 
     m_timer.leave_subsection();
   }
