@@ -5693,8 +5693,14 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
     std::vector<std::vector<SymmetricTensor<2, dim>>>
       symm_grad_Nx(m_qf_cell.size(), std::vector<SymmetricTensor<2, dim>>(m_dofs_per_cell));
 
+      // TODO:
     for (const auto &cell : m_dof_handler.active_cell_iterators())
       {
+          // skip cells owned by other ranks in mpi mode
+          if constexpr (is_mpi)
+              if (!cell->is_locally_owned())
+                  continue;
+          
 	// if calculate_reaction_force() is defined as const, then
 	// we also need to put a const in std::shared_ptr,
 	// that is, std::shared_ptr<const PointHistory<dim>>
@@ -5886,6 +5892,11 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
 
     for (const auto &cell : m_dof_handler.active_cell_iterators())
       {
+          // skip cells owned by other ranks in mpi mode
+          if constexpr (is_mpi)
+              if (!cell->is_locally_owned())
+                  continue;
+          
         fe_values.reinit(cell);
 
         const std::vector<std::shared_ptr<const PointHistory<dim>>> lqph =
@@ -5914,6 +5925,11 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
 
     for (const auto &cell : m_dof_handler.active_cell_iterators())
       {
+          
+          // skip cells owned by other ranks in mpi mode
+          if constexpr (is_mpi)
+              if (!cell->is_locally_owned())
+                  continue;
         fe_values.reinit(cell);
 
         const std::vector<std::shared_ptr<const PointHistory<dim>>> lqph =
