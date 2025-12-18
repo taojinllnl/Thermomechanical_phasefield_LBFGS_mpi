@@ -6073,7 +6073,8 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
         // to the newly refined mesh
         if (cell_refine_flag)
         {
-            using VecType = typename BVector::VecType;
+            using VecType  = typename BVector::VecType;
+            using VecBType = typename LATraits::VectorBlock;
             
             mesh_is_same = false;
             
@@ -6092,9 +6093,12 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
             DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
             constraints.close();
             
-            Vector<double> old_history_variable_field_L2;
-            old_history_variable_field_L2.reinit(dof_handler_L2.n_dofs());
-            
+            VecBType old_history_variable_field_L2;
+            if constexpr (is_mpi){
+                old_history_variable_field_L2.reinit(dof_handler_L2.locally_owned_dofs(), *m_mpiInfo.mpiCommPtr());
+            } else {
+                old_history_variable_field_L2.reinit(dof_handler_L2.n_dofs());
+            }
             MappingQ<dim> mapping(m_parameters.m_poly_degree + 1);
             VectorTools::project(mapping,
                                  dof_handler_L2,
@@ -6111,7 +6115,7 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
             
             SolutionTransfer<dim, VecType> solution_transfer(m_dof_handler);
             solution_transfer.prepare_for_coarsening_and_refinement(old_solutions);
-            SolutionTransfer<dim, Vector<double>> solution_transfer_history_variable(dof_handler_L2);
+            SolutionTransfer<dim, VecBType> solution_transfer_history_variable(dof_handler_L2);
             solution_transfer_history_variable.prepare_for_coarsening_and_refinement(old_history_variable_field_L2);
             m_triangulation.execute_coarsening_and_refinement();
             
@@ -6136,8 +6140,15 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
                 tmp_solutions[1].reinit(m_dofs_per_block);
             }
             
-            Vector<double> new_history_variable_field_L2;
-            new_history_variable_field_L2.reinit(dof_handler_L2.n_dofs());
+            VecBType new_history_variable_field_L2;
+            if constexpr (is_mpi)
+            {
+                const IndexSet relevant_dofs = DoFTools::extract_locally_relevant_dofs(dof_handler_L2);
+                
+                new_history_variable_field_L2.reinit(dof_handler_L2.locally_owned_dofs(), relevant_dofs, *m_mpiInfo.mpiCommPtr());
+            } else {
+                new_history_variable_field_L2.reinit(dof_handler_L2.n_dofs());
+            }
             
 #  if DEAL_II_VERSION_GTE(9, 7, 0)
             solution_transfer.interpolate(tmp_solutions);
