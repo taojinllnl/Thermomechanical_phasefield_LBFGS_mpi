@@ -6005,203 +6005,204 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
   }
 
 
-  template <typename LATraits, typename Tria>
-  bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transfer(BVector & solution_delta,
-									  BVector & LBFGS_update_refine)
-  {
+template <typename LATraits, typename Tria>
+bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transfer(BVector & solution_delta,
+                                                                                   BVector & LBFGS_update_refine)
+{
     // This is the solution at (n+1) obtained from the old (coarse) mesh
     BVector solution_next_step(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
-      solution_next_step.initalize();
+    solution_next_step.initalize();
     solution_next_step.base() = m_solution.base() + solution_delta.base();
+    solution_next_step.updateRelevance();
+    
     bool mesh_is_same = true;
     bool cell_refine_flag = true;
-
+    
     unsigned int material_id;
     double length_scale;
     double cell_length;
     while(cell_refine_flag)
-      {
-	cell_refine_flag = false;
-
-          // TODO:
-	std::vector<types::global_dof_index> local_dof_indices(m_fe.dofs_per_cell);
-	for (const auto &cell : m_dof_handler.active_cell_iterators())
-	  {
-	    cell->get_dof_indices(local_dof_indices);
-
-	    for (unsigned int i = 0; i< m_fe.dofs_per_cell; ++i)
-	      {
-		const unsigned int comp_i = m_fe.system_to_component_index(i).first;
-		if (comp_i == m_d_component) //phasefield component
-		  {
-		    if (  solution_next_step(local_dof_indices[i])
-			> m_parameters.m_phasefield_refine_threshold )
-		      {
-			material_id = cell->material_id();
-	                length_scale = m_material_data[material_id][2];
-	                if (dim == 2)
-	                  cell_length = std::sqrt(cell->measure());
-	                else
-	                  cell_length = std::cbrt(cell->measure());
-			if (  cell_length
-			    > length_scale * m_parameters.m_allowed_max_h_l_ratio )
-			  {
-			    if (cell->level() < m_parameters.m_max_allowed_refinement_level)
-			      {
-			        cell->set_refine_flag();
-			        break;
-			      }
-			  }
-		      }
-		  }
-	      }
-	  }
-
-          // TODO: 
-	for (const auto &cell : m_dof_handler.active_cell_iterators())
-	  {
-	    if (cell->refine_flag_set())
-	      {
-		cell_refine_flag = true;
-		break;
-	      }
-	  }
-
-	// if any cell is refined, we need to project the solution
-	// to the newly refined mesh
-	if (cell_refine_flag)
-	  {
-	    mesh_is_same = false;
-          //          TODO: type confict
-          /*
-	    std::vector<BVector> old_solutions(2, m_solution);
-	    old_solutions[0] = solution_next_step;
-
-	    // history variable field L2 projection
-	    DoFHandler<dim> dof_handler_L2(m_triangulation);
-	    FE_DGQ<dim>     fe_L2(m_parameters.m_poly_degree); //Discontinuous Galerkin
-	    dof_handler_L2.distribute_dofs(fe_L2);
-	    AffineConstraints<double> constraints;
-	    constraints.clear();
-	    DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
-	    constraints.close();
-
-	    Vector<double> old_history_variable_field_L2;
-	    old_history_variable_field_L2.reinit(dof_handler_L2.n_dofs());
-
-	    MappingQ<dim> mapping(m_parameters.m_poly_degree + 1);
-	    VectorTools::project(mapping,
-			     dof_handler_L2,
-			     constraints,
-			     m_qf_cell,
-			     [&] (const typename DoFHandler<dim>::active_cell_iterator & cell,
-				  const unsigned int q) -> double
-			     {
-			       return m_quadrature_point_history.get_data(cell)[q]->get_history_max_positive_strain_energy();
-			     },
-			     old_history_variable_field_L2);
-
-	    m_triangulation.prepare_coarsening_and_refinement();
+    {
+        cell_refine_flag = false;
         
-	    SolutionTransfer<dim, BVector> solution_transfer(m_dof_handler);
-	    solution_transfer.prepare_for_coarsening_and_refinement(old_solutions);
-	    SolutionTransfer<dim, Vector<double>> solution_transfer_history_variable(dof_handler_L2);
-	    solution_transfer_history_variable.prepare_for_coarsening_and_refinement(old_history_variable_field_L2);
-	    m_triangulation.execute_coarsening_and_refinement();
-
-	    setup_system();
-
-	    dof_handler_L2.distribute_dofs(fe_L2);
-	    constraints.clear();
-	    DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
-	    constraints.close();
-
-        std::vector<BVector> tmp_solutions;
-        tmp_solutions.reserve(2);
-        tmp_solutions.emplace_back(m_mpiInfo, m_blocks_desc, true);
-        tmp_solutions.emplace_back(m_mpiInfo, m_blocks_desc, true);
-//	    tmp_solutions[0].reinit(m_dofs_per_block);
-//	    tmp_solutions[1].reinit(m_dofs_per_block);
-          tmp_solutions[0].initalize();
-          tmp_solutions[1].initalize();
-
-	    Vector<double> new_history_variable_field_L2;
-	    new_history_variable_field_L2.reinit(dof_handler_L2.n_dofs());
-
+        // TODO:
+        std::vector<types::global_dof_index> local_dof_indices(m_fe.dofs_per_cell);
+        for (const auto &cell : m_dof_handler.active_cell_iterators())
+        {
+            cell->get_dof_indices(local_dof_indices);
+            
+            for (unsigned int i = 0; i< m_fe.dofs_per_cell; ++i)
+            {
+                const unsigned int comp_i = m_fe.system_to_component_index(i).first;
+                if (comp_i == m_d_component) //phasefield component
+                {
+                    if (  solution_next_step(local_dof_indices[i])
+                        > m_parameters.m_phasefield_refine_threshold )
+                    {
+                        material_id = cell->material_id();
+                        length_scale = m_material_data[material_id][2];
+                        if (dim == 2)
+                            cell_length = std::sqrt(cell->measure());
+                        else
+                            cell_length = std::cbrt(cell->measure());
+                        if (  cell_length
+                            > length_scale * m_parameters.m_allowed_max_h_l_ratio )
+                        {
+                            if (cell->level() < m_parameters.m_max_allowed_refinement_level)
+                            {
+                                cell->set_refine_flag();
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // TODO:
+        for (const auto &cell : m_dof_handler.active_cell_iterators())
+        {
+            if (cell->refine_flag_set())
+            {
+                cell_refine_flag = true;
+                break;
+            }
+        }
+        
+        // if any cell is refined, we need to project the solution
+        // to the newly refined mesh
+        if (cell_refine_flag)
+        {
+            mesh_is_same = false;
+            
+            std::vector<BVector> old_solutions(2, m_solution);
+            old_solutions[0] = solution_next_step;
+            
+            // history variable field L2 projection
+            DoFHandler<dim> dof_handler_L2(m_triangulation);
+            FE_DGQ<dim>     fe_L2(m_parameters.m_poly_degree); //Discontinuous Galerkin
+            dof_handler_L2.distribute_dofs(fe_L2);
+            AffineConstraints<double> constraints;
+            constraints.clear();
+            DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
+            constraints.close();
+            
+            Vector<double> old_history_variable_field_L2;
+            old_history_variable_field_L2.reinit(dof_handler_L2.n_dofs());
+            
+            MappingQ<dim> mapping(m_parameters.m_poly_degree + 1);
+            VectorTools::project(mapping,
+                                 dof_handler_L2,
+                                 constraints,
+                                 m_qf_cell,
+                                 [&] (const typename DoFHandler<dim>::active_cell_iterator & cell,
+                                      const unsigned int q) -> double
+                                 {
+                return m_quadrature_point_history.get_data(cell)[q]->get_history_max_positive_strain_energy();
+            },
+                                 old_history_variable_field_L2);
+            
+            m_triangulation.prepare_coarsening_and_refinement();
+            
+            SolutionTransfer<dim, BVector> solution_transfer(m_dof_handler);
+            solution_transfer.prepare_for_coarsening_and_refinement(old_solutions);
+            SolutionTransfer<dim, Vector<double>> solution_transfer_history_variable(dof_handler_L2);
+            solution_transfer_history_variable.prepare_for_coarsening_and_refinement(old_history_variable_field_L2);
+            m_triangulation.execute_coarsening_and_refinement();
+            
+            setup_system();
+            
+            dof_handler_L2.distribute_dofs(fe_L2);
+            constraints.clear();
+            DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
+            constraints.close();
+            
+            std::vector<BVector> tmp_solutions;
+            tmp_solutions.reserve(2);
+            tmp_solutions.emplace_back(m_mpiInfo, m_blocks_desc, true);
+            tmp_solutions.emplace_back(m_mpiInfo, m_blocks_desc, true);
+            //	    tmp_solutions[0].reinit(m_dofs_per_block);
+            //	    tmp_solutions[1].reinit(m_dofs_per_block);
+            tmp_solutions[0].initalize();
+            tmp_solutions[1].initalize();
+            
+            Vector<double> new_history_variable_field_L2;
+            new_history_variable_field_L2.reinit(dof_handler_L2.n_dofs());
+            
 #  if DEAL_II_VERSION_GTE(9, 7, 0)
-	    solution_transfer.interpolate(tmp_solutions);
+            solution_transfer.interpolate(tmp_solutions);
 #  else
-	    // If an older version of dealII is used, for example, 9.4.0, interpolate()
+            // If an older version of dealII is used, for example, 9.4.0, interpolate()
             // needs to use the following interface.
             solution_transfer.interpolate(old_solutions, tmp_solutions);
 #  endif
-
+            
 #  if DEAL_II_VERSION_GTE(9, 7, 0)
             solution_transfer_history_variable.interpolate(new_history_variable_field_L2);
 #  else
-	    // If an older version of dealII is used, for example, 9.4.0, interpolate()
+            // If an older version of dealII is used, for example, 9.4.0, interpolate()
             // needs to use the following interface.
             solution_transfer_history_variable.interpolate(old_history_variable_field_L2, new_history_variable_field_L2);
 #  endif
-
-	    solution_next_step = tmp_solutions[0];
-	    m_solution = tmp_solutions[1];
-
-	    // make sure the projected solutions still satisfy
-	    // hanging node constraints
-	    m_constraints.distribute(solution_next_step);
-	    m_constraints.distribute(m_solution);
-	    constraints.distribute(new_history_variable_field_L2);
-
+            
+            solution_next_step = tmp_solutions[0];
+            m_solution = tmp_solutions[1];
+            
+            // make sure the projected solutions still satisfy
+            // hanging node constraints
+            m_constraints.distribute(solution_next_step);
+            m_constraints.distribute(m_solution);
+            constraints.distribute(new_history_variable_field_L2);
+            
             // new_history_variable_field_L2 contains the history variable projected
             // onto the newly refined mesh
-	    FEValues<dim> fe_values(fe_L2,
-				    m_qf_cell,
-				    update_values | update_gradients |
-				    update_quadrature_points | update_JxW_values);
-
-	    for (const auto &cell : dof_handler_L2.active_cell_iterators())
-	      {
-	        fe_values.reinit(cell);
-
-	        const std::vector<std::shared_ptr<PointHistory<dim>>> lqph =
-	              m_quadrature_point_history.get_data(cell);
-
-	        std::vector<double> history_variable_values_cell(m_n_q_points);
-
-	        fe_values.get_function_values(
-	            new_history_variable_field_L2, history_variable_values_cell);
-
-	        for (unsigned int q_point : fe_values.quadrature_point_indices())
-	          {
-	            lqph[q_point]->assign_history_variable(history_variable_values_cell[q_point]);
-	          }
-	      }
-           */
-	  } // if (cell_refine_flag)
-      } // while(cell_refine_flag)
-
+            FEValues<dim> fe_values(fe_L2,
+                                    m_qf_cell,
+                                    update_values | update_gradients |
+                                    update_quadrature_points | update_JxW_values);
+            
+            for (const auto &cell : dof_handler_L2.active_cell_iterators())
+            {
+                fe_values.reinit(cell);
+                
+                const std::vector<std::shared_ptr<PointHistory<dim>>> lqph =
+                m_quadrature_point_history.get_data(cell);
+                
+                std::vector<double> history_variable_values_cell(m_n_q_points);
+                
+                fe_values.get_function_values(
+                                              new_history_variable_field_L2, history_variable_values_cell);
+                
+                for (unsigned int q_point : fe_values.quadrature_point_indices())
+                {
+                    lqph[q_point]->assign_history_variable(history_variable_values_cell[q_point]);
+                }
+            }
+            
+        } // if (cell_refine_flag)
+    } // while(cell_refine_flag)
+    
     // calculate field variables for newly refined cells
     if (!mesh_is_same)
-      {
-	BVector temp_solution_delta(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
-	BVector temp_previous_solution(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
-//	temp_solution_delta = 0.0;
-          temp_solution_delta.initalize();
-//	temp_previous_solution = 0.0;
-          temp_previous_solution.initalize();
-          
-          temp_solution_delta.updateRelevance();
-          temp_previous_solution.updateRelevance();
-	update_qph_incremental(temp_solution_delta, temp_previous_solution, false);
-	update_history_field_step();
-
-	// initial guess for the resolve on the refined mesh
-	LBFGS_update_refine.base() = solution_next_step.base() - m_solution.base();
-      }
-
+    {
+        BVector temp_solution_delta(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
+        BVector temp_previous_solution(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
+        //	temp_solution_delta = 0.0;
+        temp_solution_delta.initalize();
+        //	temp_previous_solution = 0.0;
+        temp_previous_solution.initalize();
+        
+        temp_solution_delta.updateRelevance();
+        temp_previous_solution.updateRelevance();
+        update_qph_incremental(temp_solution_delta, temp_previous_solution, false);
+        update_history_field_step();
+        
+        // initial guess for the resolve on the refined mesh
+        LBFGS_update_refine.base() = solution_next_step.base() - m_solution.base();
+    }
+    
     return mesh_is_same;
-  }
+}
 
   template <typename LATraits, typename Tria>
   void PhaseFieldMonolithicSolve<LATraits, Tria>::print_parameter_information()
