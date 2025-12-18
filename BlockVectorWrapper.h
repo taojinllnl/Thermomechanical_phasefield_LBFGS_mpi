@@ -31,6 +31,11 @@ private:
     
     const MPIInfo&      __mpiInfo;
     const BlockDesc&    __blockDesc;
+    
+    
+    void __initRelevance();
+    
+    
 public:
     virtual ~BlockVectorWrapper() = default;
     

@@ -45,17 +45,31 @@ BlockVectorWrapper<TraitsType>
 {}
 
 
+
+template <typename TraitsType>
+void
+BlockVectorWrapper<TraitsType>
+::__initRelevance()
+{
+    if (!__relevancePtr)
+    {
+        __relevancePtr = std::make_unique<VecType>();
+    }
+    
+    if constexpr (!std::is_same_v<VecType, dealii::BlockVector<double>>)
+        __relevancePtr->reinit(*(__blockDesc.ownedPartition()),
+                               *(__blockDesc.relevantPartition()),
+                               *(__mpiInfo.mpiCommPtr()));
+}
+
+
 template <typename TraitsType>
 const typename TraitsType::Vector&
 BlockVectorWrapper<TraitsType>
 ::updateRelevance()
 {
     if (__hasRelevance) {
-        if (!__relevancePtr) {
-            __relevancePtr = std::make_unique<VecType>();
-        }
-        
-
+        __initRelevance();
         
         (*__relevancePtr) = base();
         __relevancePtr->update_ghost_values();
@@ -113,14 +127,7 @@ BlockVectorWrapper<TraitsType>
         
         if(__hasRelevance)
         {
-            if (!__relevancePtr)
-            {
-                __relevancePtr = std::make_unique<VecType>();
-            }
-            
-            __relevancePtr->reinit(*(__blockDesc.ownedPartition()),
-                                   *(__blockDesc.relevantPartition()),
-                                   *(__mpiInfo.mpiCommPtr()));
+            __initRelevance();
             
             (*__relevancePtr) = 0.0;
         }
