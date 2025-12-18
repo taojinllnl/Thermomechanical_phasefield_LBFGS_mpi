@@ -6073,10 +6073,15 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
         // to the newly refined mesh
         if (cell_refine_flag)
         {
+            using VecType = typename BVector::VecType;
+            
             mesh_is_same = false;
             
-            std::vector<BVector> old_solutions(2, m_solution);
-            old_solutions[0] = solution_next_step;
+            std::vector<VecType> old_solutions;
+            old_solutions.reserve(2);
+            old_solutions.emplace_back(m_solution.base());
+            old_solutions.emplace_back(solution_next_step.base());
+            
             
             // history variable field L2 projection
             DoFHandler<dim> dof_handler_L2(m_triangulation);
@@ -6104,7 +6109,7 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
             
             m_triangulation.prepare_coarsening_and_refinement();
             
-            SolutionTransfer<dim, BVector> solution_transfer(m_dof_handler);
+            SolutionTransfer<dim, VecType> solution_transfer(m_dof_handler);
             solution_transfer.prepare_for_coarsening_and_refinement(old_solutions);
             SolutionTransfer<dim, Vector<double>> solution_transfer_history_variable(dof_handler_L2);
             solution_transfer_history_variable.prepare_for_coarsening_and_refinement(old_history_variable_field_L2);
@@ -6117,14 +6122,19 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
             DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
             constraints.close();
             
-            std::vector<BVector> tmp_solutions;
-            tmp_solutions.reserve(2);
-            tmp_solutions.emplace_back(m_mpiInfo, m_blocks_desc, true);
-            tmp_solutions.emplace_back(m_mpiInfo, m_blocks_desc, true);
-            //	    tmp_solutions[0].reinit(m_dofs_per_block);
-            //	    tmp_solutions[1].reinit(m_dofs_per_block);
-            tmp_solutions[0].initalize();
-            tmp_solutions[1].initalize();
+            std::vector<VecType> tmp_solutions(2);
+            if constexpr (is_mpi) {
+                // target vectors should have info about ghost cells
+                tmp_solutions[0].reinit(*m_blocks_desc.ownedPartition(),
+                                        *m_blocks_desc.relevantPartition(),
+                                        *m_mpiInfo.mpiCommPtr());
+                tmp_solutions[1].reinit(*m_blocks_desc.ownedPartition(),
+                                        *m_blocks_desc.relevantPartition(),
+                                        *m_mpiInfo.mpiCommPtr());
+            } else {
+                tmp_solutions[0].reinit(m_dofs_per_block);
+                tmp_solutions[1].reinit(m_dofs_per_block);
+            }
             
             Vector<double> new_history_variable_field_L2;
             new_history_variable_field_L2.reinit(dof_handler_L2.n_dofs());
@@ -6144,15 +6154,24 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
             // needs to use the following interface.
             solution_transfer_history_variable.interpolate(old_history_variable_field_L2, new_history_variable_field_L2);
 #  endif
+
             
-            solution_next_step = tmp_solutions[0];
-            m_solution = tmp_solutions[1];
+            solution_next_step.base()   = tmp_solutions[0];
+            m_solution.base()           = tmp_solutions[1];
+
+
             
             // make sure the projected solutions still satisfy
             // hanging node constraints
-            m_constraints.distribute(solution_next_step);
-            m_constraints.distribute(m_solution);
+            m_constraints.distribute(solution_next_step.base());
+            m_constraints.distribute(m_solution.base());
             constraints.distribute(new_history_variable_field_L2);
+            
+            
+            if constexpr (is_mpi) {
+                m_solution.updateRelevance();
+                solution_next_step.updateRelevance();
+            }
             
             // new_history_variable_field_L2 contains the history variable projected
             // onto the newly refined mesh
