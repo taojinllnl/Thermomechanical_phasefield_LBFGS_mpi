@@ -4724,7 +4724,7 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
 
       
       solution_delta_trial.updateRelevance();
-      m_solution.updateRelevance();
+
       
     update_qph_incremental(solution_delta_trial, m_solution, false);
 
@@ -4769,7 +4769,7 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
         solution_delta_trial.add(alpha, BFGS_p_vector);
           
           solution_delta_trial.updateRelevance();
-          m_solution.updateRelevance();
+
           
         update_qph_incremental(solution_delta_trial, m_solution, false);
         assemble_system_rhs_LBFGS_parallel(m_solution, g_new);
@@ -5059,7 +5059,7 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
     solution_delta_trial.add(alpha, BFGS_p_vector);
 
         solution_delta_trial.updateRelevance();
-        m_solution.updateRelevance();
+
         
     update_qph_incremental(solution_delta_trial, m_solution, false);
 
@@ -5086,7 +5086,7 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
     solution_delta_trial.add(alpha, BFGS_p_vector);
 
         solution_delta_trial.updateRelevance();
-        m_solution.updateRelevance();
+
         
     update_qph_incremental(solution_delta_trial, m_solution, false);
 
@@ -5118,6 +5118,7 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
   {
       m_timer.enter_subsection("Solve B0");
       
+
       assemble_system_B0();
       
       m_solver.solve(LBFGS_r_vector, LBFGS_q_vector, m_tangent_matrix);
@@ -5203,15 +5204,15 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
 
             m_constraints.distribute(LBFGS_update.base());
             solution_delta += LBFGS_update;
+              solution_delta.updateRelevance();
+              
             if (m_parameters.m_output_iteration_history)
               {
                 m_logfile << " --- " << std::flush;
                 m_logfile << " --- " << std::flush;
               }
               
-              solution_delta.updateRelevance();
-              m_solution.updateRelevance();
-            update_qph_incremental(solution_delta, m_solution, false);
+              update_qph_incremental(solution_delta, m_solution, false);
             if (m_parameters.m_output_iteration_history)
               {
                 m_logfile << " ---  |" << std::flush;
@@ -5224,7 +5225,8 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
 	    // Calculate the residual vector r. NOTICE that in the context of
 	    // BFGS, this r is the gradient of the energy functional (objective function),
 	    // NOT the negative gradient of the energy functional
-	    assemble_system_rhs_LBFGS_parallel(m_solution, m_system_rhs);
+
+              assemble_system_rhs_LBFGS_parallel(m_solution, m_system_rhs);
 
 	    // We cannot simply zero out the dofs that are constrained, since we might
 	    // have hanging node constraints. In this case, we need to modify the RHS
@@ -5404,7 +5406,9 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
         LBFGS_r_vector *= -1.0; // this is the p_vector (search direction)
 
         m_constraints.distribute(LBFGS_r_vector.base());
-
+          
+          LBFGS_r_vector.updateRelevance();
+          
         // We need a line search algorithm to decide line_search_parameter
 
         line_search_parameter = line_search_stepsize_gradient_based(LBFGS_r_vector,
@@ -5448,14 +5452,15 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
           m_error_update_norm.normalize(m_error_update_0);
 
         solution_delta += LBFGS_update;
-          
           solution_delta.updateRelevance();
-          m_solution.updateRelevance();
-        update_qph_incremental(solution_delta, m_solution, false);
+
+          update_qph_incremental(solution_delta, m_solution, false);
 
         LBFGS_y_vector = m_system_rhs;
         LBFGS_y_vector *= -1.0;
-        assemble_system_rhs_LBFGS_parallel(m_solution, m_system_rhs);
+          
+
+          assemble_system_rhs_LBFGS_parallel(m_solution, m_system_rhs);
         // if we use assemble_system_rhs_LBFGS_parallel, then condense() is not necessary
         //m_constraints.condense(m_system_rhs);
         LBFGS_y_vector += m_system_rhs;
@@ -6323,6 +6328,7 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
 		if (adp_refine_iteration == m_parameters.m_max_adaptive_refine_times)
 		  {
 		    m_solution += solution_delta;
+              m_solution.updateRelevance();
 		    break;
 		  }
 
@@ -6332,12 +6338,14 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
 		if (mesh_is_same)
 		  {
 		    m_solution += solution_delta;
+              m_solution.updateRelevance();
 		    break;
 		  }
 	      }
 	    else if (m_parameters.m_refinement_strategy == "pre-refine")
 	      {
 		m_solution += solution_delta;
+              m_solution.updateRelevance();
 	        break;
 	      }
 	    else
