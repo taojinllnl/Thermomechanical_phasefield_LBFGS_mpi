@@ -24,8 +24,11 @@ template <typename TraitsType>
 class BlockVectorWrapper
 : public TraitsType::Vector
 {
-private:
+public:
     using VecType = typename TraitsType::Vector;
+    
+private:
+    
     const bool __hasRelevance;
     mutable std::unique_ptr<VecType> __relevancePtr{};
     
@@ -52,7 +55,6 @@ public:
     const typename TraitsType::Vector& relevance() const;
     bool hasRelevance() const;
     
-    
     void initalize();
     
     BlockVectorWrapper&     operator= (const double s);
@@ -61,6 +63,9 @@ public:
     
     typename TraitsType::Vector& base();
     const typename TraitsType::Vector& base() const;
+    
+    
+
 };
 
 

@@ -15,7 +15,7 @@ BlockVectorWrapper<TraitsType>
 : TraitsType::Vector(other.base())
 , __hasRelevance(other.hasRelevance())
 , __relevancePtr(__hasRelevance
-                 ? std::make_unique<VecType>(*other.__relevancePtr)
+                 ? std::make_unique<VecType>(other.relevance())
                  : nullptr)
 , __mpiInfo(other.__mpiInfo)
 , __blockDesc(other.__blockDesc)
@@ -26,7 +26,9 @@ BlockVectorWrapper<TraitsType>
 ::BlockVectorWrapper(BlockVectorWrapper&& other) noexcept
 : TraitsType::Vector(other.base())
 , __hasRelevance(other.hasRelevance())
-, __relevancePtr(std::move(other.__relevancePtr))
+, __relevancePtr(__hasRelevance 
+                 ? std::move(other.__relevancePtr)
+                 : nullptr)
 , __mpiInfo(other.__mpiInfo)
 , __blockDesc(other.__blockDesc)
 {}
@@ -69,7 +71,8 @@ BlockVectorWrapper<TraitsType>
 ::updateRelevance()
 {
     if (__hasRelevance) {
-        __initRelevance();
+        
+        // the relevant vector should already have the same dofs structure
         
         (*__relevancePtr) = base();
         __relevancePtr->update_ghost_values();
@@ -172,6 +175,10 @@ BlockVectorWrapper<TraitsType>
 {
     return *this;
 }
+
+
+
+
 
 
 template class la::BlockVectorWrapper<la::Traits<TagSerial>>;
