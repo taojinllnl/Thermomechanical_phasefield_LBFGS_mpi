@@ -3722,8 +3722,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
 //                                                 + pnt[1]*pnt[1]
 //                                                 + pnt[2]*pnt[2]
 //                                                 );
-              const double distance2center = pnt.distance(Point<dim>());
-              return std::fabs(distance2center - radius) < 1.0e-6;
+              return std::fabs(pnt.distance(Point<dim>()) - radius) < 1.0e-6;
           });
           
       }
