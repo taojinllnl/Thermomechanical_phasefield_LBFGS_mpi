@@ -4,6 +4,11 @@
 //
 //
 
+
+#include <deal.II/lac/affine_constraints.h>
+
+#include <deal.II/dofs/dof_handler.h>
+
 #include <memory>
 
 #include "Traits.h"
@@ -11,6 +16,8 @@
 #include "MPIInfo.h"
 
 #include "BlockDesc.h"
+
+
 
 #ifndef BlockVectorWrapper_h
 #define BlockVectorWrapper_h
@@ -69,7 +76,45 @@ public:
     void assignDoubleOverABlock(const unsigned int groupID,
                                 const double value);
 
+    template <int dim, int spacedim = dim>
+    void copyNoncst(const BlockVectorWrapper& other,
+                    const dealii::AffineConstraints<double>& constraints,
+                    const dealii::DoFHandler<dim, spacedim>& dof_handler);
 };
+
+
+
+template <typename TraitsType>
+template <int dim, int spacedim>
+void
+BlockVectorWrapper<TraitsType>
+::copyNoncst(const BlockVectorWrapper& other,
+             const dealii::AffineConstraints<double>& constraints,
+             const dealii::DoFHandler<dim, spacedim>& dof_handler)
+{
+    if constexpr (is_mpi) {
+        
+        const dealii::IndexSet &owned = dof_handler.locally_owned_dofs();
+        
+        for (auto i = owned.begin(); i != owned.end(); ++i)
+        {
+            const dealii::types::global_dof_index dof = *i;
+            if (!constraints.is_constrained(dof))
+                base()(dof) = other(dof);
+            else
+                base()(dof) = 0.0;
+        }
+        
+        base().compress(dealii::VectorOperation::insert);
+        
+    } else {
+        
+        for (unsigned int i = 0; i < dof_handler.n_dofs(); ++i)
+            if (!constraints.is_constrained(i))
+                base()(i) = other(i);
+    }
+}
+
 
 
 
