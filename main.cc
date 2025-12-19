@@ -1410,6 +1410,8 @@ namespace PhaseField_monolithic
     void setup_system();
 
     void setup_temperature_initial_conditions();
+      
+      void addSupportTemperature(const std::function<bool(const Point<dim>&)>& func);
 
     void determine_component_extractors();
 
@@ -3450,6 +3452,54 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
 
     m_timer.leave_subsection();
   }
+
+
+
+template <typename LATraits, typename Tria>
+void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std::function<bool(const Point<dim>&)>& func)
+{
+    
+    const double cool_down_temperature = 293.15; // Kelvin
+    
+    std::map<types::global_dof_index, Point<dim>> support_points_T;
+    
+    ComponentMask temperature_mask = m_fe.component_mask(m_t_fe);
+    support_points_T = DoFTools::map_dofs_to_support_points (MappingQ1<dim>(),
+                                                             m_dof_handler,
+                                                             temperature_mask);
+    
+    if constexpr (is_mpi)
+    {
+        const auto& owned_dofs = m_dof_handler.locally_owned_dofs();
+
+        for (const auto &item : support_points_T)
+        {
+            const types::global_dof_index dof = item.first;
+            const Point<dim>&             pnt = item.second;
+
+            // Return whether the specified index is an element of the index set.
+            if (!owned_dofs.is_element(dof))
+                continue;
+
+            if (func(pnt))
+                m_solution(dof) = cool_down_temperature;
+        }
+
+        if constexpr (is_mpi)
+            m_solution.compress(dealii::VectorOperation::insert);
+        
+    } else {
+        
+        for (auto const & item : support_points_T)
+        {
+            if (func(item.second))
+            {
+                m_solution(item.first) = cool_down_temperature;
+            }
+        }
+    }
+}
+
 
   template <typename LATraits, typename Tria>
   void PhaseFieldMonolithicSolve<LATraits, Tria>::setup_temperature_initial_conditions()
