@@ -3412,11 +3412,11 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
               << "\n\t\t\t Number of degrees of freedom (total): "
 	      << m_dof_handler.n_dofs()
 	      << "\n\t\t\t Number of degrees of freedom (disp): "
-	      << m_dofs_per_block[m_u_dof]
+	      << (*m_blocks_desc.dofsPerBlock())[m_u_dof]
 	      << "\n\t\t\t Number of degrees of freedom (phasefield): "
-	      << m_dofs_per_block[m_d_dof]
+	      << (*m_blocks_desc.dofsPerBlock())[m_d_dof]
 	      << "\n\t\t\t Number of degrees of freedom (temperature): "
-	      << m_dofs_per_block[m_t_dof]
+	      << (*m_blocks_desc.dofsPerBlock())[m_t_dof]
               << std::endl;
 
 //
@@ -6145,8 +6145,10 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
                                         *m_blocks_desc.relevantPartition(),
                                         *m_mpiInfo.mpiCommPtr());
             } else {
-                tmp_solutions[0].reinit(m_dofs_per_block);
-                tmp_solutions[1].reinit(m_dofs_per_block);
+//                tmp_solutions[0].reinit(m_dofs_per_block);
+//                tmp_solutions[1].reinit(m_dofs_per_block);
+                tmp_solutions[0].reinit(*m_blocks_desc.dofsPerBlock());
+                tmp_solutions[1].reinit(*m_blocks_desc.dofsPerBlock());
             }
             
             VecBType new_history_variable_field_L2;
