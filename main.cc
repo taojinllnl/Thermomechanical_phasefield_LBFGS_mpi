@@ -3453,200 +3453,208 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
 
   template <typename LATraits, typename Tria>
   void PhaseFieldMonolithicSolve<LATraits, Tria>::setup_temperature_initial_conditions()
-  {
-    if (   m_parameters.m_scenario == 3
-    	|| m_parameters.m_scenario == 4)
+{
+      if (   m_parameters.m_scenario == 3
+          || m_parameters.m_scenario == 4)
       {
-	for(unsigned int i = 0; i < m_dofs_per_block[m_t_dof]; ++i)
-	  {
-	    m_solution.block(m_t_dof)(i) = m_parameters.m_ref_temperature;
-	  }
+          // TODO: may not work
+          for(unsigned int i = 0; i < m_dofs_per_block[m_t_dof]; ++i)
+          {
+              m_solution.block(m_t_dof)(i) = m_parameters.m_ref_temperature;
+          }
       }
-    else if (m_parameters.m_scenario == 5)
+      else if (m_parameters.m_scenario == 5)
       {
-	for(unsigned int i = 0; i < m_dofs_per_block[m_t_dof]; ++i)
-	  {
-	    m_solution.block(m_t_dof)(i) = m_parameters.m_ref_temperature;
-	  }
-
-	const double cool_down_temperature = 293.15; // Kelvin
-
-	std::map<types::global_dof_index, Point<dim> > support_points_T;
-	ComponentMask temperature_mask = m_fe.component_mask(m_t_fe);
-	support_points_T = DoFTools::map_dofs_to_support_points (MappingQ1<dim>(),
-					                         m_dof_handler,
-					                         temperature_mask);
-
-	for (auto const & item : support_points_T)
-	  {
-	    if (   (std::fabs(item.second[0] -  0.0) < 1.0e-9)
-		|| (std::fabs(item.second[1] -  0.0) < 1.0e-9))
-	      {
-		m_solution(item.first) = cool_down_temperature;
-	      }
-	  }
+          // TODO: may not work
+          for(unsigned int i = 0; i < m_dofs_per_block[m_t_dof]; ++i)
+          {
+              m_solution.block(m_t_dof)(i) = m_parameters.m_ref_temperature;
+          }
+          
+          const double cool_down_temperature = 293.15; // Kelvin
+          
+          std::map<types::global_dof_index, Point<dim> > support_points_T;
+          ComponentMask temperature_mask = m_fe.component_mask(m_t_fe);
+          support_points_T = DoFTools::map_dofs_to_support_points (MappingQ1<dim>(),
+                                                                   m_dof_handler,
+                                                                   temperature_mask);
+          
+          for (auto const & item : support_points_T)
+          {
+              if (   (std::fabs(item.second[0] -  0.0) < 1.0e-9)
+                  || (std::fabs(item.second[1] -  0.0) < 1.0e-9))
+              {
+                  m_solution(item.first) = cool_down_temperature;
+              }
+          }
       }
-    else if (m_parameters.m_scenario == 6)
+      else if (m_parameters.m_scenario == 6)
       {
-	for(unsigned int i = 0; i < m_dofs_per_block[m_t_dof]; ++i)
-	  {
-	    m_solution.block(m_t_dof)(i) = m_parameters.m_ref_temperature;
-	  }
-
-	const double cool_down_temperature = 293.15; // Kelvin
-
-	std::map<types::global_dof_index, Point<dim> > support_points_T;
-	ComponentMask temperature_mask = m_fe.component_mask(m_t_fe);
-	support_points_T = DoFTools::map_dofs_to_support_points (MappingQ1<dim>(),
-					                         m_dof_handler,
-					                         temperature_mask);
-
-	for (auto const & item : support_points_T)
-	  {
-	    if (   (std::fabs(item.second[0] -  0.0) < 1.0e-9)
-		|| (std::fabs(item.second[1] -  0.0) < 1.0e-9)
-		|| (std::fabs(item.second[1] -  10.0) < 1.0e-9))
-	      {
-		m_solution(item.first) = cool_down_temperature;
-	      }
-	  }
+          // TODO: may not work
+          for(unsigned int i = 0; i < m_dofs_per_block[m_t_dof]; ++i)
+          {
+              m_solution.block(m_t_dof)(i) = m_parameters.m_ref_temperature;
+          }
+          
+          const double cool_down_temperature = 293.15; // Kelvin
+          
+          std::map<types::global_dof_index, Point<dim> > support_points_T;
+          ComponentMask temperature_mask = m_fe.component_mask(m_t_fe);
+          support_points_T = DoFTools::map_dofs_to_support_points (MappingQ1<dim>(),
+                                                                   m_dof_handler,
+                                                                   temperature_mask);
+          
+          for (auto const & item : support_points_T)
+          {
+              if (   (std::fabs(item.second[0] -  0.0) < 1.0e-9)
+                  || (std::fabs(item.second[1] -  0.0) < 1.0e-9)
+                  || (std::fabs(item.second[1] -  10.0) < 1.0e-9))
+              {
+                  m_solution(item.first) = cool_down_temperature;
+              }
+          }
       }
-    else if (m_parameters.m_scenario == 7)
+      else if (m_parameters.m_scenario == 7)
       {
-	for(unsigned int i = 0; i < m_dofs_per_block[m_t_dof]; ++i)
-	  {
-	    m_solution.block(m_t_dof)(i) = m_parameters.m_ref_temperature;
-	  }
-
-	const double cool_down_temperature = 293.15; // Kelvin
-
-	std::map<types::global_dof_index, Point<dim> > support_points_T;
-	ComponentMask temperature_mask = m_fe.component_mask(m_t_fe);
-	support_points_T = DoFTools::map_dofs_to_support_points (MappingQ1<dim>(),
-					                         m_dof_handler,
-					                         temperature_mask);
-
-	for (auto const & item : support_points_T)
-	  {
-	    if (   (std::fabs(item.second[0] -  0.0) < 1.0e-9)
-		|| (std::fabs(item.second[1] -  0.0) < 1.0e-9)
-		//|| (std::fabs(item.second[2] -  0.0) < 1.0e-9)
-		//|| (std::fabs(item.second[2] -  0.25) < 1.0e-9)
-		)
-	      {
-		m_solution(item.first) = cool_down_temperature;
-	      }
-	  }
+          // TODO: may not work
+          for(unsigned int i = 0; i < m_dofs_per_block[m_t_dof]; ++i)
+          {
+              m_solution.block(m_t_dof)(i) = m_parameters.m_ref_temperature;
+          }
+          
+          const double cool_down_temperature = 293.15; // Kelvin
+          
+          std::map<types::global_dof_index, Point<dim> > support_points_T;
+          ComponentMask temperature_mask = m_fe.component_mask(m_t_fe);
+          support_points_T = DoFTools::map_dofs_to_support_points (MappingQ1<dim>(),
+                                                                   m_dof_handler,
+                                                                   temperature_mask);
+          
+          for (auto const & item : support_points_T)
+          {
+              if (   (std::fabs(item.second[0] -  0.0) < 1.0e-9)
+                  || (std::fabs(item.second[1] -  0.0) < 1.0e-9)
+                  //|| (std::fabs(item.second[2] -  0.0) < 1.0e-9)
+                  //|| (std::fabs(item.second[2] -  0.25) < 1.0e-9)
+                  )
+              {
+                  m_solution(item.first) = cool_down_temperature;
+              }
+          }
       }
-    else if (m_parameters.m_scenario == 8)
+      else if (m_parameters.m_scenario == 8)
       {
-	for(unsigned int i = 0; i < m_dofs_per_block[m_t_dof]; ++i)
-	  {
-	    m_solution.block(m_t_dof)(i) = m_parameters.m_ref_temperature;
-	  }
-
-	const double cool_down_temperature = 293.15; // Kelvin
-
-	std::map<types::global_dof_index, Point<dim> > support_points_T;
-	ComponentMask temperature_mask = m_fe.component_mask(m_t_fe);
-	support_points_T = DoFTools::map_dofs_to_support_points (MappingQ1<dim>(),
-					                         m_dof_handler,
-					                         temperature_mask);
-
-	for (auto const & item : support_points_T)
-	  {
-	    if (   (std::fabs(item.second[0] -  0.0) < 1.0e-9)
-		|| (std::fabs(item.second[1] -  0.0) < 1.0e-9)
-		|| (std::fabs(item.second[2] -  0.0) < 1.0e-9)
-		|| (std::fabs(item.second[2] -  1.0) < 1.0e-9)
-		)
-	      {
-		m_solution(item.first) = cool_down_temperature;
-	      }
-	  }
+          // TODO: may not work
+          for(unsigned int i = 0; i < m_dofs_per_block[m_t_dof]; ++i)
+          {
+              m_solution.block(m_t_dof)(i) = m_parameters.m_ref_temperature;
+          }
+          
+          const double cool_down_temperature = 293.15; // Kelvin
+          
+          std::map<types::global_dof_index, Point<dim> > support_points_T;
+          ComponentMask temperature_mask = m_fe.component_mask(m_t_fe);
+          support_points_T = DoFTools::map_dofs_to_support_points (MappingQ1<dim>(),
+                                                                   m_dof_handler,
+                                                                   temperature_mask);
+          
+          for (auto const & item : support_points_T)
+          {
+              if (   (std::fabs(item.second[0] -  0.0) < 1.0e-9)
+                  || (std::fabs(item.second[1] -  0.0) < 1.0e-9)
+                  || (std::fabs(item.second[2] -  0.0) < 1.0e-9)
+                  || (std::fabs(item.second[2] -  1.0) < 1.0e-9)
+                  )
+              {
+                  m_solution(item.first) = cool_down_temperature;
+              }
+          }
       }
-    else if (m_parameters.m_scenario == 9)
+      else if (m_parameters.m_scenario == 9)
       {
-	for(unsigned int i = 0; i < m_dofs_per_block[m_t_dof]; ++i)
-	  {
-	    m_solution.block(m_t_dof)(i) = m_parameters.m_ref_temperature;
-	  }
-
-	const double cool_down_temperature = 293.15; // Kelvin
-
-	std::map<types::global_dof_index, Point<dim> > support_points_T;
-	ComponentMask temperature_mask = m_fe.component_mask(m_t_fe);
-	support_points_T = DoFTools::map_dofs_to_support_points (MappingQ1<dim>(),
-					                         m_dof_handler,
-					                         temperature_mask);
-
-	for (auto const & item : support_points_T)
-	  {
-	    if ( (std::fabs(item.second[2] -  0.0) < 1.0e-9)
-		)
-	      {
-		m_solution(item.first) = cool_down_temperature;
-	      }
-	  }
+          // TODO: may not work
+          for(unsigned int i = 0; i < m_dofs_per_block[m_t_dof]; ++i)
+          {
+              m_solution.block(m_t_dof)(i) = m_parameters.m_ref_temperature;
+          }
+          
+          const double cool_down_temperature = 293.15; // Kelvin
+          
+          std::map<types::global_dof_index, Point<dim> > support_points_T;
+          ComponentMask temperature_mask = m_fe.component_mask(m_t_fe);
+          support_points_T = DoFTools::map_dofs_to_support_points (MappingQ1<dim>(),
+                                                                   m_dof_handler,
+                                                                   temperature_mask);
+          
+          for (auto const & item : support_points_T)
+          {
+              if ( (std::fabs(item.second[2] -  0.0) < 1.0e-9)
+                  )
+              {
+                  m_solution(item.first) = cool_down_temperature;
+              }
+          }
       }
-    else if (m_parameters.m_scenario == 10)
+      else if (m_parameters.m_scenario == 10)
       {
-	for(unsigned int i = 0; i < m_dofs_per_block[m_t_dof]; ++i)
-	  {
-	    m_solution.block(m_t_dof)(i) = m_parameters.m_ref_temperature;
-	  }
-
-	const double cool_down_temperature = 293.15; // Kelvin
-
-	std::map<types::global_dof_index, Point<dim> > support_points_T;
-	ComponentMask temperature_mask = m_fe.component_mask(m_t_fe);
-	support_points_T = DoFTools::map_dofs_to_support_points (MappingQ1<dim>(),
-					                         m_dof_handler,
-					                         temperature_mask);
-
-	for (auto const & item : support_points_T)
-	  {
-	    if ( (std::fabs(item.second[1] -  0.0) < 1.0e-9)
-		)
-	      {
-		m_solution(item.first) = cool_down_temperature;
-	      }
-	  }
+          // TODO: may not work
+          for(unsigned int i = 0; i < m_dofs_per_block[m_t_dof]; ++i)
+          {
+              m_solution.block(m_t_dof)(i) = m_parameters.m_ref_temperature;
+          }
+          
+          const double cool_down_temperature = 293.15; // Kelvin
+          
+          std::map<types::global_dof_index, Point<dim> > support_points_T;
+          ComponentMask temperature_mask = m_fe.component_mask(m_t_fe);
+          support_points_T = DoFTools::map_dofs_to_support_points (MappingQ1<dim>(),
+                                                                   m_dof_handler,
+                                                                   temperature_mask);
+          
+          for (auto const & item : support_points_T)
+          {
+              if ( (std::fabs(item.second[1] -  0.0) < 1.0e-9)
+                  )
+              {
+                  m_solution(item.first) = cool_down_temperature;
+              }
+          }
       }
-    else if (m_parameters.m_scenario == 11)
+      else if (m_parameters.m_scenario == 11)
       {
-	for(unsigned int i = 0; i < m_dofs_per_block[m_t_dof]; ++i)
-	  {
-	    m_solution.block(m_t_dof)(i) = m_parameters.m_ref_temperature;
-	  }
-
-	const double cool_down_temperature = 293.15; // Kelvin
-
-	std::map<types::global_dof_index, Point<dim> > support_points_T;
-	ComponentMask temperature_mask = m_fe.component_mask(m_t_fe);
-	support_points_T = DoFTools::map_dofs_to_support_points (MappingQ1<dim>(),
-					                         m_dof_handler,
-					                         temperature_mask);
-
-	// This radius has to be consistent with the radius value
-	// used in make_grid_case_11()
-	const double radius = 5.0;
-	for (auto const & item : support_points_T)
-	  {
-	    double distance2center = std::sqrt( item.second[0]*item.second[0]
-	    				      + item.second[1]*item.second[1]
-	    				      + item.second[2]*item.second[2]
-	    				      );
-
-	    if (std::fabs(distance2center - radius) < 1.0e-6)
-	      {
-		m_solution(item.first) = cool_down_temperature;
-	      }
-	  }
+          // TODO: may not work
+          for(unsigned int i = 0; i < m_dofs_per_block[m_t_dof]; ++i)
+          {
+              m_solution.block(m_t_dof)(i) = m_parameters.m_ref_temperature;
+          }
+          
+          const double cool_down_temperature = 293.15; // Kelvin
+          
+          std::map<types::global_dof_index, Point<dim> > support_points_T;
+          ComponentMask temperature_mask = m_fe.component_mask(m_t_fe);
+          support_points_T = DoFTools::map_dofs_to_support_points (MappingQ1<dim>(),
+                                                                   m_dof_handler,
+                                                                   temperature_mask);
+          
+          // This radius has to be consistent with the radius value
+          // used in make_grid_case_11()
+          const double radius = 5.0;
+          for (auto const & item : support_points_T)
+          {
+              double distance2center = std::sqrt( item.second[0]*item.second[0]
+                                                 + item.second[1]*item.second[1]
+                                                 + item.second[2]*item.second[2]
+                                                 );
+              
+              if (std::fabs(distance2center - radius) < 1.0e-6)
+              {
+                  m_solution(item.first) = cool_down_temperature;
+              }
+          }
       }
-    else
+      else
       {
-	Assert(false, ExcMessage("The scenario has not been implemented!"));
+          Assert(false, ExcMessage("The scenario has not been implemented!"));
       }
   }
 
@@ -5849,12 +5857,13 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
 
     std::vector<double> reaction_force(dim, 0.0);
 
-    for (unsigned int i = 0; i < m_dofs_per_block[m_u_dof]; ++i)
+      // TODO: may not work
+      for (unsigned int i = 0; i < m_dofs_per_block[m_u_dof]; ++i)
       {
-	if (mapping[i] != numbers::invalid_dof_index)
-	  {
-	    reaction_force[i % dim] += system_rhs.block(m_u_dof)(i);
-	  }
+          if (mapping[i] != numbers::invalid_dof_index)
+          {
+              reaction_force[i % dim] += system_rhs.block(m_u_dof)(i);
+          }
       }
 
     for (unsigned int i = 0; i < dim; i++)
