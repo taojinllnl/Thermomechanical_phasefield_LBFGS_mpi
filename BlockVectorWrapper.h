@@ -80,6 +80,11 @@ public:
     void copyNoncst(const BlockVectorWrapper& other,
                     const dealii::AffineConstraints<double>& constraints,
                     const dealii::DoFHandler<dim, spacedim>& dof_handler);
+    
+    template <int dim, int spacedim = dim>
+    void copyAndRemoveCst(const BlockVectorWrapper& other,
+                          const dealii::AffineConstraints<double>& constraints,
+                          const dealii::DoFHandler<dim, spacedim>& dof_handler);
 };
 
 
@@ -112,6 +117,39 @@ BlockVectorWrapper<TraitsType>
         for (unsigned int i = 0; i < dof_handler.n_dofs(); ++i)
             if (!constraints.is_constrained(i))
                 base()(i) = other(i);
+    }
+}
+
+
+
+template <typename TraitsType>
+template <int dim, int spacedim>
+void
+BlockVectorWrapper<TraitsType>
+::copyAndRemoveCst(const BlockVectorWrapper& other,
+                   const dealii::AffineConstraints<double>& constraints,
+                   const dealii::DoFHandler<dim, spacedim>& dof_handler)
+{
+    base() = other.base();
+    
+    if constexpr (is_mpi) {
+        
+        const dealii::IndexSet &owned = dof_handler.locally_owned_dofs();
+        
+        for (auto i = owned.begin(); i != owned.end(); ++i)
+        {
+            const dealii::types::global_dof_index dof = *i;
+            if (constraints.is_constrained(dof))
+                base()(dof) = 0.0;
+        }
+        
+        base().compress(dealii::VectorOperation::insert);
+        
+    } else {
+        
+        for (unsigned int i = 0; i < dof_handler.n_dofs(); ++i)
+            if (constraints.is_constrained(i))
+                base()(i) = 0.0;
     }
 }
 
