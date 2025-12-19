@@ -1530,14 +1530,14 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, Tria>::BVector;
   template <typename LATraits, typename Tria>
   void PhaseFieldMonolithicSolve<LATraits, Tria>::get_error_residual(Errors &error_residual)
   {
-    BVector error_res(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
+    BVector error_res(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
       error_res.initalize();
       
-      // TODO: may not work in MPI mode
-    for (unsigned int i = 0; i < m_dof_handler.n_dofs(); ++i)
-      if (!m_constraints.is_constrained(i))
-        error_res(i) = m_system_rhs(i);
-
+      error_res.copyAndRemoveCst(m_system_rhs, m_constraints, m_dof_handler);
+      // TODO: verify if the following operation is the same to the former one
+//      error_res.base() = m_system_rhs.base();
+//      m_constraints.set_zero(error_res.base());
+      
     error_residual.m_norm = error_res.l2_norm();
     error_residual.m_u    = error_res.block(m_u_dof).l2_norm();
     error_residual.m_d    = error_res.block(m_d_dof).l2_norm();
@@ -1548,13 +1548,13 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, Tria>::BVector;
   void PhaseFieldMonolithicSolve<LATraits, Tria>::get_error_update(const BVector &soln_update,
                                                         Errors & error_update)
   {
-    BVector error_ud(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
+    BVector error_ud(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
       error_ud.initalize();
       
-      // TODO: may not work in MPI mode
-    for (unsigned int i = 0; i < m_dof_handler.n_dofs(); ++i)
-      if (!m_constraints.is_constrained(i))
-        error_ud(i) = soln_update(i);
+      error_ud.copyAndRemoveCst(m_system_rhs, m_constraints, m_dof_handler);
+      // TODO: verify if the following operation is the same to the former one
+//      error_ud.base() = m_system_rhs.base();
+//      m_constraints.set_zero(error_ud.base());
 
     error_update.m_norm = error_ud.l2_norm();
     error_update.m_u    = error_ud.block(m_u_dof).l2_norm();
@@ -5185,13 +5185,13 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
     //phi_prime = system_rhs * BFGS_p_vector;
 
 //    BVector error_res(m_dofs_per_block);
-        BVector error_res(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
+        BVector error_res(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
         error_res.initalize();
 
-        // TODO: may not work in MPI mode
-    for (unsigned int i = 0; i < m_dof_handler.n_dofs(); ++i)
-      if (!m_constraints.is_constrained(i))
-        error_res(i) = system_rhs(i);
+        error_res.copyAndRemoveCst(m_system_rhs, m_constraints, m_dof_handler);
+        // TODO: verify if the following operation is the same to the former one
+  //      error_res.base() = m_system_rhs.base();
+  //      m_constraints.set_zero(error_res.base());
 
     phi_prime = error_res.l2_norm();
 
