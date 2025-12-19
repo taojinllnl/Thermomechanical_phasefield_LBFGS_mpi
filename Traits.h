@@ -56,6 +56,8 @@ struct Traits<TagSerial>
     
     using MatrixBlock   = ::dealii::LinearAlgebraDealII::SparseMatrix;
     using VectorBlock   = ::dealii::LinearAlgebraDealII::Vector;
+    
+    static constexpr bool IS_MPI = false;
 };
 }
 
@@ -82,6 +84,8 @@ struct Traits<TagPETSc>
     
     using MatrixBlock   = ::dealii::LinearAlgebraPETSc::MPI::SparseMatrix;
     using VectorBlock   = ::dealii::LinearAlgebraPETSc::MPI::Vector;
+    
+    static constexpr bool IS_MPI = true;
 };
 }
 
@@ -113,6 +117,8 @@ struct Traits<TagTrilinos>
     
     using MatrixBlock   = ::dealii::LinearAlgebraTrilinos::MPI::SparseMatrix;
     using VectorBlock   = ::dealii::LinearAlgebraTrilinos::MPI::Vector;
+    
+    static constexpr bool IS_MPI = true;
 };
 }
 

@@ -7,7 +7,7 @@
 #include "BlockVectorWrapper.h"
 
 using namespace la;
-
+using namespace dealii;
 
 template <typename TraitsType>
 BlockVectorWrapper<TraitsType>
@@ -178,6 +178,29 @@ BlockVectorWrapper<TraitsType>
 
 
 
+template <typename TraitsType>
+void
+BlockVectorWrapper<TraitsType>
+::assignDoubleOverABlock(const unsigned int groupID,
+                         const double value)
+{
+    if constexpr (is_mpi)
+    {
+        auto &vecBlock = TraitsType::Vector::block(groupID);
+        const IndexSet &owned = vecBlock.locally_owned_elements();
+        
+        for (auto it = owned.begin(); it != owned.end(); ++it)
+            vecBlock[*it] = value;
+        
+        TraitsType::Vector::compress(VectorOperation::insert);
+    } else {
+        
+        for(unsigned int i = 0; i < (*__blockDesc.dofsPerBlock())[groupID]; ++i)
+        {
+            TraitsType::Vector::block(groupID)(i) = value;
+        }
+    }
+}
 
 
 

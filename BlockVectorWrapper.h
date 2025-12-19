@@ -27,6 +27,7 @@ class BlockVectorWrapper
 public:
     using VecType = typename TraitsType::Vector;
     
+    static constexpr bool is_mpi = TraitsType::IS_MPI;
 private:
     
     const bool __hasRelevance;
@@ -65,6 +66,8 @@ public:
     const typename TraitsType::Vector& base() const;
     
     
+    void assignDoubleOverABlock(const unsigned int groupID,
+                                const double value);
 
 };
 
