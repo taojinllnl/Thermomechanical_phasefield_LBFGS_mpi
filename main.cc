@@ -3457,19 +3457,13 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
       if (   m_parameters.m_scenario == 3
           || m_parameters.m_scenario == 4)
       {
-          // TODO: may not work
-          for(unsigned int i = 0; i < m_dofs_per_block[m_t_dof]; ++i)
-          {
-              m_solution.block(m_t_dof)(i) = m_parameters.m_ref_temperature;
-          }
+          m_solution.assignDoubleOverABlock(m_t_dof,
+                                            m_parameters.m_ref_temperature);
       }
       else if (m_parameters.m_scenario == 5)
       {
-          // TODO: may not work
-          for(unsigned int i = 0; i < m_dofs_per_block[m_t_dof]; ++i)
-          {
-              m_solution.block(m_t_dof)(i) = m_parameters.m_ref_temperature;
-          }
+          m_solution.assignDoubleOverABlock(m_t_dof,
+                                            m_parameters.m_ref_temperature);
           
           const double cool_down_temperature = 293.15; // Kelvin
           
@@ -3490,11 +3484,9 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
       }
       else if (m_parameters.m_scenario == 6)
       {
-          // TODO: may not work
-          for(unsigned int i = 0; i < m_dofs_per_block[m_t_dof]; ++i)
-          {
-              m_solution.block(m_t_dof)(i) = m_parameters.m_ref_temperature;
-          }
+          m_solution.assignDoubleOverABlock(m_t_dof,
+                                            m_parameters.m_ref_temperature);
+          
           
           const double cool_down_temperature = 293.15; // Kelvin
           
@@ -3516,11 +3508,9 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
       }
       else if (m_parameters.m_scenario == 7)
       {
-          // TODO: may not work
-          for(unsigned int i = 0; i < m_dofs_per_block[m_t_dof]; ++i)
-          {
-              m_solution.block(m_t_dof)(i) = m_parameters.m_ref_temperature;
-          }
+          m_solution.assignDoubleOverABlock(m_t_dof,
+                                            m_parameters.m_ref_temperature);
+          
           
           const double cool_down_temperature = 293.15; // Kelvin
           
@@ -3544,11 +3534,9 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
       }
       else if (m_parameters.m_scenario == 8)
       {
-          // TODO: may not work
-          for(unsigned int i = 0; i < m_dofs_per_block[m_t_dof]; ++i)
-          {
-              m_solution.block(m_t_dof)(i) = m_parameters.m_ref_temperature;
-          }
+          m_solution.assignDoubleOverABlock(m_t_dof,
+                                            m_parameters.m_ref_temperature);
+          
           
           const double cool_down_temperature = 293.15; // Kelvin
           
@@ -3572,11 +3560,9 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
       }
       else if (m_parameters.m_scenario == 9)
       {
-          // TODO: may not work
-          for(unsigned int i = 0; i < m_dofs_per_block[m_t_dof]; ++i)
-          {
-              m_solution.block(m_t_dof)(i) = m_parameters.m_ref_temperature;
-          }
+          m_solution.assignDoubleOverABlock(m_t_dof,
+                                            m_parameters.m_ref_temperature);
+          
           
           const double cool_down_temperature = 293.15; // Kelvin
           
@@ -3597,11 +3583,9 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
       }
       else if (m_parameters.m_scenario == 10)
       {
-          // TODO: may not work
-          for(unsigned int i = 0; i < m_dofs_per_block[m_t_dof]; ++i)
-          {
-              m_solution.block(m_t_dof)(i) = m_parameters.m_ref_temperature;
-          }
+          m_solution.assignDoubleOverABlock(m_t_dof,
+                                            m_parameters.m_ref_temperature);
+          
           
           const double cool_down_temperature = 293.15; // Kelvin
           
@@ -3622,11 +3606,9 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
       }
       else if (m_parameters.m_scenario == 11)
       {
-          // TODO: may not work
-          for(unsigned int i = 0; i < m_dofs_per_block[m_t_dof]; ++i)
-          {
-              m_solution.block(m_t_dof)(i) = m_parameters.m_ref_temperature;
-          }
+          m_solution.assignDoubleOverABlock(m_t_dof,
+                                            m_parameters.m_ref_temperature);
+          
           
           const double cool_down_temperature = 293.15; // Kelvin
           
@@ -3656,6 +3638,9 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
       {
           Assert(false, ExcMessage("The scenario has not been implemented!"));
       }
+      
+      if constexpr (is_mpi)
+          m_solution.updateRelevance();
   }
 
   template <typename LATraits, typename Tria>
