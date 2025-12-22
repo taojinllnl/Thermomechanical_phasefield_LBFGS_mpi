@@ -6374,16 +6374,6 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
         // initial guess for the resolve on the refined mesh
         LBFGS_update_refine.base() = solution_next_step.base() - m_solution.base();
         
-        
-        if constexpr (std::is_same_v<Tria, DTria<2>> ||
-                      std::is_same_v<Tria, DTria<3>>)
-        {
-            // once refinement applied, repartitioning may be required
-            // TODO: flag for repartitioning
-            if(true) {
-                m_triangulation.repartition();
-            }
-        }
     }
     
     return mesh_is_same;
