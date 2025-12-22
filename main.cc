@@ -2251,7 +2251,7 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
     , m_tangent_matrix(m_mpiInfo, 
                        m_blocks_desc,
                        [](unsigned int, unsigned int){return DoFTools::always;})
-    , m_system_rhs(m_mpiInfo, m_blocks_desc, /*relevance=*/ true)
+    , m_system_rhs(m_mpiInfo, m_blocks_desc, /*relevance=*/ false)
     , m_solution(m_mpiInfo, m_blocks_desc, /*relevance=*/ true)
     , m_solver(m_parameters.m_type_linear_solver == "Direct"
                ? SolverType::Direct : SolverType::CG,
