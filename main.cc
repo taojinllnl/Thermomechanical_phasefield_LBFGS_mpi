@@ -6143,6 +6143,10 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
         std::vector<types::global_dof_index> local_dof_indices(m_fe.dofs_per_cell);
         for (const auto &cell : m_dof_handler.active_cell_iterators())
         {
+            if constexpr (is_mpi) {
+                if (!cell->is_locally_owned()) continue;;
+            }
+            
             cell->get_dof_indices(local_dof_indices);
             
             for (unsigned int i = 0; i< m_fe.dofs_per_cell; ++i)
@@ -6176,12 +6180,27 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
         // TODO:
         for (const auto &cell : m_dof_handler.active_cell_iterators())
         {
+            if constexpr (is_mpi) {
+                if (!cell->is_locally_owned()) continue;;
+            }
+            
             if (cell->refine_flag_set())
             {
                 cell_refine_flag = true;
                 break;
             }
         }
+        
+        
+        if constexpr (is_mpi)
+        {
+            // accumulate local flag over all ranks
+            const unsigned int local_flag = cell_refine_flag ? 1u : 0u;
+            const unsigned int global_flag =
+                Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
+            cell_refine_flag = (global_flag > 0u);
+        }
+        
         
         // if any cell is refined, we need to project the solution
         // to the newly refined mesh
