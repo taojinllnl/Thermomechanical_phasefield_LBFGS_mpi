@@ -5791,7 +5791,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
   {
     m_timer.enter_subsection("Calculate reaction force");
 
-    BVector       system_rhs(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
+    BVector       system_rhs(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
 //    system_rhs.reinit(m_dofs_per_block);
       system_rhs.initalize();
 
@@ -5817,100 +5817,102 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
       symm_grad_Nx(m_qf_cell.size(), std::vector<SymmetricTensor<2, dim>>(m_dofs_per_cell));
 
       // TODO:
-    for (const auto &cell : m_dof_handler.active_cell_iterators())
+      for (const auto &cell : m_dof_handler.active_cell_iterators())
       {
           // skip cells owned by other ranks in mpi mode
           if constexpr (is_mpi)
               if (!cell->is_locally_owned())
                   continue;
           
-	// if calculate_reaction_force() is defined as const, then
-	// we also need to put a const in std::shared_ptr,
-	// that is, std::shared_ptr<const PointHistory<dim>>
-	const std::vector<std::shared_ptr< PointHistory<dim>>> lqph =
-	  m_quadrature_point_history.get_data(cell);
-	Assert(lqph.size() == m_n_q_points, ExcInternalError());
-        cell_rhs = 0.0;
-        fe_values.reinit(cell);
-        right_hand_side(fe_values.get_quadrature_points(),
-    		        rhs_values,
-    		        m_parameters.m_x_component*1.0,
-    		        m_parameters.m_y_component*1.0,
-    		        m_parameters.m_z_component*1.0);
-
-        for (const unsigned int q_point : fe_values.quadrature_point_indices())
+          // if calculate_reaction_force() is defined as const, then
+          // we also need to put a const in std::shared_ptr,
+          // that is, std::shared_ptr<const PointHistory<dim>>
+          const std::vector<std::shared_ptr< PointHistory<dim>>> lqph =
+          m_quadrature_point_history.get_data(cell);
+          Assert(lqph.size() == m_n_q_points, ExcInternalError());
+          cell_rhs = 0.0;
+          fe_values.reinit(cell);
+          right_hand_side(fe_values.get_quadrature_points(),
+                          rhs_values,
+                          m_parameters.m_x_component*1.0,
+                          m_parameters.m_y_component*1.0,
+                          m_parameters.m_z_component*1.0);
+          
+          for (const unsigned int q_point : fe_values.quadrature_point_indices())
           {
-            for (const unsigned int k : fe_values.dof_indices())
+              for (const unsigned int k : fe_values.dof_indices())
               {
-                const unsigned int k_group = m_fe.system_to_base_index(k).first.first;
-
-                if (k_group == m_u_dof)
+                  const unsigned int k_group = m_fe.system_to_base_index(k).first.first;
+                  
+                  if (k_group == m_u_dof)
                   {
-    		    Nx[q_point][k] = fe_values[m_u_fe].value(k, q_point);
-    		    grad_Nx[q_point][k] = fe_values[m_u_fe].gradient(k, q_point);
-    		    symm_grad_Nx[q_point][k] = symmetrize(grad_Nx[q_point][k]);
+                      Nx[q_point][k] = fe_values[m_u_fe].value(k, q_point);
+                      grad_Nx[q_point][k] = fe_values[m_u_fe].gradient(k, q_point);
+                      symm_grad_Nx[q_point][k] = symmetrize(grad_Nx[q_point][k]);
                   }
               }
           }
-
-        for (const unsigned int q_point : fe_values.quadrature_point_indices())
+          
+          for (const unsigned int q_point : fe_values.quadrature_point_indices())
           {
-            const SymmetricTensor<2, dim> & cauchy_stress = lqph[q_point]->get_cauchy_stress();
-
-            const std::vector<Tensor<1,dim>> & N = Nx[q_point];
-            const std::vector<SymmetricTensor<2, dim>> & symm_grad_N = symm_grad_Nx[q_point];
-            const double JxW = fe_values.JxW(q_point);
-
-            for (const unsigned int i : fe_values.dof_indices())
+              const SymmetricTensor<2, dim> & cauchy_stress = lqph[q_point]->get_cauchy_stress();
+              
+              const std::vector<Tensor<1,dim>> & N = Nx[q_point];
+              const std::vector<SymmetricTensor<2, dim>> & symm_grad_N = symm_grad_Nx[q_point];
+              const double JxW = fe_values.JxW(q_point);
+              
+              for (const unsigned int i : fe_values.dof_indices())
               {
-                const unsigned int i_group = m_fe.system_to_base_index(i).first.first;
-
-                if (i_group == m_u_dof)
+                  const unsigned int i_group = m_fe.system_to_base_index(i).first.first;
+                  
+                  if (i_group == m_u_dof)
                   {
-                    cell_rhs(i) -= (symm_grad_N[i] * cauchy_stress) * JxW;
-    		    // contributions from the body force to right-hand side
-    		    cell_rhs(i) += N[i] * rhs_values[q_point] * JxW;
+                      cell_rhs(i) -= (symm_grad_N[i] * cauchy_stress) * JxW;
+                      // contributions from the body force to right-hand side
+                      cell_rhs(i) += N[i] * rhs_values[q_point] * JxW;
                   }
               }
           }
-
-        // if there is surface pressure, this surface pressure always applied to the
-        // reference configuration
-        const unsigned int face_pressure_id = 100;
-        const double p0 = 0.0;
-
-        for (const auto &face : cell->face_iterators())
+          
+          // if there is surface pressure, this surface pressure always applied to the
+          // reference configuration
+          const unsigned int face_pressure_id = 100;
+          const double p0 = 0.0;
+          
+          for (const auto &face : cell->face_iterators())
           {
-	    if (face->at_boundary() && face->boundary_id() == face_pressure_id)
-	      {
-		fe_face_values.reinit(cell, face);
-
-		for (const unsigned int f_q_point : fe_face_values.quadrature_point_indices())
-		  {
-		    const Tensor<1, dim> &N = fe_face_values.normal_vector(f_q_point);
-
-		    const double         pressure  = p0 * time_ramp;
-		    const Tensor<1, dim> traction  = pressure * N;
-
-		    for (const unsigned int i : fe_values.dof_indices())
-		      {
-			const unsigned int i_group = m_fe.system_to_base_index(i).first.first;
-
-			if (i_group == m_u_dof)
-			  {
-			    const unsigned int component_i = m_fe.system_to_component_index(i).first;
-			    const double Ni = fe_face_values.shape_value(i, f_q_point);
-			    const double JxW = fe_face_values.JxW(f_q_point);
-			    cell_rhs(i) += (Ni * traction[component_i]) * JxW;
-			  }
-		      }
-		  }
-	      }
+              if (face->at_boundary() && face->boundary_id() == face_pressure_id)
+              {
+                  fe_face_values.reinit(cell, face);
+                  
+                  for (const unsigned int f_q_point : fe_face_values.quadrature_point_indices())
+                  {
+                      const Tensor<1, dim> &N = fe_face_values.normal_vector(f_q_point);
+                      
+                      const double         pressure  = p0 * time_ramp;
+                      const Tensor<1, dim> traction  = pressure * N;
+                      
+                      for (const unsigned int i : fe_values.dof_indices())
+                      {
+                          const unsigned int i_group = m_fe.system_to_base_index(i).first.first;
+                          
+                          if (i_group == m_u_dof)
+                          {
+                              const unsigned int component_i = m_fe.system_to_component_index(i).first;
+                              const double Ni = fe_face_values.shape_value(i, f_q_point);
+                              const double JxW = fe_face_values.JxW(f_q_point);
+                              cell_rhs(i) += (Ni * traction[component_i]) * JxW;
+                          }
+                      }
+                  }
+              }
           }
-
-        cell->get_dof_indices(local_dof_indices);
-        for (const unsigned int i : fe_values.dof_indices())
-          system_rhs(local_dof_indices[i]) += cell_rhs(i);
+          
+          cell->get_dof_indices(local_dof_indices);
+//          for (const unsigned int i : fe_values.dof_indices())
+//              system_rhs(local_dof_indices[i]) += cell_rhs(i);
+          // compatible for mpi / serial
+          system_rhs.add(local_dof_indices, cell_rhs);
       } // for (const auto &cell : m_dof_handler.active_cell_iterators())
 
     // The difference between the above assembled system_rhs and m_system_rhs
@@ -5921,21 +5923,54 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
     std::vector< types::global_dof_index > mapping;
     std::set<types::boundary_id> boundary_ids;
     boundary_ids.insert(face_ID);
-    DoFTools::map_dof_to_boundary_indices(m_dof_handler,
-					  boundary_ids,
-					  mapping);
+
 
     std::vector<double> reaction_force(dim, 0.0);
 
-      // TODO: may not work
-      for (unsigned int i = 0; i < m_dofs_per_block[m_u_dof]; ++i)
+      if constexpr (!is_mpi)
       {
-          if (mapping[i] != numbers::invalid_dof_index)
+          DoFTools::map_dof_to_boundary_indices(m_dof_handler,
+                                                boundary_ids,
+                                                mapping);
+          for (unsigned int i = 0; i < m_dofs_per_block[m_u_dof]; ++i)
           {
-              reaction_force[i % dim] += system_rhs.block(m_u_dof)(i);
+              if (mapping[i] != numbers::invalid_dof_index)
+              {
+                  reaction_force[i % dim] += system_rhs.block(m_u_dof)(i);
+              }
+          }
+      } else {
+          // syncronize rhs over ghost cells
+          system_rhs.compress(VectorOperation::add);
+          
+          // only loop over locally owned dofs
+          const IndexSet& owned = m_dof_handler.locally_owned_dofs();
+          
+          for (unsigned int d = 0; d < dim; ++d)
+          {
+              ComponentMask comp_mask(m_fe.n_components(), false);
+              comp_mask.set(m_u_fe.first_vector_component + d, true);
+              
+              const IndexSet boundary_comp =
+              DoFTools::extract_boundary_dofs(m_dof_handler,
+                                              comp_mask,
+                                              boundary_ids);
+              
+              // owned ∩ boundary_comp
+              const IndexSet owned_boundary = owned & boundary_comp;
+              
+              double reaction_force_comp = 0.0;
+              for (auto i = owned_boundary.begin(); i != owned_boundary.end(); ++i)
+              {
+                  reaction_force_comp += system_rhs(*i);
+              }
+              
+              // sychronize results
+              reaction_force[d] = Utilities::MPI::sum(reaction_force_comp,
+                                                      *m_mpiInfo.mpiCommPtr());
           }
       }
-
+      
     for (unsigned int i = 0; i < dim; i++)
       m_logfile << "\t\tReaction force in direction " << i << " on boundary ID " << face_ID
                 << " = "
