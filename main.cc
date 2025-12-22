@@ -3389,6 +3389,12 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
     DoFRenumbering::component_wise(m_dof_handler, block_component);
 
     m_constraints.clear();
+      if constexpr (is_mpi)
+      {
+          VersionAdapter::cstReinit(m_constraints,
+                                    m_dof_handler.locally_owned_dofs(),
+                                    DoFTools::extract_locally_relevant_dofs(m_dof_handler));
+      }
     DoFTools::make_hanging_node_constraints(m_dof_handler, m_constraints);
     m_constraints.close();
 
@@ -3733,550 +3739,563 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
 
   template <typename LATraits, typename Tria>
   void PhaseFieldMonolithicSolve<LATraits, Tria>::make_constraints(const unsigned int it_nr)
-  {
-    const bool apply_dirichlet_bc = (it_nr == 0);
-
-    if (it_nr > 1)
+{
+      const bool apply_dirichlet_bc = (it_nr == 0);
+      
+      if (it_nr > 1)
       {
-	if (m_parameters.m_output_iteration_history)
-          m_logfile << " --- " << std::flush;
-        return;
+          if (m_parameters.m_output_iteration_history)
+              m_logfile << " --- " << std::flush;
+          return;
       }
-
-    if (m_parameters.m_output_iteration_history)
-      m_logfile << " CST " << std::flush;
-
-    if (apply_dirichlet_bc)
+      
+      if (m_parameters.m_output_iteration_history)
+          m_logfile << " CST " << std::flush;
+      
+      if (apply_dirichlet_bc)
       {
-	m_constraints.clear();
-	DoFTools::make_hanging_node_constraints(m_dof_handler,
-						m_constraints);
-
-	const FEValuesExtractors::Scalar x_displacement(0);
-	const FEValuesExtractors::Scalar y_displacement(1);
-	const FEValuesExtractors::Scalar z_displacement(dim-1);
-
-	const FEValuesExtractors::Vector displacements(0);
-
-	const FEValuesExtractors::Scalar temperature(dim+1);
-
-	if (   m_parameters.m_scenario == 1
-	    || m_parameters.m_scenario == 3)
-	  {
-	    // Remember, the essential B.C. is applied incrementally during each time step.
-	    // If a constant temperature is needed through time, the B.C should be set as zero.
-	    double delta_temperature = 0.0; // temperature change per load step
-
-	    // Dirichlet B,C. bottom surface
-	    const int boundary_id_bottom_surface = 0;
-	    VectorTools::interpolate_boundary_values(m_dof_handler,
-						     boundary_id_bottom_surface,
-						     Functions::ZeroFunction<dim>(m_n_components),
-						     m_constraints,
-						     m_fe.component_mask(y_displacement));
-
-	    // temperature B.C. at the bottom surface
-	    VectorTools::interpolate_boundary_values(m_dof_handler,
-	    				             boundary_id_bottom_surface,
-						     Functions::ConstantFunction<dim>(
-						       delta_temperature, m_n_components),
-	    					     m_constraints,
-	    					     m_fe.component_mask(temperature));
-
-	    typename Triangulation<dim>::active_vertex_iterator vertex_itr;
-	    vertex_itr = m_triangulation.begin_active_vertex();
-	    std::vector<types::global_dof_index> node_xy(m_fe.dofs_per_vertex);
-
-	    for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
-	      {
-		if (   (std::fabs(vertex_itr->vertex()[0] - 0.0) < 1.0e-9)
-		    && (std::fabs(vertex_itr->vertex()[1] - 0.0) < 1.0e-9) )
-		  {
-		    node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
-		  }
-	      }
-	    m_constraints.add_line(node_xy[0]);
-	    m_constraints.set_inhomogeneity(node_xy[0], 0.0);
-
-	    m_constraints.add_line(node_xy[1]);
-	    m_constraints.set_inhomogeneity(node_xy[1], 0.0);
-
-	    const int boundary_id_top_surface = 1;
-	    /*
-	    VectorTools::interpolate_boundary_values(m_dof_handler,
-						     boundary_id_top_surface,
-						     Functions::ZeroFunction<dim>(m_n_components),
-						     m_constraints,
-						     m_fe.component_mask(x_displacement));
-	    */
-            const double time_inc = m_time.get_delta_t();
-            double disp_magnitude = m_time.get_magnitude();
-	    VectorTools::interpolate_boundary_values(m_dof_handler,
-						     boundary_id_top_surface,
-						     Functions::ConstantFunction<dim>(
-						       disp_magnitude*time_inc, m_n_components),
-						     m_constraints,
-						     m_fe.component_mask(y_displacement));
-
-	    // temperature B.C. at the top surface
-	    if (m_time.current() <= 0.25e-3)
-	      delta_temperature = -time_inc * 1.0e5; //cool down
-//	      delta_temperature =  time_inc * 1.0e5; //warn up
-//	      delta_temperature = 0.0; //constant
-
-	    VectorTools::interpolate_boundary_values(m_dof_handler,
-						     boundary_id_top_surface,
-						     Functions::ConstantFunction<dim>(
-						       delta_temperature, m_n_components),
-						     m_constraints,
-						     m_fe.component_mask(temperature));
-	  }
-	else if (   m_parameters.m_scenario == 2
-	         || m_parameters.m_scenario == 4)
-	  {
-	    // Remember, the essential B.C. is applied incrementally during each time step.
-	    // If a constant temperature is needed through time, the B.C should be set as zero.
-	    double delta_temperature = 0.0; // temperature change per load step
-
-	    // Dirichlet B,C. bottom surface
-	    const int boundary_id_bottom_surface = 0;
-	    VectorTools::interpolate_boundary_values(m_dof_handler,
-						     boundary_id_bottom_surface,
-						     Functions::ZeroFunction<dim>(m_n_components),
-						     m_constraints,
-						     m_fe.component_mask(displacements));
-
-	    // temperature B.C. at the bottom surface
-	    VectorTools::interpolate_boundary_values(m_dof_handler,
-						     boundary_id_bottom_surface,
-						     Functions::ConstantFunction<dim>(
-						       delta_temperature, m_n_components),
-						     m_constraints,
-						     m_fe.component_mask(temperature));
-
-	    const int boundary_id_top_surface = 1;
-	    VectorTools::interpolate_boundary_values(m_dof_handler,
-						     boundary_id_top_surface,
-						     Functions::ZeroFunction<dim>(m_n_components),
-						     m_constraints,
-						     m_fe.component_mask(y_displacement));
-
-	    const double time_inc = m_time.get_delta_t();
-	    double disp_magnitude = m_time.get_magnitude();
-	    VectorTools::interpolate_boundary_values(m_dof_handler,
-						     boundary_id_top_surface,
-						     Functions::ConstantFunction<dim>(
-						       disp_magnitude*time_inc, m_n_components),
-						     m_constraints,
-						     m_fe.component_mask(x_displacement));
-
-	    const int boundary_id_side_surfaces = 2;
-	    VectorTools::interpolate_boundary_values(m_dof_handler,
-						     boundary_id_side_surfaces,
-						     Functions::ZeroFunction<dim>(m_n_components),
-						     m_constraints,
-						     m_fe.component_mask(y_displacement));
-
-	    // temperature B.C. at the top surface
-	    if (m_time.current() <= 10.0001e-3)
-	      delta_temperature = -time_inc * 2.0e4; //cool down
-//	      delta_temperature =  time_inc * 2.0e4; //warm up
-
-	    VectorTools::interpolate_boundary_values(m_dof_handler,
-						     boundary_id_top_surface,
-						     Functions::ConstantFunction<dim>(
-						       delta_temperature, m_n_components),
-						     m_constraints,
-						     m_fe.component_mask(temperature));
-	  }
-	else if (m_parameters.m_scenario == 5)
-	  {
-	    const int boundary_id_mid_surface_x = 2;
-	    VectorTools::interpolate_boundary_values(m_dof_handler,
-						     boundary_id_mid_surface_x,
-						     Functions::ZeroFunction<dim>(m_n_components),
-						     m_constraints,
-						     m_fe.component_mask(x_displacement));
-
-	    const int boundary_id_mid_surface_y = 3;
-	    VectorTools::interpolate_boundary_values(m_dof_handler,
-						     boundary_id_mid_surface_y,
-						     Functions::ZeroFunction<dim>(m_n_components),
-						     m_constraints,
-						     m_fe.component_mask(y_displacement));
-
-	    // Remember, the essential B.C. is applied incrementally during each time step.
-	    // If a constant temperature is needed through time, the B.C should be set as zero.
-	    double delta_temperature = 0.0; // temperature change per load step
-	    const int boundary_id_left_surface = 0;
-	    VectorTools::interpolate_boundary_values(m_dof_handler,
-						     boundary_id_left_surface,
-						     Functions::ConstantFunction<dim>(
-						       delta_temperature, m_n_components),
-						     m_constraints,
-						     m_fe.component_mask(temperature));
-
-	    const int boundary_id_bottom_surface = 1;
-	    VectorTools::interpolate_boundary_values(m_dof_handler,
-						     boundary_id_bottom_surface,
-						     Functions::ConstantFunction<dim>(
-						       delta_temperature, m_n_components),
-						     m_constraints,
-						     m_fe.component_mask(temperature));
-	  }
-	else if (m_parameters.m_scenario == 6)
-	  {
-	    const int boundary_id_mid_surface_x = 2;
-	    VectorTools::interpolate_boundary_values(m_dof_handler,
-						     boundary_id_mid_surface_x,
-						     Functions::ZeroFunction<dim>(m_n_components),
-						     m_constraints,
-						     m_fe.component_mask(x_displacement));
-
-	    typename Triangulation<dim>::active_vertex_iterator vertex_itr;
-	    vertex_itr = m_triangulation.begin_active_vertex();
-	    std::vector<types::global_dof_index> node_xy(m_fe.dofs_per_vertex);
-
-	    for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
-	      {
-		if (   (std::fabs(vertex_itr->vertex()[0] - 25.0) < 1.0e-9)
-		    && (std::fabs(vertex_itr->vertex()[1] -  5.0) < 1.0e-9) )
-		  {
-		    node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
-		  }
-	      }
-	    m_constraints.add_line(node_xy[1]);
-	    m_constraints.set_inhomogeneity(node_xy[1], 0.0);
-
-	    // Remember, the essential B.C. is applied incrementally during each time step.
-	    // If a constant temperature is needed through time, the B.C should be set as zero.
-	    double delta_temperature = 0.0; // temperature change per load step
-	    const int boundary_id_left_surface = 0;
-	    VectorTools::interpolate_boundary_values(m_dof_handler,
-						     boundary_id_left_surface,
-						     Functions::ConstantFunction<dim>(
-						       delta_temperature, m_n_components),
-						     m_constraints,
-						     m_fe.component_mask(temperature));
-
-	    const int boundary_id_bottom_surface = 1;
-	    VectorTools::interpolate_boundary_values(m_dof_handler,
-						     boundary_id_bottom_surface,
-						     Functions::ConstantFunction<dim>(
-						       delta_temperature, m_n_components),
-						     m_constraints,
-						     m_fe.component_mask(temperature));
-
-	    const int boundary_id_top_surface = 3;
-	    VectorTools::interpolate_boundary_values(m_dof_handler,
-						     boundary_id_top_surface,
-						     Functions::ConstantFunction<dim>(
-						       delta_temperature, m_n_components),
-						     m_constraints,
-						     m_fe.component_mask(temperature));
-	  }
-	else if (m_parameters.m_scenario == 7)
-	  {
-	    const int boundary_id_mid_surface_x = 3;
-	    VectorTools::interpolate_boundary_values(m_dof_handler,
-						     boundary_id_mid_surface_x,
-						     Functions::ZeroFunction<dim>(m_n_components),
-						     m_constraints,
-						     m_fe.component_mask(x_displacement));
-
-	    const int boundary_id_mid_surface_y = 4;
-	    VectorTools::interpolate_boundary_values(m_dof_handler,
-						     boundary_id_mid_surface_y,
-						     Functions::ZeroFunction<dim>(m_n_components),
-						     m_constraints,
-						     m_fe.component_mask(y_displacement));
-
-	    typename Triangulation<dim>::active_vertex_iterator vertex_itr;
-	    vertex_itr = m_triangulation.begin_active_vertex();
-	    std::vector<types::global_dof_index> node_xy(m_fe.dofs_per_vertex);
-
-	    for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
-	      {
-		if (   (std::fabs(vertex_itr->vertex()[0] -  0.0) < 1.0e-9)
-		    && (std::fabs(vertex_itr->vertex()[1] -  0.0) < 1.0e-9)
-		    && (std::fabs(vertex_itr->vertex()[2] -0.125) < 1.0e-9) )
-		  {
-		    node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
-		  }
-	      }
-	    m_constraints.add_line(node_xy[2]);
-	    m_constraints.set_inhomogeneity(node_xy[2], 0.0);
-
-	    for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
-	      {
-		if (   (std::fabs(vertex_itr->vertex()[0] - 25.0) < 1.0e-9)
-		    && (std::fabs(vertex_itr->vertex()[1] -  0.0) < 1.0e-9)
-		    && (std::fabs(vertex_itr->vertex()[2] -0.125) < 1.0e-9) )
-		  {
-		    node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
-		  }
-	      }
-	    m_constraints.add_line(node_xy[2]);
-	    m_constraints.set_inhomogeneity(node_xy[2], 0.0);
-
-	    for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
-	      {
-		if (   (std::fabs(vertex_itr->vertex()[0] -  0.0) < 1.0e-9)
-		    && (std::fabs(vertex_itr->vertex()[1] -  5.0) < 1.0e-9)
-		    && (std::fabs(vertex_itr->vertex()[2] -0.125) < 1.0e-9) )
-		  {
-		    node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
-		  }
-	      }
-	    m_constraints.add_line(node_xy[2]);
-	    m_constraints.set_inhomogeneity(node_xy[2], 0.0);
-
-	    // Remember, the essential B.C. is applied incrementally during each time step.
-	    // If a constant temperature is needed through time, the B.C should be set as zero.
-	    double delta_temperature = 0.0; // temperature change per load step
-	    const int boundary_id_left_surface = 0;
-	    VectorTools::interpolate_boundary_values(m_dof_handler,
-						     boundary_id_left_surface,
-						     Functions::ConstantFunction<dim>(
-						       delta_temperature, m_n_components),
-						     m_constraints,
-						     m_fe.component_mask(temperature));
-
-	    const int boundary_id_front_surface = 1;
-	    VectorTools::interpolate_boundary_values(m_dof_handler,
-						     boundary_id_front_surface,
-						     Functions::ConstantFunction<dim>(
-						       delta_temperature, m_n_components),
-						     m_constraints,
-						     m_fe.component_mask(temperature));
-	  }
-	else if (m_parameters.m_scenario == 8)
-	  {
-	    const int boundary_id_mid_surface_x = 3;
-	    VectorTools::interpolate_boundary_values(m_dof_handler,
-						     boundary_id_mid_surface_x,
-						     Functions::ZeroFunction<dim>(m_n_components),
-						     m_constraints,
-						     m_fe.component_mask(x_displacement));
-
-	    const int boundary_id_mid_surface_y = 4;
-	    VectorTools::interpolate_boundary_values(m_dof_handler,
-						     boundary_id_mid_surface_y,
-						     Functions::ZeroFunction<dim>(m_n_components),
-						     m_constraints,
-						     m_fe.component_mask(y_displacement));
-
-	    typename Triangulation<dim>::active_vertex_iterator vertex_itr;
-	    vertex_itr = m_triangulation.begin_active_vertex();
-	    std::vector<types::global_dof_index> node_xy(m_fe.dofs_per_vertex);
-
-	    for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
-	      {
-		if (   (std::fabs(vertex_itr->vertex()[0] -  0.0) < 1.0e-9)
-		    && (std::fabs(vertex_itr->vertex()[1] -  0.0) < 1.0e-9)
-		    && (std::fabs(vertex_itr->vertex()[2] -  0.5) < 1.0e-9) )
-		  {
-		    node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
-		  }
-	      }
-	    m_constraints.add_line(node_xy[2]);
-	    m_constraints.set_inhomogeneity(node_xy[2], 0.0);
-
-	    for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
-	      {
-		if (   (std::fabs(vertex_itr->vertex()[0] -  5.0) < 1.0e-9)
-		    && (std::fabs(vertex_itr->vertex()[1] -  0.0) < 1.0e-9)
-		    && (std::fabs(vertex_itr->vertex()[2] -  0.5) < 1.0e-9) )
-		  {
-		    node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
-		  }
-	      }
-	    m_constraints.add_line(node_xy[2]);
-	    m_constraints.set_inhomogeneity(node_xy[2], 0.0);
-
-	    for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
-	      {
-		if (   (std::fabs(vertex_itr->vertex()[0] -  0.0) < 1.0e-9)
-		    && (std::fabs(vertex_itr->vertex()[1] -  2.0) < 1.0e-9)
-		    && (std::fabs(vertex_itr->vertex()[2] -  0.5) < 1.0e-9) )
-		  {
-		    node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
-		  }
-	      }
-	    m_constraints.add_line(node_xy[2]);
-	    m_constraints.set_inhomogeneity(node_xy[2], 0.0);
-
-	    // Remember, the essential B.C. is applied incrementally during each time step.
-	    // If a constant temperature is needed through time, the B.C should be set as zero.
-	    double delta_temperature = 0.0; // temperature change per load step
-	    const int boundary_id_left_surface = 0;
-	    VectorTools::interpolate_boundary_values(m_dof_handler,
-						     boundary_id_left_surface,
-						     Functions::ConstantFunction<dim>(
-						       delta_temperature, m_n_components),
-						     m_constraints,
-						     m_fe.component_mask(temperature));
-
-	    const int boundary_id_front_surface = 1;
-	    VectorTools::interpolate_boundary_values(m_dof_handler,
-						     boundary_id_front_surface,
-						     Functions::ConstantFunction<dim>(
-						       delta_temperature, m_n_components),
-						     m_constraints,
-						     m_fe.component_mask(temperature));
-
-	    const int boundary_id_bottom_surface = 2;
-	    VectorTools::interpolate_boundary_values(m_dof_handler,
-						     boundary_id_bottom_surface,
-						     Functions::ConstantFunction<dim>(
-						       delta_temperature, m_n_components),
-						     m_constraints,
-						     m_fe.component_mask(temperature));
-
-	    const int boundary_id_top_surface = 5;
-	    VectorTools::interpolate_boundary_values(m_dof_handler,
-						     boundary_id_top_surface,
-						     Functions::ConstantFunction<dim>(
-						       delta_temperature, m_n_components),
-						     m_constraints,
-						     m_fe.component_mask(temperature));
-	  }
-	else if (m_parameters.m_scenario == 9)
-	  {
-	    const int boundary_id_mid_surface_x = 3;
-	    VectorTools::interpolate_boundary_values(m_dof_handler,
-						     boundary_id_mid_surface_x,
-						     Functions::ZeroFunction<dim>(m_n_components),
-						     m_constraints,
-						     m_fe.component_mask(x_displacement));
-
-	    const int boundary_id_mid_surface_y = 4;
-	    VectorTools::interpolate_boundary_values(m_dof_handler,
-						     boundary_id_mid_surface_y,
-						     Functions::ZeroFunction<dim>(m_n_components),
-						     m_constraints,
-						     m_fe.component_mask(y_displacement));
-
-	    typename Triangulation<dim>::active_vertex_iterator vertex_itr;
-	    vertex_itr = m_triangulation.begin_active_vertex();
-	    std::vector<types::global_dof_index> node_xy(m_fe.dofs_per_vertex);
-
-	    for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
-	      {
-		if (   (std::fabs(vertex_itr->vertex()[0] -  5.0) < 1.0e-9)
-		    && (std::fabs(vertex_itr->vertex()[1] -  2.0) < 1.0e-9)
-		    && (std::fabs(vertex_itr->vertex()[2] -  0.5) < 1.0e-9) )
-		  {
-		    node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
-		  }
-	      }
-	    m_constraints.add_line(node_xy[2]);
-	    m_constraints.set_inhomogeneity(node_xy[2], 0.0);
-
-	    // Remember, the essential B.C. is applied incrementally during each time step.
-	    // If a constant temperature is needed through time, the B.C should be set as zero.
-	    double delta_temperature = 0.0; // temperature change per load step
-	    const int boundary_id_bottom_surface = 2;
-	    VectorTools::interpolate_boundary_values(m_dof_handler,
-						     boundary_id_bottom_surface,
-						     Functions::ConstantFunction<dim>(
-						       delta_temperature, m_n_components),
-						     m_constraints,
-						     m_fe.component_mask(temperature));
-	  }
-	else if (m_parameters.m_scenario == 10)
-	  {
-	    const int boundary_id_mid_surface_x = 3;
-	    VectorTools::interpolate_boundary_values(m_dof_handler,
-						     boundary_id_mid_surface_x,
-						     Functions::ZeroFunction<dim>(m_n_components),
-						     m_constraints,
-						     m_fe.component_mask(x_displacement));
-
-	    const int boundary_id_mid_surface_y = 4;
-	    VectorTools::interpolate_boundary_values(m_dof_handler,
-						     boundary_id_mid_surface_y,
-						     Functions::ZeroFunction<dim>(m_n_components),
-						     m_constraints,
-						     m_fe.component_mask(y_displacement));
-
-	    typename Triangulation<dim>::active_vertex_iterator vertex_itr;
-	    vertex_itr = m_triangulation.begin_active_vertex();
-	    std::vector<types::global_dof_index> node_xy(m_fe.dofs_per_vertex);
-
-	    for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
-	      {
-		if (   (std::fabs(vertex_itr->vertex()[0] -  5.0) < 1.0e-9)
-		    && (std::fabs(vertex_itr->vertex()[1] -  2.0) < 1.0e-9)
-		    && (std::fabs(vertex_itr->vertex()[2] -  1.0) < 1.0e-9) )
-		  {
-		    node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
-		  }
-	      }
-	    m_constraints.add_line(node_xy[2]);
-	    m_constraints.set_inhomogeneity(node_xy[2], 0.0);
-
-	    // Remember, the essential B.C. is applied incrementally during each time step.
-	    // If a constant temperature is needed through time, the B.C should be set as zero.
-	    double delta_temperature = 0.0; // temperature change per load step
-	    const int boundary_id_front_surface = 1;
-	    VectorTools::interpolate_boundary_values(m_dof_handler,
-						     boundary_id_front_surface,
-						     Functions::ConstantFunction<dim>(
-						       delta_temperature, m_n_components),
-						     m_constraints,
-						     m_fe.component_mask(temperature));
-	  }
-	else if (m_parameters.m_scenario == 11)
-	  {
-	    const int boundary_id_surface_x = 0;
-	    VectorTools::interpolate_boundary_values(m_dof_handler,
-						     boundary_id_surface_x,
-						     Functions::ZeroFunction<dim>(m_n_components),
-						     m_constraints,
-						     m_fe.component_mask(x_displacement));
-
-	    const int boundary_id_surface_y = 1;
-	    VectorTools::interpolate_boundary_values(m_dof_handler,
-						     boundary_id_surface_y,
-						     Functions::ZeroFunction<dim>(m_n_components),
-						     m_constraints,
-						     m_fe.component_mask(y_displacement));
-
-	    const int boundary_id_surface_z = 2;
-	    VectorTools::interpolate_boundary_values(m_dof_handler,
-						     boundary_id_surface_z,
-						     Functions::ZeroFunction<dim>(m_n_components),
-						     m_constraints,
-						     m_fe.component_mask(z_displacement));
-
-	    // Remember, the essential B.C. is applied incrementally during each time step.
-	    // If a constant temperature is needed through time, the B.C should be set as zero.
-	    double delta_temperature = 0.0; // temperature change per load step
-	    const int boundary_id_sphere_surface = 3;
-	    VectorTools::interpolate_boundary_values(m_dof_handler,
-						     boundary_id_sphere_surface,
-						     Functions::ConstantFunction<dim>(
-						       delta_temperature, m_n_components),
-						     m_constraints,
-						     m_fe.component_mask(temperature));
-	  }
-	else
-	  Assert(false, ExcMessage("The scenario has not been implemented!"));
-      }
-    else  // inhomogeneous constraints
-      {
-        if (m_constraints.has_inhomogeneities())
+          m_constraints.clear();
+          if constexpr (is_mpi)
           {
-            AffineConstraints<double> homogeneous_constraints(m_constraints);
-            for (unsigned int dof = 0; dof != m_dof_handler.n_dofs(); ++dof)
-              if (homogeneous_constraints.is_inhomogeneously_constrained(dof))
-                homogeneous_constraints.set_inhomogeneity(dof, 0.0);
-            m_constraints.clear();
-            m_constraints.copy_from(homogeneous_constraints);
+              VersionAdapter::cstReinit(m_constraints,
+                                        m_dof_handler.locally_owned_dofs(),
+                                        DoFTools::extract_locally_relevant_dofs(m_dof_handler));
+          }
+          DoFTools::make_hanging_node_constraints(m_dof_handler,
+                                                  m_constraints);
+          
+          const FEValuesExtractors::Scalar x_displacement(0);
+          const FEValuesExtractors::Scalar y_displacement(1);
+          const FEValuesExtractors::Scalar z_displacement(dim-1);
+          
+          const FEValuesExtractors::Vector displacements(0);
+          
+          const FEValuesExtractors::Scalar temperature(dim+1);
+          
+          if (   m_parameters.m_scenario == 1
+              || m_parameters.m_scenario == 3)
+          {
+              // Remember, the essential B.C. is applied incrementally during each time step.
+              // If a constant temperature is needed through time, the B.C should be set as zero.
+              double delta_temperature = 0.0; // temperature change per load step
+              
+              // Dirichlet B,C. bottom surface
+              const int boundary_id_bottom_surface = 0;
+              VectorTools::interpolate_boundary_values(m_dof_handler,
+                                                       boundary_id_bottom_surface,
+                                                       Functions::ZeroFunction<dim>(m_n_components),
+                                                       m_constraints,
+                                                       m_fe.component_mask(y_displacement));
+              
+              // temperature B.C. at the bottom surface
+              VectorTools::interpolate_boundary_values(m_dof_handler,
+                                                       boundary_id_bottom_surface,
+                                                       Functions::ConstantFunction<dim>(
+                                                                                        delta_temperature, m_n_components),
+                                                       m_constraints,
+                                                       m_fe.component_mask(temperature));
+              
+              typename Triangulation<dim>::active_vertex_iterator vertex_itr;
+              vertex_itr = m_triangulation.begin_active_vertex();
+              std::vector<types::global_dof_index> node_xy(m_fe.dofs_per_vertex);
+              
+              for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
+              {
+                  if (   (std::fabs(vertex_itr->vertex()[0] - 0.0) < 1.0e-9)
+                      && (std::fabs(vertex_itr->vertex()[1] - 0.0) < 1.0e-9) )
+                  {
+                      node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
+                  }
+              }
+              m_constraints.add_line(node_xy[0]);
+              m_constraints.set_inhomogeneity(node_xy[0], 0.0);
+              
+              m_constraints.add_line(node_xy[1]);
+              m_constraints.set_inhomogeneity(node_xy[1], 0.0);
+              
+              const int boundary_id_top_surface = 1;
+              /*
+               VectorTools::interpolate_boundary_values(m_dof_handler,
+               boundary_id_top_surface,
+               Functions::ZeroFunction<dim>(m_n_components),
+               m_constraints,
+               m_fe.component_mask(x_displacement));
+               */
+              const double time_inc = m_time.get_delta_t();
+              double disp_magnitude = m_time.get_magnitude();
+              VectorTools::interpolate_boundary_values(m_dof_handler,
+                                                       boundary_id_top_surface,
+                                                       Functions::ConstantFunction<dim>(
+                                                                                        disp_magnitude*time_inc, m_n_components),
+                                                       m_constraints,
+                                                       m_fe.component_mask(y_displacement));
+              
+              // temperature B.C. at the top surface
+              if (m_time.current() <= 0.25e-3)
+                  delta_temperature = -time_inc * 1.0e5; //cool down
+              //	      delta_temperature =  time_inc * 1.0e5; //warn up
+              //	      delta_temperature = 0.0; //constant
+              
+              VectorTools::interpolate_boundary_values(m_dof_handler,
+                                                       boundary_id_top_surface,
+                                                       Functions::ConstantFunction<dim>(
+                                                                                        delta_temperature, m_n_components),
+                                                       m_constraints,
+                                                       m_fe.component_mask(temperature));
+          }
+          else if (   m_parameters.m_scenario == 2
+                   || m_parameters.m_scenario == 4)
+          {
+              // Remember, the essential B.C. is applied incrementally during each time step.
+              // If a constant temperature is needed through time, the B.C should be set as zero.
+              double delta_temperature = 0.0; // temperature change per load step
+              
+              // Dirichlet B,C. bottom surface
+              const int boundary_id_bottom_surface = 0;
+              VectorTools::interpolate_boundary_values(m_dof_handler,
+                                                       boundary_id_bottom_surface,
+                                                       Functions::ZeroFunction<dim>(m_n_components),
+                                                       m_constraints,
+                                                       m_fe.component_mask(displacements));
+              
+              // temperature B.C. at the bottom surface
+              VectorTools::interpolate_boundary_values(m_dof_handler,
+                                                       boundary_id_bottom_surface,
+                                                       Functions::ConstantFunction<dim>(
+                                                                                        delta_temperature, m_n_components),
+                                                       m_constraints,
+                                                       m_fe.component_mask(temperature));
+              
+              const int boundary_id_top_surface = 1;
+              VectorTools::interpolate_boundary_values(m_dof_handler,
+                                                       boundary_id_top_surface,
+                                                       Functions::ZeroFunction<dim>(m_n_components),
+                                                       m_constraints,
+                                                       m_fe.component_mask(y_displacement));
+              
+              const double time_inc = m_time.get_delta_t();
+              double disp_magnitude = m_time.get_magnitude();
+              VectorTools::interpolate_boundary_values(m_dof_handler,
+                                                       boundary_id_top_surface,
+                                                       Functions::ConstantFunction<dim>(
+                                                                                        disp_magnitude*time_inc, m_n_components),
+                                                       m_constraints,
+                                                       m_fe.component_mask(x_displacement));
+              
+              const int boundary_id_side_surfaces = 2;
+              VectorTools::interpolate_boundary_values(m_dof_handler,
+                                                       boundary_id_side_surfaces,
+                                                       Functions::ZeroFunction<dim>(m_n_components),
+                                                       m_constraints,
+                                                       m_fe.component_mask(y_displacement));
+              
+              // temperature B.C. at the top surface
+              if (m_time.current() <= 10.0001e-3)
+                  delta_temperature = -time_inc * 2.0e4; //cool down
+              //	      delta_temperature =  time_inc * 2.0e4; //warm up
+              
+              VectorTools::interpolate_boundary_values(m_dof_handler,
+                                                       boundary_id_top_surface,
+                                                       Functions::ConstantFunction<dim>(
+                                                                                        delta_temperature, m_n_components),
+                                                       m_constraints,
+                                                       m_fe.component_mask(temperature));
+          }
+          else if (m_parameters.m_scenario == 5)
+          {
+              const int boundary_id_mid_surface_x = 2;
+              VectorTools::interpolate_boundary_values(m_dof_handler,
+                                                       boundary_id_mid_surface_x,
+                                                       Functions::ZeroFunction<dim>(m_n_components),
+                                                       m_constraints,
+                                                       m_fe.component_mask(x_displacement));
+              
+              const int boundary_id_mid_surface_y = 3;
+              VectorTools::interpolate_boundary_values(m_dof_handler,
+                                                       boundary_id_mid_surface_y,
+                                                       Functions::ZeroFunction<dim>(m_n_components),
+                                                       m_constraints,
+                                                       m_fe.component_mask(y_displacement));
+              
+              // Remember, the essential B.C. is applied incrementally during each time step.
+              // If a constant temperature is needed through time, the B.C should be set as zero.
+              double delta_temperature = 0.0; // temperature change per load step
+              const int boundary_id_left_surface = 0;
+              VectorTools::interpolate_boundary_values(m_dof_handler,
+                                                       boundary_id_left_surface,
+                                                       Functions::ConstantFunction<dim>(
+                                                                                        delta_temperature, m_n_components),
+                                                       m_constraints,
+                                                       m_fe.component_mask(temperature));
+              
+              const int boundary_id_bottom_surface = 1;
+              VectorTools::interpolate_boundary_values(m_dof_handler,
+                                                       boundary_id_bottom_surface,
+                                                       Functions::ConstantFunction<dim>(
+                                                                                        delta_temperature, m_n_components),
+                                                       m_constraints,
+                                                       m_fe.component_mask(temperature));
+          }
+          else if (m_parameters.m_scenario == 6)
+          {
+              const int boundary_id_mid_surface_x = 2;
+              VectorTools::interpolate_boundary_values(m_dof_handler,
+                                                       boundary_id_mid_surface_x,
+                                                       Functions::ZeroFunction<dim>(m_n_components),
+                                                       m_constraints,
+                                                       m_fe.component_mask(x_displacement));
+              
+              typename Triangulation<dim>::active_vertex_iterator vertex_itr;
+              vertex_itr = m_triangulation.begin_active_vertex();
+              std::vector<types::global_dof_index> node_xy(m_fe.dofs_per_vertex);
+              
+              for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
+              {
+                  if (   (std::fabs(vertex_itr->vertex()[0] - 25.0) < 1.0e-9)
+                      && (std::fabs(vertex_itr->vertex()[1] -  5.0) < 1.0e-9) )
+                  {
+                      node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
+                  }
+              }
+              m_constraints.add_line(node_xy[1]);
+              m_constraints.set_inhomogeneity(node_xy[1], 0.0);
+              
+              // Remember, the essential B.C. is applied incrementally during each time step.
+              // If a constant temperature is needed through time, the B.C should be set as zero.
+              double delta_temperature = 0.0; // temperature change per load step
+              const int boundary_id_left_surface = 0;
+              VectorTools::interpolate_boundary_values(m_dof_handler,
+                                                       boundary_id_left_surface,
+                                                       Functions::ConstantFunction<dim>(
+                                                                                        delta_temperature, m_n_components),
+                                                       m_constraints,
+                                                       m_fe.component_mask(temperature));
+              
+              const int boundary_id_bottom_surface = 1;
+              VectorTools::interpolate_boundary_values(m_dof_handler,
+                                                       boundary_id_bottom_surface,
+                                                       Functions::ConstantFunction<dim>(
+                                                                                        delta_temperature, m_n_components),
+                                                       m_constraints,
+                                                       m_fe.component_mask(temperature));
+              
+              const int boundary_id_top_surface = 3;
+              VectorTools::interpolate_boundary_values(m_dof_handler,
+                                                       boundary_id_top_surface,
+                                                       Functions::ConstantFunction<dim>(
+                                                                                        delta_temperature, m_n_components),
+                                                       m_constraints,
+                                                       m_fe.component_mask(temperature));
+          }
+          else if (m_parameters.m_scenario == 7)
+          {
+              const int boundary_id_mid_surface_x = 3;
+              VectorTools::interpolate_boundary_values(m_dof_handler,
+                                                       boundary_id_mid_surface_x,
+                                                       Functions::ZeroFunction<dim>(m_n_components),
+                                                       m_constraints,
+                                                       m_fe.component_mask(x_displacement));
+              
+              const int boundary_id_mid_surface_y = 4;
+              VectorTools::interpolate_boundary_values(m_dof_handler,
+                                                       boundary_id_mid_surface_y,
+                                                       Functions::ZeroFunction<dim>(m_n_components),
+                                                       m_constraints,
+                                                       m_fe.component_mask(y_displacement));
+              
+              typename Triangulation<dim>::active_vertex_iterator vertex_itr;
+              vertex_itr = m_triangulation.begin_active_vertex();
+              std::vector<types::global_dof_index> node_xy(m_fe.dofs_per_vertex);
+              
+              for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
+              {
+                  if (   (std::fabs(vertex_itr->vertex()[0] -  0.0) < 1.0e-9)
+                      && (std::fabs(vertex_itr->vertex()[1] -  0.0) < 1.0e-9)
+                      && (std::fabs(vertex_itr->vertex()[2] -0.125) < 1.0e-9) )
+                  {
+                      node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
+                  }
+              }
+              m_constraints.add_line(node_xy[2]);
+              m_constraints.set_inhomogeneity(node_xy[2], 0.0);
+              
+              for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
+              {
+                  if (   (std::fabs(vertex_itr->vertex()[0] - 25.0) < 1.0e-9)
+                      && (std::fabs(vertex_itr->vertex()[1] -  0.0) < 1.0e-9)
+                      && (std::fabs(vertex_itr->vertex()[2] -0.125) < 1.0e-9) )
+                  {
+                      node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
+                  }
+              }
+              m_constraints.add_line(node_xy[2]);
+              m_constraints.set_inhomogeneity(node_xy[2], 0.0);
+              
+              for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
+              {
+                  if (   (std::fabs(vertex_itr->vertex()[0] -  0.0) < 1.0e-9)
+                      && (std::fabs(vertex_itr->vertex()[1] -  5.0) < 1.0e-9)
+                      && (std::fabs(vertex_itr->vertex()[2] -0.125) < 1.0e-9) )
+                  {
+                      node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
+                  }
+              }
+              m_constraints.add_line(node_xy[2]);
+              m_constraints.set_inhomogeneity(node_xy[2], 0.0);
+              
+              // Remember, the essential B.C. is applied incrementally during each time step.
+              // If a constant temperature is needed through time, the B.C should be set as zero.
+              double delta_temperature = 0.0; // temperature change per load step
+              const int boundary_id_left_surface = 0;
+              VectorTools::interpolate_boundary_values(m_dof_handler,
+                                                       boundary_id_left_surface,
+                                                       Functions::ConstantFunction<dim>(
+                                                                                        delta_temperature, m_n_components),
+                                                       m_constraints,
+                                                       m_fe.component_mask(temperature));
+              
+              const int boundary_id_front_surface = 1;
+              VectorTools::interpolate_boundary_values(m_dof_handler,
+                                                       boundary_id_front_surface,
+                                                       Functions::ConstantFunction<dim>(
+                                                                                        delta_temperature, m_n_components),
+                                                       m_constraints,
+                                                       m_fe.component_mask(temperature));
+          }
+          else if (m_parameters.m_scenario == 8)
+          {
+              const int boundary_id_mid_surface_x = 3;
+              VectorTools::interpolate_boundary_values(m_dof_handler,
+                                                       boundary_id_mid_surface_x,
+                                                       Functions::ZeroFunction<dim>(m_n_components),
+                                                       m_constraints,
+                                                       m_fe.component_mask(x_displacement));
+              
+              const int boundary_id_mid_surface_y = 4;
+              VectorTools::interpolate_boundary_values(m_dof_handler,
+                                                       boundary_id_mid_surface_y,
+                                                       Functions::ZeroFunction<dim>(m_n_components),
+                                                       m_constraints,
+                                                       m_fe.component_mask(y_displacement));
+              
+              typename Triangulation<dim>::active_vertex_iterator vertex_itr;
+              vertex_itr = m_triangulation.begin_active_vertex();
+              std::vector<types::global_dof_index> node_xy(m_fe.dofs_per_vertex);
+              
+              for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
+              {
+                  if (   (std::fabs(vertex_itr->vertex()[0] -  0.0) < 1.0e-9)
+                      && (std::fabs(vertex_itr->vertex()[1] -  0.0) < 1.0e-9)
+                      && (std::fabs(vertex_itr->vertex()[2] -  0.5) < 1.0e-9) )
+                  {
+                      node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
+                  }
+              }
+              m_constraints.add_line(node_xy[2]);
+              m_constraints.set_inhomogeneity(node_xy[2], 0.0);
+              
+              for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
+              {
+                  if (   (std::fabs(vertex_itr->vertex()[0] -  5.0) < 1.0e-9)
+                      && (std::fabs(vertex_itr->vertex()[1] -  0.0) < 1.0e-9)
+                      && (std::fabs(vertex_itr->vertex()[2] -  0.5) < 1.0e-9) )
+                  {
+                      node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
+                  }
+              }
+              m_constraints.add_line(node_xy[2]);
+              m_constraints.set_inhomogeneity(node_xy[2], 0.0);
+              
+              for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
+              {
+                  if (   (std::fabs(vertex_itr->vertex()[0] -  0.0) < 1.0e-9)
+                      && (std::fabs(vertex_itr->vertex()[1] -  2.0) < 1.0e-9)
+                      && (std::fabs(vertex_itr->vertex()[2] -  0.5) < 1.0e-9) )
+                  {
+                      node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
+                  }
+              }
+              m_constraints.add_line(node_xy[2]);
+              m_constraints.set_inhomogeneity(node_xy[2], 0.0);
+              
+              // Remember, the essential B.C. is applied incrementally during each time step.
+              // If a constant temperature is needed through time, the B.C should be set as zero.
+              double delta_temperature = 0.0; // temperature change per load step
+              const int boundary_id_left_surface = 0;
+              VectorTools::interpolate_boundary_values(m_dof_handler,
+                                                       boundary_id_left_surface,
+                                                       Functions::ConstantFunction<dim>(
+                                                                                        delta_temperature, m_n_components),
+                                                       m_constraints,
+                                                       m_fe.component_mask(temperature));
+              
+              const int boundary_id_front_surface = 1;
+              VectorTools::interpolate_boundary_values(m_dof_handler,
+                                                       boundary_id_front_surface,
+                                                       Functions::ConstantFunction<dim>(
+                                                                                        delta_temperature, m_n_components),
+                                                       m_constraints,
+                                                       m_fe.component_mask(temperature));
+              
+              const int boundary_id_bottom_surface = 2;
+              VectorTools::interpolate_boundary_values(m_dof_handler,
+                                                       boundary_id_bottom_surface,
+                                                       Functions::ConstantFunction<dim>(
+                                                                                        delta_temperature, m_n_components),
+                                                       m_constraints,
+                                                       m_fe.component_mask(temperature));
+              
+              const int boundary_id_top_surface = 5;
+              VectorTools::interpolate_boundary_values(m_dof_handler,
+                                                       boundary_id_top_surface,
+                                                       Functions::ConstantFunction<dim>(
+                                                                                        delta_temperature, m_n_components),
+                                                       m_constraints,
+                                                       m_fe.component_mask(temperature));
+          }
+          else if (m_parameters.m_scenario == 9)
+          {
+              const int boundary_id_mid_surface_x = 3;
+              VectorTools::interpolate_boundary_values(m_dof_handler,
+                                                       boundary_id_mid_surface_x,
+                                                       Functions::ZeroFunction<dim>(m_n_components),
+                                                       m_constraints,
+                                                       m_fe.component_mask(x_displacement));
+              
+              const int boundary_id_mid_surface_y = 4;
+              VectorTools::interpolate_boundary_values(m_dof_handler,
+                                                       boundary_id_mid_surface_y,
+                                                       Functions::ZeroFunction<dim>(m_n_components),
+                                                       m_constraints,
+                                                       m_fe.component_mask(y_displacement));
+              
+              typename Triangulation<dim>::active_vertex_iterator vertex_itr;
+              vertex_itr = m_triangulation.begin_active_vertex();
+              std::vector<types::global_dof_index> node_xy(m_fe.dofs_per_vertex);
+              
+              for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
+              {
+                  if (   (std::fabs(vertex_itr->vertex()[0] -  5.0) < 1.0e-9)
+                      && (std::fabs(vertex_itr->vertex()[1] -  2.0) < 1.0e-9)
+                      && (std::fabs(vertex_itr->vertex()[2] -  0.5) < 1.0e-9) )
+                  {
+                      node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
+                  }
+              }
+              m_constraints.add_line(node_xy[2]);
+              m_constraints.set_inhomogeneity(node_xy[2], 0.0);
+              
+              // Remember, the essential B.C. is applied incrementally during each time step.
+              // If a constant temperature is needed through time, the B.C should be set as zero.
+              double delta_temperature = 0.0; // temperature change per load step
+              const int boundary_id_bottom_surface = 2;
+              VectorTools::interpolate_boundary_values(m_dof_handler,
+                                                       boundary_id_bottom_surface,
+                                                       Functions::ConstantFunction<dim>(
+                                                                                        delta_temperature, m_n_components),
+                                                       m_constraints,
+                                                       m_fe.component_mask(temperature));
+          }
+          else if (m_parameters.m_scenario == 10)
+          {
+              const int boundary_id_mid_surface_x = 3;
+              VectorTools::interpolate_boundary_values(m_dof_handler,
+                                                       boundary_id_mid_surface_x,
+                                                       Functions::ZeroFunction<dim>(m_n_components),
+                                                       m_constraints,
+                                                       m_fe.component_mask(x_displacement));
+              
+              const int boundary_id_mid_surface_y = 4;
+              VectorTools::interpolate_boundary_values(m_dof_handler,
+                                                       boundary_id_mid_surface_y,
+                                                       Functions::ZeroFunction<dim>(m_n_components),
+                                                       m_constraints,
+                                                       m_fe.component_mask(y_displacement));
+              
+              typename Triangulation<dim>::active_vertex_iterator vertex_itr;
+              vertex_itr = m_triangulation.begin_active_vertex();
+              std::vector<types::global_dof_index> node_xy(m_fe.dofs_per_vertex);
+              
+              for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
+              {
+                  if (   (std::fabs(vertex_itr->vertex()[0] -  5.0) < 1.0e-9)
+                      && (std::fabs(vertex_itr->vertex()[1] -  2.0) < 1.0e-9)
+                      && (std::fabs(vertex_itr->vertex()[2] -  1.0) < 1.0e-9) )
+                  {
+                      node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
+                  }
+              }
+              m_constraints.add_line(node_xy[2]);
+              m_constraints.set_inhomogeneity(node_xy[2], 0.0);
+              
+              // Remember, the essential B.C. is applied incrementally during each time step.
+              // If a constant temperature is needed through time, the B.C should be set as zero.
+              double delta_temperature = 0.0; // temperature change per load step
+              const int boundary_id_front_surface = 1;
+              VectorTools::interpolate_boundary_values(m_dof_handler,
+                                                       boundary_id_front_surface,
+                                                       Functions::ConstantFunction<dim>(
+                                                                                        delta_temperature, m_n_components),
+                                                       m_constraints,
+                                                       m_fe.component_mask(temperature));
+          }
+          else if (m_parameters.m_scenario == 11)
+          {
+              const int boundary_id_surface_x = 0;
+              VectorTools::interpolate_boundary_values(m_dof_handler,
+                                                       boundary_id_surface_x,
+                                                       Functions::ZeroFunction<dim>(m_n_components),
+                                                       m_constraints,
+                                                       m_fe.component_mask(x_displacement));
+              
+              const int boundary_id_surface_y = 1;
+              VectorTools::interpolate_boundary_values(m_dof_handler,
+                                                       boundary_id_surface_y,
+                                                       Functions::ZeroFunction<dim>(m_n_components),
+                                                       m_constraints,
+                                                       m_fe.component_mask(y_displacement));
+              
+              const int boundary_id_surface_z = 2;
+              VectorTools::interpolate_boundary_values(m_dof_handler,
+                                                       boundary_id_surface_z,
+                                                       Functions::ZeroFunction<dim>(m_n_components),
+                                                       m_constraints,
+                                                       m_fe.component_mask(z_displacement));
+              
+              // Remember, the essential B.C. is applied incrementally during each time step.
+              // If a constant temperature is needed through time, the B.C should be set as zero.
+              double delta_temperature = 0.0; // temperature change per load step
+              const int boundary_id_sphere_surface = 3;
+              VectorTools::interpolate_boundary_values(m_dof_handler,
+                                                       boundary_id_sphere_surface,
+                                                       Functions::ConstantFunction<dim>(
+                                                                                        delta_temperature, m_n_components),
+                                                       m_constraints,
+                                                       m_fe.component_mask(temperature));
+          }
+          else
+              Assert(false, ExcMessage("The scenario has not been implemented!"));
+      }
+      else  // inhomogeneous constraints
+      {
+          if (m_constraints.has_inhomogeneities())
+          {
+              AffineConstraints<double> homogeneous_constraints(m_constraints);
+              for (unsigned int dof = 0; dof != m_dof_handler.n_dofs(); ++dof)
+                  if (homogeneous_constraints.is_inhomogeneously_constrained(dof))
+                      homogeneous_constraints.set_inhomogeneity(dof, 0.0);
+              
+              m_constraints.clear();
+              if constexpr (is_mpi)
+              {
+                  VersionAdapter::cstReinit(m_constraints,
+                                            m_dof_handler.locally_owned_dofs(),
+                                            DoFTools::extract_locally_relevant_dofs(m_dof_handler));
+              }
+              m_constraints.copy_from(homogeneous_constraints);
           }
       }
-    m_constraints.close();
+      m_constraints.close();
   }
 
   template <typename LATraits, typename Tria>
