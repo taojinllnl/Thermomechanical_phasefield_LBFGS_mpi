@@ -2,11 +2,24 @@
 //  VersionAdapter.h
 //  main
 //
-//  Created by Ethan Lee on 2025-12-22.
 //
 
 #ifndef VersionAdapter_h
 #define VersionAdapter_h
+
+#include <deal.II/lac/affine_constraints.h>
+
+
+#include "BlockDesc.h"
+
+class VersionAdapter
+{
+public:
+    static void cstReinit(dealii::AffineConstraints<double>& constraints,
+                          const dealii::IndexSet& locally_owned_dofs,
+                          const dealii::IndexSet& locally_relevant_dofs);
+};
+
 
 
 #endif /* VersionAdapter_h */
