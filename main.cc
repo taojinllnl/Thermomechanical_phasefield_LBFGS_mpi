@@ -6261,6 +6261,17 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
             solution_transfer_history_variable.prepare_for_coarsening_and_refinement(old_history_variable_field_L2);
             m_triangulation.execute_coarsening_and_refinement();
             
+            
+            if constexpr (std::is_same_v<Tria, DTria<2>> ||
+                          std::is_same_v<Tria, DTria<3>>)
+            {
+                // once refinement applied, repartitioning may be required
+                // TODO: flag for repartitioning
+                if(true) {
+                    m_triangulation.repartition();
+                }
+            }
+            
             setup_system();
             
             dof_handler_L2.distribute_dofs(fe_L2);
