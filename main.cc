@@ -4281,10 +4281,18 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
           if (m_constraints.has_inhomogeneities())
           {
               AffineConstraints<double> homogeneous_constraints(m_constraints);
-              for (unsigned int dof = 0; dof != m_dof_handler.n_dofs(); ++dof)
-                  if (homogeneous_constraints.is_inhomogeneously_constrained(dof))
-                      homogeneous_constraints.set_inhomogeneity(dof, 0.0);
-              
+              if constexpr (is_mpi)
+              {
+                  std::vector<unsigned int> indices;
+                  m_dof_handler.locally_owned_dofs().fill_index_vector(indices);
+                  for (unsigned int dof : indices)
+                      if (homogeneous_constraints.is_inhomogeneously_constrained(dof))
+                          homogeneous_constraints.set_inhomogeneity(dof, 0.0);
+              } else {
+                  for (unsigned int dof = 0; dof != m_dof_handler.n_dofs(); ++dof)
+                      if (homogeneous_constraints.is_inhomogeneously_constrained(dof))
+                          homogeneous_constraints.set_inhomogeneity(dof, 0.0);
+              }
               m_constraints.clear();
               if constexpr (is_mpi)
               {
