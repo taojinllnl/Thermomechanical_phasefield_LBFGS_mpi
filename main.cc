@@ -2275,9 +2275,13 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 {
     if (m_parameters.m_scenario == 1)
     {
-        for (const auto &cell : m_triangulation.active_cell_iterators())
-          for (const auto &face : cell->face_iterators())
+        for(const auto& face : m_triangulation.active_face_iterators())
         {
+            
+//        }
+//        for (const auto &cell : m_triangulation.active_cell_iterators())
+//          for (const auto &face : cell->face_iterators())
+//        {
           if (face->at_boundary() == true)
             {
               if (std::fabs(face->center()[1] + 0.5 ) < 1.0e-9 )
@@ -2291,9 +2295,13 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
     }
     else if (m_parameters.m_scenario == 2)
     {
-        for (const auto &cell : m_triangulation.active_cell_iterators())
-          for (const auto &face : cell->face_iterators())
+        for(const auto& face : m_triangulation.active_face_iterators())
         {
+            
+//        }
+//        for (const auto &cell : m_triangulation.active_cell_iterators())
+//          for (const auto &face : cell->face_iterators())
+//        {
           if (face->at_boundary() == true)
             {
               if (std::fabs(face->center()[1] + 0.5 ) < 1.0e-9 )
@@ -2310,9 +2318,13 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
     }
     else if (m_parameters.m_scenario == 3)
     {
-        for (const auto &cell : m_triangulation.active_cell_iterators())
-          for (const auto &face : cell->face_iterators())
+        for(const auto& face : m_triangulation.active_face_iterators())
         {
+            
+//        }
+//        for (const auto &cell : m_triangulation.active_cell_iterators())
+//          for (const auto &face : cell->face_iterators())
+//        {
           if (face->at_boundary() == true)
             {
               if (std::fabs(face->center()[1] - 0.0 ) < 1.0e-9 )
@@ -2326,9 +2338,13 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
     }
     else if (m_parameters.m_scenario == 4)
     {
-        for (const auto &cell : m_triangulation.active_cell_iterators())
-          for (const auto &face : cell->face_iterators())
+        for(const auto& face : m_triangulation.active_face_iterators())
         {
+            
+//        }
+//        for (const auto &cell : m_triangulation.active_cell_iterators())
+//          for (const auto &face : cell->face_iterators())
+//        {
           if (face->at_boundary() == true)
             {
               if (std::fabs(face->center()[1] - 0.0 ) < 1.0e-9 )
@@ -2345,9 +2361,13 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
     }
     else if (m_parameters.m_scenario == 5)
     {
-        for (const auto &cell : m_triangulation.active_cell_iterators())
-          for (const auto &face : cell->face_iterators())
+        for(const auto& face : m_triangulation.active_face_iterators())
         {
+            
+//        }
+//        for (const auto &cell : m_triangulation.active_cell_iterators())
+//          for (const auto &face : cell->face_iterators())
+//        {
           if (face->at_boundary() == true)
             {
               if (std::fabs(face->center()[0] - 0.0 ) < 1.0e-9 )
@@ -2367,9 +2387,14 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
     {
         double const length = 25.0; //mm
         double const width  = 10.0;  //mm
-        for (const auto &cell : m_triangulation.active_cell_iterators())
-          for (const auto &face : cell->face_iterators())
+        
+        for(const auto& face : m_triangulation.active_face_iterators())
         {
+            
+//        }
+//        for (const auto &cell : m_triangulation.active_cell_iterators())
+//          for (const auto &face : cell->face_iterators())
+//        {
           if (face->at_boundary() == true)
             {
               if (std::fabs(face->center()[0] - 0.0 ) < 1.0e-9 )
@@ -2391,10 +2416,13 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
         double const width  = 5.0;  //mm
         double const thickness = 0.25;  //mm
         
-        
-        for (const auto &cell : m_triangulation.active_cell_iterators())
-          for (const auto &face : cell->face_iterators())
+        for(const auto& face : m_triangulation.active_face_iterators())
         {
+            
+//        }
+//        for (const auto &cell : m_triangulation.active_cell_iterators())
+//          for (const auto &face : cell->face_iterators())
+//        {
           if (face->at_boundary() == true)
             {
               if (std::fabs(face->center()[0] - 0.0 ) < 1.0e-9 )
@@ -2420,9 +2448,13 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
         double const width  = 2.0;  //mm
         double const thickness = 1.0;  //mm
         
-        for (const auto &cell : m_triangulation.active_cell_iterators())
-            for (const auto &face : cell->face_iterators())
-            {
+        for(const auto& face : m_triangulation.active_face_iterators())
+        {
+            
+//        }
+//        for (const auto &cell : m_triangulation.active_cell_iterators())
+//            for (const auto &face : cell->face_iterators())
+//            {
                 if (face->at_boundary() == true)
                 {
                     if (std::fabs(face->center()[0] - 0.0 ) < 1.0e-9 )
@@ -2447,9 +2479,14 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
         double const length = 5.0; //mm
         double const width  = 2.0;  //mm
         double const thickness = 1.0;  //mm
-        for (const auto &cell : m_triangulation.active_cell_iterators())
-            for (const auto &face : cell->face_iterators())
-            {
+        
+        for(const auto& face : m_triangulation.active_face_iterators())
+        {
+            
+//        }
+//        for (const auto &cell : m_triangulation.active_cell_iterators())
+//            for (const auto &face : cell->face_iterators())
+//            {
                 if (face->at_boundary() == true)
                 {
                     if (std::fabs(face->center()[0] - 0.0 ) < 1.0e-9 )
@@ -2475,9 +2512,13 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
         double const width  = 2.0;  //mm
         double const thickness = 1.0;  //mm
         
-        for (const auto &cell : m_triangulation.active_cell_iterators())
-            for (const auto &face : cell->face_iterators())
-            {
+        for(const auto& face : m_triangulation.active_face_iterators())
+        {
+            
+//        }
+//        for (const auto &cell : m_triangulation.active_cell_iterators())
+//            for (const auto &face : cell->face_iterators())
+//            {
                 if (face->at_boundary() == true)
                 {
                     if (std::fabs(face->center()[0] - 0.0 ) < 1.0e-9 )
@@ -2499,9 +2540,13 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
     }
     else if (m_parameters.m_scenario == 11)
     {
-        for (const auto &cell : m_triangulation.active_cell_iterators())
-            for (const auto &face : cell->face_iterators())
-            {
+        for(const auto& face : m_triangulation.active_face_iterators())
+        {
+            
+//        }
+//        for (const auto &cell : m_triangulation.active_cell_iterators())
+//            for (const auto &face : cell->face_iterators())
+//            {
                 if (face->at_boundary() == true)
                 {
                     if (std::fabs(face->center()[0] - 0.0 ) < 1.0e-9 )
