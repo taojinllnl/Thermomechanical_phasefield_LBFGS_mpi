@@ -6645,6 +6645,12 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
             
             dof_handler_L2.distribute_dofs(fe_L2);
             constraints.clear();
+            if constexpr (is_mpi)
+            {
+                VersionAdapter::cstReinit(constraints,
+                                          m_dof_handler.locally_owned_dofs(),
+                                          DoFTools::extract_locally_relevant_dofs(m_dof_handler));
+            }
             DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
             constraints.close();
             
