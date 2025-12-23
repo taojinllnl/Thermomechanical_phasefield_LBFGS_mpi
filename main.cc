@@ -2594,6 +2594,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
       Assert(false, ExcMessage("The scenario has not been implemented!"));
 
       
+    set_bcs_id();
       
     m_logfile << "\t\tTriangulation:"
               << "\n\t\t\tNumber of active cells: "
@@ -2697,8 +2698,6 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 	AssertThrow(false,
 	            ExcMessage("Selected mesh refinement strategy not implemented!"));
       }
-      
-      set_bcs_id();
   }
 
 
@@ -2792,8 +2791,6 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 	AssertThrow(false,
 	            ExcMessage("Selected mesh refinement strategy not implemented!"));
       }
-      
-      set_bcs_id();
   }
 
   template <typename LATraits, typename Tria>
@@ -2884,8 +2881,6 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 	AssertThrow(false,
 	            ExcMessage("Selected mesh refinement strategy not implemented!"));
       }
-      
-      set_bcs_id();
   }
 
   template <typename LATraits, typename Tria>
@@ -2979,8 +2974,6 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 	AssertThrow(false,
 	            ExcMessage("Selected mesh refinement strategy not implemented!"));
       }
-      
-      set_bcs_id();
   }
 
   template <typename LATraits, typename Tria>
@@ -3093,8 +3086,6 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 	AssertThrow(false,
 	            ExcMessage("Selected mesh refinement strategy not implemented!"));
       }
-      
-      set_bcs_id();
   }
 
   template <typename LATraits, typename Tria>
@@ -3212,8 +3203,6 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 	AssertThrow(false,
 	            ExcMessage("Selected mesh refinement strategy not implemented!"));
       }
-      
-      set_bcs_id();
   }
 
   template <typename LATraits, typename Tria>
@@ -3306,8 +3295,6 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 	AssertThrow(false,
 	            ExcMessage("Selected mesh refinement strategy not implemented!"));
       }
-      
-      set_bcs_id();
   }
 
   template <typename LATraits, typename Tria>
@@ -3402,8 +3389,6 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 	AssertThrow(false,
 	            ExcMessage("Selected mesh refinement strategy not implemented!"));
       }
-      
-      set_bcs_id();
   }
 
   template <typename LATraits, typename Tria>
@@ -3498,8 +3483,6 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 	AssertThrow(false,
 	            ExcMessage("Selected mesh refinement strategy not implemented!"));
       }
-      
-      set_bcs_id();
   }
 
   template <typename LATraits, typename Tria>
@@ -3591,8 +3574,6 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 	AssertThrow(false,
 	            ExcMessage("Selected mesh refinement strategy not implemented!"));
       }
-      
-      set_bcs_id();
   }
 
   template <typename LATraits, typename Tria>
@@ -3703,8 +3684,6 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 	AssertThrow(false,
 	            ExcMessage("Selected mesh refinement strategy not implemented!"));
       }
-      
-      set_bcs_id();
   }
 
   template <typename LATraits, typename Tria>
