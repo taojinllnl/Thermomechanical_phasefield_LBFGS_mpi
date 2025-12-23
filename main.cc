@@ -6626,6 +6626,7 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
                 }
             }
             
+            set_bcs_id();
             setup_system();
             
             dof_handler_L2.distribute_dofs(fe_L2);
