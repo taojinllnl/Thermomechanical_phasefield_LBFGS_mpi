@@ -2641,7 +2641,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 //	        face->set_boundary_id(2);
 //	    }
 //	}
-      set_bcs_id();
+      
 
     m_triangulation.refine_global(m_parameters.m_global_refine_times);
 
@@ -2697,6 +2697,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 	AssertThrow(false,
 	            ExcMessage("Selected mesh refinement strategy not implemented!"));
       }
+      
+      set_bcs_id();
   }
 
 
@@ -2734,7 +2736,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 //	        face->set_boundary_id(3);
 //	    }
 //	}
-      set_bcs_id();
+      
 
     m_triangulation.refine_global(m_parameters.m_global_refine_times);
 
@@ -2790,6 +2792,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 	AssertThrow(false,
 	            ExcMessage("Selected mesh refinement strategy not implemented!"));
       }
+      
+      set_bcs_id();
   }
 
   template <typename LATraits, typename Tria>
@@ -2823,7 +2827,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 //	        face->set_boundary_id(2);
 //	    }
 //	}
-      set_bcs_id();
+      
       
 
     m_triangulation.refine_global(m_parameters.m_global_refine_times);
@@ -2880,6 +2884,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 	AssertThrow(false,
 	            ExcMessage("Selected mesh refinement strategy not implemented!"));
       }
+      
+      set_bcs_id();
   }
 
   template <typename LATraits, typename Tria>
@@ -2917,7 +2923,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 //	    }
 //	}
       
-      set_bcs_id();
+      
 
     m_triangulation.refine_global(m_parameters.m_global_refine_times);
 
@@ -2973,6 +2979,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 	AssertThrow(false,
 	            ExcMessage("Selected mesh refinement strategy not implemented!"));
       }
+      
+      set_bcs_id();
   }
 
   template <typename LATraits, typename Tria>
@@ -3017,7 +3025,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 //	        face->set_boundary_id(4);
 //	    }
 //	}
-      set_bcs_id();
+      
       
     if (m_parameters.m_refinement_strategy == "pre-refine")
       {
@@ -3085,6 +3093,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 	AssertThrow(false,
 	            ExcMessage("Selected mesh refinement strategy not implemented!"));
       }
+      
+      set_bcs_id();
   }
 
   template <typename LATraits, typename Tria>
@@ -3130,7 +3140,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 //	    }
 //	}
       
-      set_bcs_id();
+      
 
     if (m_parameters.m_refinement_strategy == "pre-refine")
       {
@@ -3202,6 +3212,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 	AssertThrow(false,
 	            ExcMessage("Selected mesh refinement strategy not implemented!"));
       }
+      
+      set_bcs_id();
   }
 
   template <typename LATraits, typename Tria>
@@ -3252,7 +3264,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 //	        face->set_boundary_id(6);
 //	    }
 //	}
-      set_bcs_id();
+      
 
     if (m_parameters.m_refinement_strategy == "pre-refine")
       {
@@ -3294,6 +3306,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 	AssertThrow(false,
 	            ExcMessage("Selected mesh refinement strategy not implemented!"));
       }
+      
+      set_bcs_id();
   }
 
   template <typename LATraits, typename Tria>
@@ -3344,7 +3358,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 //	        face->set_boundary_id(6);
 //	    }
 //	}
-      set_bcs_id();
+      
 
     if (m_parameters.m_refinement_strategy == "pre-refine")
       {
@@ -3388,6 +3402,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 	AssertThrow(false,
 	            ExcMessage("Selected mesh refinement strategy not implemented!"));
       }
+      
+      set_bcs_id();
   }
 
   template <typename LATraits, typename Tria>
@@ -3438,7 +3454,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 //	        face->set_boundary_id(6);
 //	    }
 //	}
-      set_bcs_id();
+      
 
     if (m_parameters.m_refinement_strategy == "pre-refine")
       {
@@ -3482,6 +3498,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 	AssertThrow(false,
 	            ExcMessage("Selected mesh refinement strategy not implemented!"));
       }
+      
+      set_bcs_id();
   }
 
   template <typename LATraits, typename Tria>
@@ -3532,7 +3550,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 //	        face->set_boundary_id(6);
 //	    }
 //	}
-      set_bcs_id();
+      
 
     if (m_parameters.m_refinement_strategy == "pre-refine")
       {
@@ -3573,6 +3591,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 	AssertThrow(false,
 	            ExcMessage("Selected mesh refinement strategy not implemented!"));
       }
+      
+      set_bcs_id();
   }
 
   template <typename LATraits, typename Tria>
@@ -3606,7 +3626,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 //	        face->set_boundary_id(3);
 //	    }
 //	}
-      set_bcs_id();
+      
 
     m_triangulation.refine_global(m_parameters.m_global_refine_times);
 
@@ -3683,6 +3703,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 	AssertThrow(false,
 	            ExcMessage("Selected mesh refinement strategy not implemented!"));
       }
+      
+      set_bcs_id();
   }
 
   template <typename LATraits, typename Tria>
