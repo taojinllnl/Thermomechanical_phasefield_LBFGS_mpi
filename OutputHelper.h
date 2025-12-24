@@ -75,6 +75,7 @@ private:
     
     void __heatFluxL2(dealii::DataOut<dim>&         data_out,
                       dealii::DoFHandler<dim>&      dof_handler_L2,
+                      dealii::DoFHandler<dim>& dof_handler_L2_flux,
                       dealii::AffineConstraints<double>&    constraints,
                       const unsigned int polyDegree,
                       const CellDataStorage& qPntHistory) const;
@@ -294,6 +295,7 @@ void
 OutputHelper<LATraits, Tria, PointHistory>
 ::__heatFluxL2(dealii::DataOut<dim>& data_out,
                dealii::DoFHandler<dim>& dof_handler_L2,
+               dealii::DoFHandler<dim>& dof_handler_L2_flux,
                dealii::AffineConstraints<double>&  constraints,
                const unsigned int polyDegree,
                const CellDataStorage& qPntHistory) const
@@ -373,7 +375,7 @@ OutputHelper<LATraits, Tria, PointHistory>
 ////        heat_flux_L2_list[2] = 0;
 //    }
     
-    DoFHandler<dim> dof_handler_L2_flux(__tria);
+    
     FESystem<dim>   fe_flux_L2(FE_Q<dim>(polyDegree), dim);
     dof_handler_L2_flux.distribute_dofs(fe_flux_L2);
     std::vector<DataComponentInterpretation::DataComponentInterpretation>
@@ -569,8 +571,10 @@ void OutputHelper<LATraits, Tria, PointHistory>
                polyDegree,
                qPntHistory);
     
+    DoFHandler<dim> dof_handler_L2_flux(__tria);
     __heatFluxL2(data_out,
                  dof_handler_L2,
+                 dof_handler_L2_flux,
                  constraints,
                  polyDegree,
                  qPntHistory);
