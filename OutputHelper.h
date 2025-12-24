@@ -248,6 +248,7 @@ OutputHelper<LATraits, Tria, PointHistory>
         for (unsigned int j = i; j < dim; ++j)
         {
             typename LATraits::VectorBlock stress_field_L2;
+            typename LATraits::VectorBlock stress_field_L2_rele;
             
             if constexpr (is_mpi)
             {
@@ -256,8 +257,10 @@ OutputHelper<LATraits, Tria, PointHistory>
                     DoFTools::extract_locally_relevant_dofs(dof_handler_L2);
                 
                 stress_field_L2.reinit(locally_owned_dofs,
-                                       locally_relevant_dofs,
                                        *__mpiInfo.mpiCommPtr());
+                stress_field_L2_rele.reinit(locally_owned_dofs,
+                                            locally_relevant_dofs,
+                                            *__mpiInfo.mpiCommPtr());
             }
             else
             {
@@ -277,7 +280,10 @@ OutputHelper<LATraits, Tria, PointHistory>
                                  stress_field_L2);
             
             if constexpr (is_mpi)
-                stress_field_L2.update_ghost_values();
+            {
+                stress_field_L2_rele = stress_field_L2;
+                stress_field_L2_rele.update_ghost_values();
+            }
             
             const std::string stress_name =
             "Cauchy_stress_" + std::to_string(i + 1) + std::to_string(j + 1) + "_L2";
