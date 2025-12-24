@@ -263,12 +263,14 @@ OutputHelper<LATraits, Tria, PointHistory>
                 stress_field_L2.reinit(dof_handler_L2.n_dofs());
             }
             
-            VectorTools
-            ::project(mapping,
-                      dof_handler_L2,
-                      constraints,
-                      __qf_cell,
-                      [&qPntHistory, i, j](const auto &cell, const unsigned int q) -> double {
+            VectorTools::project(mapping,
+                                 dof_handler_L2,
+                                 constraints,
+                                 __qf_cell,
+                                 [&qPntHistory, i, j](const auto &cell, const unsigned int q) -> double {
+                if constexpr (is_mpi)
+                    if (!cell->is_locally_owned()) 
+                        return 0.0;
                 return qPntHistory.get_data(cell)[q]->get_cauchy_stress()[i][j];
             },
                                  stress_field_L2);
@@ -329,6 +331,9 @@ OutputHelper<LATraits, Tria, PointHistory>
                              [&] (const typename DoFHandler<dim>::active_cell_iterator & cell,
                                   const unsigned int q) -> double
                              {
+            if constexpr (is_mpi)
+                if (!cell->is_locally_owned())
+                    return 0.0;
             return qPntHistory.get_data(cell)[q]->get_heat_flux()[i];
         },
                              heat_flux_L2_list[i]);

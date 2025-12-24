@@ -6492,7 +6492,7 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
         for (const auto &cell : m_dof_handler.active_cell_iterators())
         {
             if constexpr (is_mpi) {
-                if (!cell->is_locally_owned()) continue;;
+                if (!cell->is_locally_owned()) continue;
             }
             
             cell->get_dof_indices(local_dof_indices);
@@ -6525,7 +6525,6 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
             }
         }
         
-        // TODO:
         for (const auto &cell : m_dof_handler.active_cell_iterators())
         {
             if constexpr (is_mpi) {
