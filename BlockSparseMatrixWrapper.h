@@ -58,10 +58,10 @@ public:
     
     
     template <int dim, int spacedim=dim>
-    void init(::dealii::DoFHandler<dim, spacedim>& dof_handler,
-              const ::dealii::AffineConstraints<double>&  constraints = {},
-              const bool keep_constrained_dofs = true,
-              const ::dealii::types::subdomain_id subdomain_id = ::dealii::numbers::invalid_subdomain_id );
+    void initalize(::dealii::DoFHandler<dim, spacedim>& dof_handler,
+                   const ::dealii::AffineConstraints<double>&  constraints = {},
+                   const bool keep_constrained_dofs = true,
+                   const ::dealii::types::subdomain_id subdomain_id = ::dealii::numbers::invalid_subdomain_id );
     
     
     BlockSparseMatrixWrapper& operator= (const BlockSparseMatrixWrapper&  m);
@@ -78,10 +78,10 @@ template <typename TraitsType>
 template <int dim, int spacedim>
 void
 BlockSparseMatrixWrapper<TraitsType>
-::init(::dealii::DoFHandler<dim, spacedim>&       dof_handler,
-       const ::dealii::AffineConstraints<double>& constraints,
-       const bool                               keep_constrained_dofs,
-       const ::dealii::types::subdomain_id        subdomain_id)
+::initalize(::dealii::DoFHandler<dim, spacedim>&       dof_handler,
+            const ::dealii::AffineConstraints<double>& constraints,
+            const bool                                 keep_constrained_dofs,
+            const ::dealii::types::subdomain_id        subdomain_id)
 {
     using namespace dealii;
     
@@ -115,24 +115,26 @@ BlockSparseMatrixWrapper<TraitsType>
         /*  *  *  *   *   *   *   *   *  MPI  *   *   *   *   *   *   *   *   */
         const std::vector<IndexSet>& ownedPartition = *__blockDesc.ownedPartition();
         const std::vector<IndexSet>& relevPartition = *__blockDesc.relevantPartition();
+        const IndexSet& locallOwnedDoFs = dof_handler.locally_owned_dofs();
         const IndexSet& locallyRelevantDoFs = *__blockDesc.localRelevantPartition();
         
         BlockDynamicSparsityPattern dsp(relevPartition);
-        
         DoFTools::make_sparsity_pattern(dof_handler,
                                         __coupling,
                                         dsp, constraints,
                                         keep_constrained_dofs,
                                         subdomain_id);
-        __sparsity_pattern.copy_from(dsp);
+        
         
         
         SparsityTools::distribute_sparsity_pattern(dsp,
-                                                   ownedPartition,
+                                                   locallOwnedDoFs,
                                                    *__mpiInfo.mpiCommPtr(),
                                                    locallyRelevantDoFs);
         
-
+        
+        
+        __sparsity_pattern.copy_from(dsp);
         TraitsType::Matrix::reinit(ownedPartition,
                                    dsp,
                                    *__mpiInfo.mpiCommPtr());
