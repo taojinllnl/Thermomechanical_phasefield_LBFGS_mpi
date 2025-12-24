@@ -10,6 +10,7 @@
 #include "Traits.h"
 #include "BlockVectorWrapper.h"
 #include "MPIInfo.h"
+#include "VersionAdapter.h"
 
 #include <memory>
 #include <array>
@@ -281,6 +282,7 @@ OutputHelper<LATraits, Tria, PointHistory>
             
             if constexpr (is_mpi)
             {
+                stress_field_L2.compress(dealii::VectorOperation::insert);
                 stress_field_L2_rele = stress_field_L2;
                 stress_field_L2_rele.update_ghost_values();
             }
@@ -288,10 +290,17 @@ OutputHelper<LATraits, Tria, PointHistory>
             const std::string stress_name =
             "Cauchy_stress_" + std::to_string(i + 1) + std::to_string(j + 1) + "_L2";
             
-            data_out.add_data_vector(dof_handler_L2,
-                                     stress_field_L2,
-                                     stress_name,
-                                     __data_component_L2);
+            if constexpr (is_mpi){
+                data_out.add_data_vector(dof_handler_L2,
+                                         stress_field_L2_rele,
+                                         stress_name,
+                                         __data_component_L2);
+            } else {
+                data_out.add_data_vector(dof_handler_L2,
+                                         stress_field_L2,
+                                         stress_name,
+                                         __data_component_L2);
+            }
         }
 }
 
@@ -310,7 +319,7 @@ OutputHelper<LATraits, Tria, PointHistory>
     // Heat flux L2 projection
     
     std::array<typename LATraits::VectorBlock, dim> heat_flux_L2_list;
-    
+    std::array<typename LATraits::VectorBlock, dim> heat_flux_L2_rele_list;
 //    Vector<double> heat_flux_field_L2_x;
 //    Vector<double> heat_flux_field_L2_y;
 //    Vector<double> heat_flux_field_L2_z;
@@ -325,8 +334,10 @@ OutputHelper<LATraits, Tria, PointHistory>
                 DoFTools::extract_locally_relevant_dofs(dof_handler_L2);
             
             heat_flux_L2_list[i].reinit(locally_owned_dofs,
-                                        locally_relevant_dofs,
                                         *__mpiInfo.mpiCommPtr());
+            heat_flux_L2_rele_list[i].reinit(locally_owned_dofs,
+                                             locally_relevant_dofs,
+                                             *__mpiInfo.mpiCommPtr());
         } else {
             heat_flux_L2_list[i].reinit(dof_handler_L2.n_dofs());
         }
@@ -346,19 +357,30 @@ OutputHelper<LATraits, Tria, PointHistory>
         },
                              heat_flux_L2_list[i]);
         
-        if constexpr (is_mpi)
-            heat_flux_L2_list[i].update_ghost_values();
+        if constexpr (is_mpi) {
+            heat_flux_L2_list[i].compress(dealii::VectorOperation::insert);
+            heat_flux_L2_rele_list[i] = heat_flux_L2_list[i];
+            heat_flux_L2_rele_list[i].update_ghost_values();
+        }
         
         std::string heat_flux_name = "Heat_flux_" + std::to_string(i+1) + "_L2";
+        if constexpr (is_mpi) {
+            data_out.add_data_vector(dof_handler_L2,
+                                     heat_flux_L2_rele_list[i],
+                                     heat_flux_name,
+                                     __data_component_L2);
+            
+        } else {
         
-        data_out.add_data_vector(dof_handler_L2,
-                                 heat_flux_L2_list[i],
-                                 heat_flux_name,
-                                 __data_component_L2);
-        
+            data_out.add_data_vector(dof_handler_L2,
+                                     heat_flux_L2_list[i],
+                                     heat_flux_name,
+                                     __data_component_L2);
+            
+        }
 //        heat_flux_L2_list[i] = heat_flux_field_L2;
     }
-    
+
 //    // For 2D problems, let the flux in the third direction is zero
 //    if (dim == 2)
 //    {
@@ -389,53 +411,52 @@ OutputHelper<LATraits, Tria, PointHistory>
                                           DataComponentInterpretation::component_is_part_of_vector);
     
     typename LATraits::VectorBlock heat_flux_field_L2;
+    typename LATraits::VectorBlock heat_flux_field_L2_rele;
     
     if constexpr (is_mpi){
         
         const IndexSet& owned_dofs = dof_handler_L2_flux.locally_owned_dofs();
         const IndexSet  relevant_dofs =
-            DoFTools::extract_locally_relevant_dofs(dof_handler_L2_flux);
+        DoFTools::extract_locally_relevant_dofs(dof_handler_L2_flux);
         
         
         heat_flux_field_L2.reinit(owned_dofs,
-                                  relevant_dofs,
                                   *__mpiInfo.mpiCommPtr());
+        heat_flux_field_L2_rele.reinit(owned_dofs,
+                                       relevant_dofs,
+                                       *__mpiInfo.mpiCommPtr());
         
-        // copy values by dim and indices
-//        for (unsigned int d = 0; d < dim; ++d)
-//            for (auto i = owned_dofs.begin(); i != owned_dofs.end(); ++i)
-//                heat_flux_field_L2(d + (*i) * dim) = heat_flux_L2_list[d](*i);
-//        
-//        heat_flux_field_L2.compress(dealii::VectorOperation::insert);
-//        
-//        heat_flux_field_L2.update_ghost_values();
-//        
+        const unsigned int dofs_per_cell_scalar = FE_Q<dim>(polyDegree).n_dofs_per_cell();
+        const unsigned int dofs_per_cell_vector = fe_flux_L2.n_dofs_per_cell();
         
-        std::vector<types::global_dof_index> scalar_dof_indices(1);
-        std::vector<types::global_dof_index> vector_dof_indices(dim);
+        std::vector<types::global_dof_index> local_dof_indices_scalar(dofs_per_cell_scalar);
+        std::vector<types::global_dof_index> local_dof_indices_vector(dofs_per_cell_vector);
+        
+        auto cell_scalar = dof_handler_L2.begin_active();
+        auto cell_vector = dof_handler_L2_flux.begin_active();
+        auto end_it      = dof_handler_L2.end();
+        
+        for (; cell_scalar != end_it; ++cell_scalar, ++cell_vector) {
+            if (cell_scalar->is_locally_owned()) 
+            {
+            
+                cell_scalar->get_dof_indices(local_dof_indices_scalar);
+                cell_vector->get_dof_indices(local_dof_indices_vector);
+                
+                for (unsigned int i = 0; i < dofs_per_cell_scalar; ++i) {
+                    for (unsigned int d = 0; d < dim; ++d) {
 
-        for (auto cell = dof_handler_L2.begin_active();
-             cell != dof_handler_L2.end(); ++cell)
-        {
-          if (!cell->is_locally_owned())
-            continue;
-
-          auto flux_cell = typename DoFHandler<dim>::active_cell_iterator(
-              &dof_handler_L2_flux.get_triangulation(),
-              cell->level(),
-              cell->index(),
-              &dof_handler_L2_flux);
-
-          cell->get_dof_indices(scalar_dof_indices);
-          flux_cell->get_dof_indices(vector_dof_indices);
-
-          for (unsigned int d = 0; d < dim; ++d)
-            heat_flux_field_L2(vector_dof_indices[d]) =
-                heat_flux_L2_list[d](scalar_dof_indices[0]);
+                        const double value = heat_flux_L2_rele_list[d](local_dof_indices_scalar[i]);
+                        heat_flux_field_L2(local_dof_indices_vector[i * dim + d]) =  value;
+                    }
+                }
+            }
         }
-
+        
         heat_flux_field_L2.compress(dealii::VectorOperation::insert);
-        heat_flux_field_L2.update_ghost_values();
+        
+        heat_flux_field_L2_rele = heat_flux_field_L2;
+        heat_flux_field_L2_rele.update_ghost_values();
         
         
     } else {
@@ -451,11 +472,17 @@ OutputHelper<LATraits, Tria, PointHistory>
     
     
     std::vector<std::string> solution_name_flux(dim, "Heat_flux_vector");
-    data_out.add_data_vector(dof_handler_L2_flux,
-                             heat_flux_field_L2,
-                             solution_name_flux,
-                             data_component_interpretation_flux_L2);
-    
+    if(is_mpi){
+        data_out.add_data_vector(dof_handler_L2_flux,
+                                 heat_flux_field_L2_rele,
+                                 solution_name_flux,
+                                 data_component_interpretation_flux_L2);
+    } else {
+        data_out.add_data_vector(dof_handler_L2_flux,
+                                 heat_flux_field_L2,
+                                 solution_name_flux,
+                                 data_component_interpretation_flux_L2);
+    }
 }
 
 
@@ -570,13 +597,15 @@ void OutputHelper<LATraits, Tria, PointHistory>
     
     
     __solution(data_out, solution);
-    
+
+
     __stressL2(data_out,
                dof_handler_L2,
                constraints,
                polyDegree,
                qPntHistory);
-    
+
+    std::cout << "__heatFluxL2; -->" << std::endl;
     DoFHandler<dim> dof_handler_L2_flux(__tria);
     __heatFluxL2(data_out,
                  dof_handler_L2,
@@ -584,10 +613,10 @@ void OutputHelper<LATraits, Tria, PointHistory>
                  constraints,
                  polyDegree,
                  qPntHistory);
-    
-    
+    std::cout << "__heatFluxL2; -->|" << std::endl;
+    std::cout << "__partitioning; -->" << std::endl;
     __partitioning(data_out);
-    
+    std::cout << "__partitioning; -->|" << std::endl;
     
     data_out.build_patches(polyDegree);
     
