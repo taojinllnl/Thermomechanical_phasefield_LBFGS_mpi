@@ -1779,6 +1779,7 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
   {
     BVector solution_total(m_solution);
     solution_total += solution_delta;
+      solution_total.updateRelevance();
     return solution_total;
   }
 
