@@ -13,12 +13,17 @@ using namespace dealii;
 void VersionAdapter
 ::cstReinit(AffineConstraints<double>& constraints,
             const IndexSet& locally_owned_dofs,
-            const IndexSet& locally_relevant_dofs)
+            const IndexSet& locally_relevant_dofs,
+            const MPI_Comm& mpiComm)
 {
 #  if DEAL_II_VERSION_GTE(9, 6, 0)
     constraints.reinit(locally_owned_dofs, locally_relevant_dofs);
 #  else
     constraints.reinit(locally_relevant_dofs);
 #  endif
+    
+    constraints.make_consistent_in_parallel(locally_owned_dofs,
+                                            locally_relevant_dofs,
+                                            mpiComm);
 }
 

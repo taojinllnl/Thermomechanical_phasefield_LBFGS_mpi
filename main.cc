@@ -3705,7 +3705,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
       {
           VersionAdapter::cstReinit(m_constraints,
                                     m_dof_handler.locally_owned_dofs(),
-                                    DoFTools::extract_locally_relevant_dofs(m_dof_handler));
+                                    DoFTools::extract_locally_relevant_dofs(m_dof_handler),
+                                    *m_mpiInfo.mpiCommPtr());
       }
     DoFTools::make_hanging_node_constraints(m_dof_handler, m_constraints);
     m_constraints.close();
@@ -3756,8 +3757,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 //    m_system_rhs.reinit(m_dofs_per_block);
 //    m_solution.reinit(m_dofs_per_block);
 
-      
-      m_tangent_matrix.init(m_dof_handler, m_constraints, false);
+      m_tangent_matrix.initalize(m_dof_handler, m_constraints, false);
       
       m_system_rhs.initalize();
       m_solution.initalize();
@@ -4071,7 +4071,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
           {
               VersionAdapter::cstReinit(m_constraints,
                                         m_dof_handler.locally_owned_dofs(),
-                                        DoFTools::extract_locally_relevant_dofs(m_dof_handler));
+                                        DoFTools::extract_locally_relevant_dofs(m_dof_handler),
+                                        *m_mpiInfo.mpiCommPtr());
           }
           DoFTools::make_hanging_node_constraints(m_dof_handler,
                                                   m_constraints);
@@ -4610,19 +4611,17 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
               {
                   VersionAdapter::cstReinit(m_constraints,
                                             m_dof_handler.locally_owned_dofs(),
-                                            DoFTools::extract_locally_relevant_dofs(m_dof_handler));
+                                            DoFTools::extract_locally_relevant_dofs(m_dof_handler),
+                                            *m_mpiInfo.mpiCommPtr());
               }
               m_constraints.copy_from(homogeneous_constraints);
           }
       }
       
-      if constexpr (is_mpi)
-      {
-          m_constraints.make_consistent_in_parallel(m_dof_handler.locally_owned_dofs(),
-                                                    *m_blocks_desc.localRelevantPartition(),
-                                                    *m_mpiInfo.mpiCommPtr());
-      }
+      
+      
       m_constraints.close();
+      
   }
 
   template <typename LATraits, typename Tria>
@@ -6574,7 +6573,8 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
             {
                 VersionAdapter::cstReinit(constraints,
                                           m_dof_handler.locally_owned_dofs(),
-                                          DoFTools::extract_locally_relevant_dofs(m_dof_handler));
+                                          DoFTools::extract_locally_relevant_dofs(m_dof_handler),
+                                          *m_mpiInfo.mpiCommPtr());
             }
             DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
             constraints.close();
@@ -6634,7 +6634,8 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
             {
                 VersionAdapter::cstReinit(constraints,
                                           m_dof_handler.locally_owned_dofs(),
-                                          DoFTools::extract_locally_relevant_dofs(m_dof_handler));
+                                          DoFTools::extract_locally_relevant_dofs(m_dof_handler),
+                                          *m_mpiInfo.mpiCommPtr());
             }
             DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
             constraints.close();

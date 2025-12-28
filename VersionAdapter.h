@@ -17,7 +17,8 @@ class VersionAdapter
 public:
     static void cstReinit(dealii::AffineConstraints<double>& constraints,
                           const dealii::IndexSet& locally_owned_dofs,
-                          const dealii::IndexSet& locally_relevant_dofs);
+                          const dealii::IndexSet& locally_relevant_dofs,
+                          const MPI_Comm& mpiComm);
 };
 
 

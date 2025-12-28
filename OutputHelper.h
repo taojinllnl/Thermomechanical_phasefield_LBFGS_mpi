@@ -605,7 +605,6 @@ void OutputHelper<LATraits, Tria, PointHistory>
                polyDegree,
                qPntHistory);
 
-    std::cout << "__heatFluxL2; -->" << std::endl;
     DoFHandler<dim> dof_handler_L2_flux(__tria);
     __heatFluxL2(data_out,
                  dof_handler_L2,
@@ -613,10 +612,8 @@ void OutputHelper<LATraits, Tria, PointHistory>
                  constraints,
                  polyDegree,
                  qPntHistory);
-    std::cout << "__heatFluxL2; -->|" << std::endl;
-    std::cout << "__partitioning; -->" << std::endl;
+
     __partitioning(data_out);
-    std::cout << "__partitioning; -->|" << std::endl;
     
     data_out.build_patches(polyDegree);
     
