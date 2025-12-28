@@ -72,10 +72,10 @@ subsection Scenario
   set mpi type = Serial
   
   # Configuration directory
-  set Config dir = ../Case_6/pre_refine/
+  set Config dir = ../Case_5/pre_refine/
   
   # Output directory
-  set Output dir = ./output/Case_6/pre_refine/
+  set Output dir = ./output/Case_5/pre_refine/
 end
 
 subsection Finite element system

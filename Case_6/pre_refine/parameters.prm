@@ -79,7 +79,7 @@ subsection Scenario
   set Reaction force face ID = 0
   
   # underlying mpi type: (PETSc|Trilinos|Serial)
-  set mpi type = Serial
+  set mpi type = Trilinos
   
   # Configuration directory
   set Config dir = ../Case_6/pre_refine/
