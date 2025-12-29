@@ -1555,7 +1555,7 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, Tria>::BVector;
     BVector error_ud(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
       error_ud.initalize();
       
-      error_ud.copyAndRemoveCst(m_system_rhs, m_constraints, m_dof_handler);
+      error_ud.copyAndRemoveCst(soln_update, m_constraints, m_dof_handler);
       // TODO: verify if the following operation is the same to the former one
 //      error_ud.base() = m_system_rhs.base();
 //      m_constraints.set_zero(error_ud.base());
