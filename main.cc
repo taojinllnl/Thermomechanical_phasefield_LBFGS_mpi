@@ -5303,11 +5303,11 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
       
     update_qph_incremental(solution_delta_trial, m_solution, false);
 
-    BVector g_new(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
+    BVector g_new(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
       g_new.initalize();
     assemble_system_rhs_LBFGS_parallel(m_solution, g_new);
 
-    BVector y_old(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
+    BVector y_old(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
       y_old.initalize();
 
     y_old.base() = g_new.base() - g_old.base();
@@ -5638,7 +5638,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
         
     update_qph_incremental(solution_delta_trial, m_solution, false);
 
-        BVector system_rhs(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
+        BVector system_rhs(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
         system_rhs.initalize();
     assemble_system_rhs_LBFGS_parallel(m_solution, system_rhs);
     //m_constraints.condense(system_rhs);
@@ -5666,7 +5666,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
     update_qph_incremental(solution_delta_trial, m_solution, false);
 
 //    BVector system_rhs(m_dofs_per_block);
-        BVector system_rhs(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
+        BVector system_rhs(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
         system_rhs.initalize();
     assemble_system_rhs_LBFGS_parallel(m_solution, system_rhs);
     //m_constraints.condense(system_rhs);
@@ -5727,7 +5727,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
   solve_nonlinear_timestep_LBFGS(BVector & solution_delta,
 				 BVector & LBFGS_update_refine)
   {
-    BVector LBFGS_update(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
+    BVector LBFGS_update(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
       LBFGS_update.initalize();
 //    LBFGS_update = 0.0;
 
@@ -5743,13 +5743,13 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
 
     unsigned int LBFGS_iteration = 0;
 
-    BVector LBFGS_r_vector(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
+    BVector LBFGS_r_vector(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
       LBFGS_r_vector.initalize();
-    BVector LBFGS_y_vector(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
+    BVector LBFGS_y_vector(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
       LBFGS_y_vector.initalize();
-    BVector LBFGS_q_vector(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
+    BVector LBFGS_q_vector(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
       LBFGS_q_vector.initalize();
-    BVector LBFGS_s_vector(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
+    BVector LBFGS_s_vector(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
       LBFGS_s_vector.initalize();
     std::list<std::pair< std::pair<BVector,
                                    BVector>,
