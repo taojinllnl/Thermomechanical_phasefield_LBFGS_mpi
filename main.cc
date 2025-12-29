@@ -2679,6 +2679,9 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 	    initiation_point_refine_unfinished = false;
 	    for (const auto &cell : m_triangulation.active_cell_iterators())
 	      {
+              if constexpr (is_mpi) {
+                  if (!cell->is_locally_owned()) continue;
+              }
 		if (   std::fabs(cell->center()[1] - 0.0) < 0.05
 		    && std::fabs(cell->center()[0] - 0.5) < 0.05)
 		  {
@@ -2780,6 +2783,9 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 	    initiation_point_refine_unfinished = false;
 	    for (const auto &cell : m_triangulation.active_cell_iterators())
 	      {
+              if constexpr (is_mpi) {
+                  if (!cell->is_locally_owned()) continue;
+              }
 		if (    std::fabs(cell->center()[0] - 0.5) < 0.025
 		     && cell->center()[1] < 0.0 && cell->center()[1] > -0.025)
 		  {
@@ -2877,6 +2883,9 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 	    initiation_point_refine_unfinished = false;
 	    for (const auto &cell : m_triangulation.active_cell_iterators())
 	      {
+              if constexpr (is_mpi) {
+                  if (!cell->is_locally_owned()) continue;
+              }
 		if (    std::fabs(cell->center()[0] - 0.5) < 0.025
 		     && std::fabs(cell->center()[1] - 0.5) < 0.025 )
 		  {
@@ -2977,6 +2986,9 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 	    initiation_point_refine_unfinished = false;
 	    for (const auto &cell : m_triangulation.active_cell_iterators())
 	      {
+              if constexpr (is_mpi) {
+                  if (!cell->is_locally_owned()) continue;
+              }
 		if (    std::fabs(cell->center()[0] - 0.5) < 0.025
 		     && cell->center()[1] < 0.5 && cell->center()[1] > 0.475 )
 		  {
@@ -3062,6 +3074,9 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 	    initiation_point_refine_unfinished = false;
 	    for (const auto &cell : m_triangulation.active_cell_iterators())
 	      {
+              if constexpr (is_mpi) {
+                  if (!cell->is_locally_owned()) continue;
+              }
 		if (   (cell->center()[0] >  0.0 && cell->center()[0] <  3.0)
 		    || (cell->center()[1] >  0.0 && cell->center()[1] <  3.0)
 		    )
@@ -3100,6 +3115,9 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
               initiation_point_refine_unfinished = false;
               for (const auto &cell : m_triangulation.active_cell_iterators())
               {
+                  if constexpr (is_mpi) {
+                      if (!cell->is_locally_owned()) continue;
+                  }
                   if (   (cell->center()[0] >  0.0 && cell->center()[0] <  0.13)
                       || (cell->center()[1] >  0.0 && cell->center()[1] <  0.13)
                       )
@@ -3193,6 +3211,9 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 	    initiation_point_refine_unfinished = false;
 	    for (const auto &cell : m_triangulation.active_cell_iterators())
 	      {
+     if constexpr (is_mpi) {
+         if (!cell->is_locally_owned()) continue;
+     }
 		if (   (cell->center()[0] >  0.0 && cell->center()[0] <  3.0)
 		    || (cell->center()[1] >  0.0 && cell->center()[1] <  3.0)
 		    || (cell->center()[1] >  width - 3.0)
@@ -3232,6 +3253,9 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 	    initiation_point_refine_unfinished = false;
 	    for (const auto &cell : m_triangulation.active_cell_iterators())
 	      {
+              if constexpr (is_mpi) {
+                  if (!cell->is_locally_owned()) continue;
+              }
 		if (   (cell->center()[0] >  0.0 && cell->center()[0] <  0.13)
 		    || (cell->center()[1] >  0.0 && cell->center()[1] <  0.13)
 		    || (cell->center()[1] >  width - 0.13)
@@ -3332,6 +3356,9 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 	    initiation_point_refine_unfinished = false;
 	    for (const auto &cell : m_triangulation.active_cell_iterators())
 	      {
+              if constexpr (is_mpi) {
+                  if (!cell->is_locally_owned()) continue;
+              }
 		if (   (cell->center()[0] >  0.0 && cell->center()[0] <  0.13)
 		    || (cell->center()[1] >  0.0 && cell->center()[1] <  0.13)
 		    )
@@ -3431,6 +3458,9 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 	    initiation_point_refine_unfinished = false;
 	    for (const auto &cell : m_triangulation.active_cell_iterators())
 	      {
+              if constexpr (is_mpi) {
+                  if (!cell->is_locally_owned()) continue;
+              }
 		if (   (cell->center()[0] >  0.0 && cell->center()[0] <  0.13)
 		    || (cell->center()[1] >  0.0 && cell->center()[1] <  0.13)
 		    || (cell->center()[2] >  0.0 && cell->center()[2] <  0.13)
@@ -3532,6 +3562,9 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 	    initiation_point_refine_unfinished = false;
 	    for (const auto &cell : m_triangulation.active_cell_iterators())
 	      {
+              if constexpr (is_mpi) {
+                  if (!cell->is_locally_owned()) continue;
+              }
 		if (   (cell->center()[0] >  0.0 && cell->center()[0] <  0.13)
 		    || (cell->center()[1] >  0.0 && cell->center()[1] <  0.13)
 		    || (cell->center()[2] >  0.0 && cell->center()[2] <  0.13)
@@ -3633,6 +3666,9 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 	    initiation_point_refine_unfinished = false;
 	    for (const auto &cell : m_triangulation.active_cell_iterators())
 	      {
+              if constexpr (is_mpi) {
+                  if (!cell->is_locally_owned()) continue;
+              }
 		if (  (cell->center()[1] >  0.0 && cell->center()[1] <  0.13)
 		    )
 		  {
@@ -3712,6 +3748,9 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 	    initiation_point_refine_unfinished = false;
 	    for (const auto &cell : m_triangulation.active_cell_iterators())
 	      {
+              if constexpr (is_mpi) {
+                  if (!cell->is_locally_owned()) continue;
+              }
 		double distance2center = std::sqrt( cell->center()[0]*cell->center()[0]
 					          + cell->center()[1]*cell->center()[1]
 						  + cell->center()[2]*cell->center()[2]
@@ -3752,6 +3791,9 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 	    initiation_point_refine_unfinished = false;
 	    for (const auto &cell : m_triangulation.active_cell_iterators())
 	      {
+              if constexpr (is_mpi) {
+                  if (!cell->is_locally_owned()) continue;
+              }
 		double distance2center = std::sqrt( cell->center()[0]*cell->center()[0]
 							          + cell->center()[1]*cell->center()[1]
 								  + cell->center()[2]*cell->center()[2]
