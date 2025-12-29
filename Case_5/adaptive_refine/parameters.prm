@@ -32,7 +32,7 @@ subsection Scenario
   set Linear solver type = Direct
   
   # Mesh refinement strategy (pre-refine or adaptive-refine)
-  set Mesh refinement strategy = pre-refine
+  set Mesh refinement strategy = adaptive-refine
   
   # Number of vectors used in LBFGS
   set LBFGS m = 40
@@ -69,13 +69,13 @@ subsection Scenario
   set Reaction force face ID = 0
   
   # underlying mpi type: (PETSc|Trilinos|Serial)
-  set mpi type = Serial
+  set mpi type = Trilinos
   
   # Configuration directory
-  set Config dir = ../Case_5/pre_refine/
+  set Config dir = ../Case_5/adaptive_refine/
   
   # Output directory
-  set Output dir = ./output/Case_5/pre_refine/
+  set Output dir = ./output/Case_5/adaptive_refine/
 end
 
 subsection Finite element system
