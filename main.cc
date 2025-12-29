@@ -2656,6 +2656,9 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 	  {
 	    for (const auto &cell : m_triangulation.active_cell_iterators())
 	      {
+              if constexpr (is_mpi) {
+                  if (!cell->is_locally_owned()) continue;
+              }
 		if (   std::fabs(cell->center()[1]) < 0.01
 		    && cell->center()[0] > 0.495)
 		  {
@@ -2760,6 +2763,9 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 	  {
 	    for (const auto &cell : m_triangulation.active_cell_iterators())
 	      {
+              if constexpr (is_mpi) {
+                  if (!cell->is_locally_owned()) continue;
+              }
 		if (    (cell->center()[0] > 0.45)
 		     && (cell->center()[1] < 0.05) )
 		  {
@@ -2860,6 +2866,9 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 	  {
 	    for (const auto &cell : m_triangulation.active_cell_iterators())
 	      {
+              if constexpr (is_mpi) {
+                  if (!cell->is_locally_owned()) continue;
+              }
 		if (    (std::fabs(cell->center()[1] - 0.5) < 0.025)
 		     && (cell->center()[0] > 0.475) )
 		  {
@@ -2963,6 +2972,9 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 	  {
 	    for (const auto &cell : m_triangulation.active_cell_iterators())
 	      {
+              if constexpr (is_mpi) {
+                  if (!cell->is_locally_owned()) continue;
+              }
 		if (    (cell->center()[0] > 0.475)
 		     && (cell->center()[1] < 0.525) )
 		  {
