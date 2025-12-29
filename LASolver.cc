@@ -170,11 +170,11 @@ LASolver<LATraits>::__directSolve(BVector & LBFGS_r_vector,
             prec.initialize(tangent_matrix.block(ithGroup, ithGroup));
             
             
-            InverseMatrix A_direct(tangent_matrix.block(__u_group_ID, __u_group_ID),
+            InverseMatrix A_direct(tangent_matrix.block(ithGroup, ithGroup),
                                    prec);
             A_direct.vmult(solver_control,
-                           LBFGS_r_vector.block(__u_group_ID),
-                           LBFGS_q_vector.block(__u_group_ID));
+                           LBFGS_r_vector.block(ithGroup),
+                           LBFGS_q_vector.block(ithGroup));
         }
         //
         //        {
