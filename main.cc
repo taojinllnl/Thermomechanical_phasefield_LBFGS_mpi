@@ -6968,7 +6968,7 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
                 std::vector<double> history_variable_values_cell(m_n_q_points);
                 
                 fe_values.get_function_values(
-                                              new_history_variable_field_L2, history_variable_values_cell);
+                                              new_history_variable_field_L2_rele, history_variable_values_cell);
                 
                 for (unsigned int q_point : fe_values.quadrature_point_indices())
                 {
