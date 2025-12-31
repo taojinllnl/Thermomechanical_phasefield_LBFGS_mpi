@@ -10,6 +10,7 @@
 #include <array>
 
 #include <deal.II/lac/sparse_direct.h>
+#include <deal.II/lac/precondition.h>
 
 #include "Traits.h"
 
