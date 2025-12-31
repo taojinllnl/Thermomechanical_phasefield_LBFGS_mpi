@@ -193,6 +193,7 @@ BlockVectorWrapper<TraitsType>
             vecBlock[*it] = value;
         
         TraitsType::Vector::compress(VectorOperation::insert);
+        updateRelevance();
     } else {
         
         for(unsigned int i = 0; i < (*__blockDesc.dofsPerBlock())[groupID]; ++i)
