@@ -80,13 +80,13 @@ subsection Scenario
   
   
   # underlying mpi type: (PETSc|Trilinos|Serial)
-  set mpi type = Serial
+  set mpi type = Trilinos
   
   # Configuration directory
-  set Config dir = ../Case_6/pre_refine/
+  set Config dir = ../Case_6/adaptive_refine/
   
   # Output directory
-  set Output dir = ./output/Case_6/pre_refine/
+  set Output dir = ./output/Case_6/adaptive_refine/
 end
 
 subsection Finite element system
