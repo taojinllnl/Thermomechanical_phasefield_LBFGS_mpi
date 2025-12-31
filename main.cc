@@ -1258,7 +1258,7 @@ namespace PhaseField_monolithic
       using BSMatrix = ::la::BlockSparseMatrixWrapper<LATraits>;
       using BVector  = ::la::BlockVectorWrapper<LATraits>;
       
-      using CellDataStorage = CellDataStorage<typename Tria::cell_iterator,
+      using CellDataStorageT = CellDataStorage<typename Tria::cell_iterator,
       PointHistory<dim>>;
       
       static constexpr bool is_mpi =
@@ -1289,7 +1289,7 @@ namespace PhaseField_monolithic
     const Parameters::AllParameters& m_parameters;
     Tria& m_triangulation;
 
-    CellDataStorage m_quadrature_point_history;
+    CellDataStorageT m_quadrature_point_history;
 
     Time                m_time;
       
