@@ -2271,18 +2271,7 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
                m_triangulation,
                m_dof_handler,
                m_qf_cell)
-  {
-        if(m_mpiInfo.rank() == 0)
-        {
-            std::cout << "\nDir: \t" << parameters.m_output_dir << std::endl
-            << "Type: \t" << parameters.m_mpi_type << std::endl
-            << "Log: \t" << parameters.m_logfile_name << std::endl << std::endl;
-        }
-        
-        m_logfile << "\nDir: \t" << parameters.m_output_dir << std::endl
-        << "Type: \t" << parameters.m_mpi_type << std::endl
-        << "Log: \t" << parameters.m_logfile_name << std::endl << std::endl;
-    }
+  {}
 
 
 template <typename LATraits, typename Tria>
@@ -3979,9 +3968,10 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
                 m_solution(dof) = cool_down_temperature;
         }
 
-        if constexpr (is_mpi)
+        if constexpr (is_mpi) {
             m_solution.compress(dealii::VectorOperation::insert);
-        
+            m_solution.updateRelevance();
+        }
     } else {
         
         for (auto const & item : support_points_T)
@@ -7021,6 +7011,12 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
   template <typename LATraits, typename Tria>
   void PhaseFieldMonolithicSolve<LATraits, Tria>::print_parameter_information()
   {
+      
+      m_logfile << "\nDir: \t" << m_parameters.m_output_dir << std::endl
+      << "Type: \t" << m_parameters.m_mpi_type << std::endl
+      << "Log: \t" << m_parameters.m_logfile_name << std::endl << std::endl;
+      
+      
     m_logfile << "Scenario number = " << m_parameters.m_scenario << std::endl;
     m_logfile << "Log file = " << m_parameters.m_logfile_name << std::endl;
     m_logfile << "Write iteration history to log file? = " << std::boolalpha
@@ -7339,6 +7335,13 @@ int main(int argc, char* argv[])
         init_dirs(parameters);
     }
 
+    
+    if(mpiInfo.rank() == 0)
+    {
+        std::cout << "\nDir: \t" << parameters.m_output_dir << std::endl
+        << "Type: \t" << parameters.m_mpi_type << std::endl
+        << "Log: \t" << parameters.m_logfile_name << std::endl << std::endl;
+    }
 
     
     // dimension by prm setting

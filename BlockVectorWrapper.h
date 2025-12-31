@@ -111,7 +111,7 @@ BlockVectorWrapper<TraitsType>
         }
         
         base().compress(dealii::VectorOperation::insert);
-        
+        updateRelevance();
     } else {
         
         for (unsigned int i = 0; i < dof_handler.n_dofs(); ++i)
@@ -144,7 +144,7 @@ BlockVectorWrapper<TraitsType>
         }
         
         base().compress(dealii::VectorOperation::insert);
-        
+        updateRelevance();
     } else {
         
         for (unsigned int i = 0; i < dof_handler.n_dofs(); ++i)
