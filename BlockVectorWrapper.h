@@ -75,6 +75,9 @@ public:
     
     void assignDoubleOverABlock(const unsigned int groupID,
                                 const double value);
+    
+    void distributeCst(const dealii::AffineConstraints<double>& constraints,
+                       const bool updateGhostValues = true);
 
     template <int dim, int spacedim = dim>
     void copyNoncst(const BlockVectorWrapper& other,
