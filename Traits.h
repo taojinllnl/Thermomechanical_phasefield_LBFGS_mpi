@@ -9,7 +9,7 @@
 
 
 #include <deal.II/lac/generic_linear_algebra.h>
-
+#include <deal.II/grid/tria.h>
 
 //
 //namespace mpi
@@ -90,11 +90,11 @@ struct Traits<TagPETSc>
 }
 
 
-#ifndef DISTRIBUTED_TRIA
-#   define DISTRIBUTED_TRIA 1
-template <int dim, int spacedim = dim>
-using DTria = ::dealii::parallel::distributed::Triangulation<dim, spacedim>;
-#endif
+//#ifndef DISTRIBUTED_TRIA
+//#   define DISTRIBUTED_TRIA 1
+//template <int dim, int spacedim = dim>
+//using DTria = ::dealii::parallel::distributed::Triangulation<dim, spacedim>;
+//#endif
 
 #endif
 
@@ -122,14 +122,41 @@ struct Traits<TagTrilinos>
 };
 }
 
+#endif
+
+
+# if defined(HAVE_TRILINOS) || defined(HAVE_PETSC)
 #ifndef DISTRIBUTED_TRIA
 #   define DISTRIBUTED_TRIA 1
 template <int dim, int spacedim = dim>
 using DTria = ::dealii::parallel::distributed::Triangulation<dim, spacedim>;
-#endif
+#   endif
+# endif
 
 
-#endif
+#include <deal.II/numerics/solution_transfer.h>
+template <int dim, typename VectorType, bool is_mpi, int spacedim=dim>
+struct SolutionTransferSelector
+{
+    using type = dealii::SolutionTransfer<dim, VectorType, spacedim>;
+};
+
+
+# if defined(HAVE_TRILINOS) || defined(HAVE_PETSC)
+#include <deal.II/distributed/solution_transfer.h>
+#   if !DEAL_II_VERSION_GTE(9, 7, 0)
+template <int dim, typename VectorType, int spacedim>
+struct SolutionTransferSelector<dim, VectorType, /*is_mpi=*/true, spacedim>
+{
+    using type = dealii::parallel::distributed::SolutionTransfer<
+    dim, VectorType, spacedim>;
+};
+
+#   endif
+# endif // #if defined(HAVE_TRILINOS) || defined(HAVE_PETSC)
+
+
+
 
 
 
