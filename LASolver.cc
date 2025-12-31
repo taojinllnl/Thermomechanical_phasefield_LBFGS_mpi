@@ -113,7 +113,7 @@ LASolver<LATraits>::__directSolve(BVector & LBFGS_r_vector,
         using PrecPSails = dealii::PETScWrappers::PreconditionParaSails;
         using PrecSOR    = dealii::PETScWrappers::PreconditionSOR;
         using PrecSSOR   = dealii::PETScWrappers::PreconditionSSOR;
-        using PrecShell  = dealii::PETScWrappers::PreconditionShell;
+//        using PrecShell  = dealii::PETScWrappers::PreconditionShell;
         using PrecNone   = dealii::PETScWrappers::PreconditionNone;
         using MatBlock   = typename LATraits::MatrixBlock;
         
@@ -259,7 +259,7 @@ LASolver<LATraits>::__cgSolve(BVector & LBFGS_r_vector,
         using PrecPSails = dealii::PETScWrappers::PreconditionParaSails;
         using PrecSOR    = dealii::PETScWrappers::PreconditionSOR;
         using PrecSSOR   = dealii::PETScWrappers::PreconditionSSOR;
-        using PrecShell  = dealii::PETScWrappers::PreconditionShell;
+//        using PrecShell  = dealii::PETScWrappers::PreconditionShell;
         using PrecNone   = dealii::PETScWrappers::PreconditionNone;
         
         using MatBlock   = typename LATraits::MatrixBlock;
