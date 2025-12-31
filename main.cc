@@ -6658,7 +6658,7 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
     while(cell_refine_flag)
     {
         cell_refine_flag = false;
-        
+
         std::vector<types::global_dof_index> local_dof_indices(m_fe.dofs_per_cell);
         for (const auto &cell : m_dof_handler.active_cell_iterators())
         {
@@ -6695,7 +6695,7 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
                 }
             }
         }
-        
+
         for (const auto &cell : m_dof_handler.active_cell_iterators())
         {
             if constexpr (is_mpi) {
@@ -6709,7 +6709,7 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
             }
         }
         
-        
+
         if constexpr (is_mpi)
         {
             // accumulate local flag over all ranks
@@ -6729,11 +6729,12 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
             
             mesh_is_same = false;
             
+            
             std::vector<VecType> old_solutions;
+            std::vector<VecType> old_solutions_rele;
             old_solutions.reserve(2);
             old_solutions.emplace_back(m_solution.base());
             old_solutions.emplace_back(solution_next_step.base());
-            
             
             // history variable field L2 projection
             DoFHandler<dim> dof_handler_L2(m_triangulation);
@@ -6750,8 +6751,9 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
             }
             DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
             constraints.close();
-            
             VecBType old_history_variable_field_L2;
+            VecBType old_history_variable_field_L2_rele;
+
             if constexpr (is_mpi){
                 old_history_variable_field_L2.reinit(dof_handler_L2.locally_owned_dofs(), *m_mpiInfo.mpiCommPtr());
             } else {
@@ -6777,28 +6779,81 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
                 }
             },
                                  old_history_variable_field_L2);
-            
+
+            if constexpr(is_mpi) {
+                old_solutions_rele.reserve(2);
+                old_solutions_rele.emplace_back();
+                old_solutions_rele.emplace_back();
+                old_solutions_rele[0].reinit(*m_blocks_desc.ownedPartition(),
+                                             *m_blocks_desc.relevantPartition(),
+                                             *m_mpiInfo.mpiCommPtr());
+                old_solutions_rele[1].reinit(*m_blocks_desc.ownedPartition(),
+                                             *m_blocks_desc.relevantPartition(),
+                                             *m_mpiInfo.mpiCommPtr());
+                
+                old_solutions_rele[0] = old_solutions[0];
+                old_solutions_rele[1] = old_solutions[1];
+                
+                
+                old_history_variable_field_L2_rele.reinit(dof_handler_L2.locally_owned_dofs(),
+                                                          DoFTools::extract_locally_relevant_dofs(dof_handler_L2),
+                                                          *m_mpiInfo.mpiCommPtr());
+                old_history_variable_field_L2_rele = old_history_variable_field_L2;
+                
+                old_solutions_rele[0].update_ghost_values();
+                old_solutions_rele[1].update_ghost_values();
+                
+                old_history_variable_field_L2_rele.update_ghost_values();
+            }
+
             m_triangulation.prepare_coarsening_and_refinement();
             
-            SolutionTransfer<dim, VecType> solution_transfer(m_dof_handler);
-            solution_transfer.prepare_for_coarsening_and_refinement(old_solutions);
-            SolutionTransfer<dim, VecBType> solution_transfer_history_variable(dof_handler_L2);
-            solution_transfer_history_variable.prepare_for_coarsening_and_refinement(old_history_variable_field_L2);
-            m_triangulation.execute_coarsening_and_refinement();
+            using SolTransBlockVector = typename SolutionTransferSelector<dim, VecType, is_mpi>::type;
+            using SolTransVector = typename SolutionTransferSelector<dim, VecBType, is_mpi>::type;
             
-            
-            if constexpr (std::is_same_v<Tria, DTria<2>> ||
-                          std::is_same_v<Tria, DTria<3>>)
-            {
-                // once refinement applied, repartitioning may be required
-                // TODO: flag for repartitioning
-                if(true) {
-                    m_triangulation.repartition();
-                }
+            SolTransBlockVector solution_transfer(m_dof_handler);
+            SolTransVector solution_transfer_history_variable(dof_handler_L2);
+
+            if constexpr (is_mpi) {
+#  if DEAL_II_VERSION_GTE(9, 7, 0)
+                solution_transfer.prepare_for_coarsening_and_refinement(old_solutions_rele);
+                
+                solution_transfer_history_variable.prepare_for_coarsening_and_refinement(old_history_variable_field_L2_rele);
+#  else
+                
+                std::vector<const VecType*> old_solutions_ptrs = {
+                    &old_solutions_rele[0],
+                    &old_solutions_rele[1]};
+                
+                solution_transfer.prepare_for_coarsening_and_refinement(old_solutions_ptrs);
+                solution_transfer_history_variable.prepare_for_coarsening_and_refinement(old_history_variable_field_L2_rele);
+#  endif
+            } else {
+                solution_transfer.prepare_for_coarsening_and_refinement(old_solutions);
+                
+                solution_transfer_history_variable.prepare_for_coarsening_and_refinement(old_history_variable_field_L2);
             }
             
+
+            m_triangulation.execute_coarsening_and_refinement();
+
+            
+//            if constexpr (std::is_same_v<Tria, DTria<2>> ||
+//                          std::is_same_v<Tria, DTria<3>>)
+//            {
+//                // once refinement applied, repartitioning may be required
+//                // TODO: flag for repartitioning
+//                if(true) {
+//                    m_triangulation.repartition();
+//                }
+//            }
+
+
             set_bcs_id();
+
             setup_system();
+            solution_next_step.initalize();
+
             
             dof_handler_L2.distribute_dofs(fe_L2);
             constraints.clear();
@@ -6816,10 +6871,10 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
             if constexpr (is_mpi) {
                 // target vectors should have info about ghost cells
                 tmp_solutions[0].reinit(*m_blocks_desc.ownedPartition(),
-                                        *m_blocks_desc.relevantPartition(),
+//                                        *m_blocks_desc.relevantPartition(),
                                         *m_mpiInfo.mpiCommPtr());
                 tmp_solutions[1].reinit(*m_blocks_desc.ownedPartition(),
-                                        *m_blocks_desc.relevantPartition(),
+//                                        *m_blocks_desc.relevantPartition(),
                                         *m_mpiInfo.mpiCommPtr());
             } else {
 //                tmp_solutions[0].reinit(m_dofs_per_block);
@@ -6827,13 +6882,19 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
                 tmp_solutions[0].reinit(*m_blocks_desc.dofsPerBlock());
                 tmp_solutions[1].reinit(*m_blocks_desc.dofsPerBlock());
             }
+
             
             VecBType new_history_variable_field_L2;
+            VecBType new_history_variable_field_L2_rele;
             if constexpr (is_mpi)
             {
                 const IndexSet relevant_dofs = DoFTools::extract_locally_relevant_dofs(dof_handler_L2);
                 
-                new_history_variable_field_L2.reinit(dof_handler_L2.locally_owned_dofs(), relevant_dofs, *m_mpiInfo.mpiCommPtr());
+                new_history_variable_field_L2.reinit(dof_handler_L2.locally_owned_dofs(),
+                                                     *m_mpiInfo.mpiCommPtr());
+                new_history_variable_field_L2_rele.reinit(dof_handler_L2.locally_owned_dofs(),
+                                                     relevant_dofs,
+                                                     *m_mpiInfo.mpiCommPtr());
             } else {
                 new_history_variable_field_L2.reinit(dof_handler_L2.n_dofs());
             }
@@ -6843,7 +6904,13 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
 #  else
             // If an older version of dealII is used, for example, 9.4.0, interpolate()
             // needs to use the following interface.
-            solution_transfer.interpolate(old_solutions, tmp_solutions);
+            if constexpr (is_mpi){
+                std::vector<VecType*> tmp_solutions_ptrs = { &tmp_solutions[0],
+                    &tmp_solutions[1]
+                };
+                solution_transfer.interpolate(tmp_solutions_ptrs);
+            } else
+                solution_transfer.interpolate(old_solutions, tmp_solutions);
 #  endif
             
 #  if DEAL_II_VERSION_GTE(9, 7, 0)
@@ -6851,10 +6918,19 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
 #  else
             // If an older version of dealII is used, for example, 9.4.0, interpolate()
             // needs to use the following interface.
+            if constexpr (is_mpi){
+                solution_transfer_history_variable.interpolate(new_history_variable_field_L2);
+            } else
             solution_transfer_history_variable.interpolate(old_history_variable_field_L2, new_history_variable_field_L2);
 #  endif
 
             
+            if constexpr (is_mpi) {
+                new_history_variable_field_L2_rele = new_history_variable_field_L2;
+                new_history_variable_field_L2_rele.update_ghost_values();
+            }
+            
+
             solution_next_step.base()   = tmp_solutions[0];
             m_solution.base()           = tmp_solutions[1];
 
@@ -6866,12 +6942,12 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
             m_constraints.distribute(m_solution.base());
             constraints.distribute(new_history_variable_field_L2);
             
-            
+
             if constexpr (is_mpi) {
                 m_solution.updateRelevance();
                 solution_next_step.updateRelevance();
             }
-            
+
             // new_history_variable_field_L2 contains the history variable projected
             // onto the newly refined mesh
             FEValues<dim> fe_values(fe_L2,
@@ -6881,6 +6957,9 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
             
             for (const auto &cell : dof_handler_L2.active_cell_iterators())
             {
+                if constexpr (is_mpi){
+                    if (!cell->is_locally_owned()) continue;
+                }
                 fe_values.reinit(cell);
                 
                 const std::vector<std::shared_ptr<PointHistory<dim>>> lqph =
@@ -6896,7 +6975,7 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
                     lqph[q_point]->assign_history_variable(history_variable_values_cell[q_point]);
                 }
             }
-            
+
         } // if (cell_refine_flag)
     } // while(cell_refine_flag)
     
@@ -6912,14 +6991,17 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
         
         temp_solution_delta.updateRelevance();
         temp_previous_solution.updateRelevance();
+
         update_qph_incremental(temp_solution_delta, temp_previous_solution, false);
+
         update_history_field_step();
-        
+
         // initial guess for the resolve on the refined mesh
         LBFGS_update_refine.base() = solution_next_step.base() - m_solution.base();
         
+
     }
-    
+
     return mesh_is_same;
 }
 
@@ -7055,6 +7137,34 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
 		mesh_is_same = local_refine_and_solution_transfer(solution_delta,
 								  LBFGS_update_refine);
 
+              if(!mesh_is_same)
+              {
+                  if constexpr (is_mpi){
+                      const std::string filename = "refined_mesh";
+                      DataOut<dim> data_out;
+                      data_out.attach_dof_handler(m_dof_handler);
+                      
+                      const std::vector<std::string> solution_name;
+                      std::vector<dealii::DataComponentInterpretation::DataComponentInterpretation> data_component_interpretation;
+                      
+                      data_out.add_data_vector(m_solution.relevance(),
+                                               solution_name,
+                                               DataOut<dim>::type_dof_data,
+                                               data_component_interpretation);
+                      
+                      data_out.write_vtu_with_pvtu_record(m_parameters.oriDir,
+                                                          filename,
+                                                          adp_refine_iteration,
+                                                          *m_mpiInfo.mpiCommPtr(),
+                                                          4 /*n_digits*/,
+                                                          0 /*n_groups*/);
+                  } else {
+                      std::ofstream out(m_parameters.oriDir + "refined_mesh.vtu");
+                      GridOut       grid_out;
+                      grid_out.write_vtu(m_triangulation, out);
+                  }
+              }
+              
 		if (mesh_is_same)
 		  {
 		    m_solution += solution_delta;
@@ -7093,6 +7203,16 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
 		  << energy_pair.first << std::endl;
 	m_logfile << "\t\tCrack energy dissipation (J) = " << std::fixed << std::setprecision(10) << std::scientific
 		  << energy_pair.second << std::endl;
+          
+//          if constexpr (std::is_same_v<Tria, DTria<2>> ||
+//                        std::is_same_v<Tria, DTria<3>>)
+//          {
+//              // once refinement applied, repartitioning may be required
+//              // TODO: flag for repartitioning
+//              if(true) {
+//                  m_triangulation.repartition();
+//              }
+//          }
 
 	std::pair<double, std::array<double, 3>> time_energy;
 	time_energy.first = m_time.current();
