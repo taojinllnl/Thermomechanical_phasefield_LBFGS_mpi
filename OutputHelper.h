@@ -589,7 +589,8 @@ void OutputHelper<LATraits, Tria, PointHistory>
         const IndexSet locally_relevant_dofs =
             DoFTools::extract_locally_relevant_dofs(dof_handler_L2);
         
-        constraints.reinit(locally_owned_dofs, locally_relevant_dofs);
+        VersionAdapter::cstReinit(constraints, locally_owned_dofs, locally_relevant_dofs, *__mpiInfo.mpiCommPtr());
+//        constraints.reinit(locally_owned_dofs, locally_relevant_dofs);
     }
     DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
     constraints.close();
