@@ -98,6 +98,7 @@
 
 #include <deal.II/base/work_stream.h>
 
+
 #include <deal.II/numerics/solution_transfer.h>
 
 
@@ -127,6 +128,7 @@
 
 #include "OutputHelper.h"
 
+#include "WorkloadBalancer.h"
 
 #include "VersionAdapter.h"
 
@@ -2228,7 +2230,7 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
     , m_time(m_parameters.m_end_time)
     , m_mpiInfo(mpiInfo)
 //    , m_logfile(mpiInfo, parameters.m_output_dir, parameters.m_logfile_name, 0)
-    , __ofstream(parameters.m_output_dir + parameters.m_logfile_name)
+    , __ofstream(parameters.m_output_dir + parameters.m_mpi_type + "_" + parameters.m_logfile_name)
     , m_logfile(__ofstream, mpiInfo.rank() == 0)
 //    , m_timer(*m_mpiInfo.mpiCommPtr(), m_logfile, TimerOutput::summary, TimerOutput::wall_times)
     , m_timer(m_logfile, m_mpiInfo, TimerOutput::summary, TimerOutput::wall_times)
@@ -2269,7 +2271,18 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
                m_triangulation,
                m_dof_handler,
                m_qf_cell)
-  {}
+  {
+        if(m_mpiInfo.rank() == 0)
+        {
+            std::cout << "\nDir: \t" << parameters.m_output_dir << std::endl
+            << "Type: \t" << parameters.m_mpi_type << std::endl
+            << "Log: \t" << parameters.m_logfile_name << std::endl << std::endl;
+        }
+        
+        m_logfile << "\nDir: \t" << parameters.m_output_dir << std::endl
+        << "Type: \t" << parameters.m_mpi_type << std::endl
+        << "Log: \t" << parameters.m_logfile_name << std::endl << std::endl;
+    }
 
 
 template <typename LATraits, typename Tria>
