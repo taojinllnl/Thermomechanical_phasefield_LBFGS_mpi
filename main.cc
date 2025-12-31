@@ -6665,7 +6665,7 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
                 const unsigned int comp_i = m_fe.system_to_component_index(i).first;
                 if (comp_i == m_d_component) //phasefield component
                 {
-                    if (  solution_next_step(local_dof_indices[i])
+                    if (  solution_next_step.relevance()(local_dof_indices[i])
                         > m_parameters.m_phasefield_refine_threshold )
                     {
                         material_id = cell->material_id();
