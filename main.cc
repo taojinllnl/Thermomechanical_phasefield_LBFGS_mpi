@@ -3937,9 +3937,17 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
     std::map<types::global_dof_index, Point<dim>> support_points_T;
     
     ComponentMask temperature_mask = m_fe.component_mask(m_t_fe);
+    
+#  if DEAL_II_VERSION_GTE(9, 5, 0)
     support_points_T = DoFTools::map_dofs_to_support_points (MappingQ1<dim>(),
                                                              m_dof_handler,
                                                              temperature_mask);
+#else
+    DoFTools::map_dofs_to_support_points (MappingQ1<dim>(),
+                                          m_dof_handler,
+                                          support_points_T,
+                                          temperature_mask);
+#endif
     
     if constexpr (is_mpi)
     {
