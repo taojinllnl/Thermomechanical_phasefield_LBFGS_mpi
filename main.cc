@@ -4472,7 +4472,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
                   
               }
               
-              if (hasCst) {
+              if (      hasCst
+                  &&    m_dof_handler.locally_owned_dofs().is_element(node_xy[1])) {
                   m_constraints.add_line(node_xy[1]);
                   m_constraints.set_inhomogeneity(node_xy[1], 0.0);
               }
