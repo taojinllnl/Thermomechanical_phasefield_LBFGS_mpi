@@ -6548,6 +6548,10 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
   {
     m_logfile << "\t\tWrite history data ... \n"<<std::endl;
 
+      // only rank 0 commits writing operation
+      if (m_mpiInfo.rank() != 0)
+            return;
+      
     std::ofstream myfile_reaction_force (m_parameters.histDir + "Reaction_force.hist");
     if (myfile_reaction_force.is_open())
     {
