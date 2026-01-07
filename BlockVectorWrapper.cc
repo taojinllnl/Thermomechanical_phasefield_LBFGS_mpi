@@ -38,13 +38,18 @@ template <typename TraitsType>
 BlockVectorWrapper<TraitsType>
 ::BlockVectorWrapper(const MPIInfo& mpiInfo,
                      const BlockDesc& blockDesc,
-                     const bool hasRelevance)
+                     const bool hasRelevance,
+                     const bool init)
 : TraitsType::Vector()
 , __hasRelevance(mpiInfo.isMPI() ? hasRelevance : false)
 , __relevancePtr(__hasRelevance? std::make_unique<VecType>() : nullptr)
 , __mpiInfo(mpiInfo)
 , __blockDesc(blockDesc)
-{}
+{
+    if (init) {
+        initalize();
+    }
+}
 
 
 

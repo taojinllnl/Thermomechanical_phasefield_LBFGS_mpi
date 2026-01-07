@@ -57,7 +57,8 @@ public:
     
     BlockVectorWrapper(const MPIInfo& mpiInfo,
                        const BlockDesc& blockDesc,
-                       const bool hasRelevance=false);
+                       const bool hasRelevance=false,
+                       const bool init=true);
     
     const typename TraitsType::Vector& updateRelevance();
     const typename TraitsType::Vector& relevance() const;
