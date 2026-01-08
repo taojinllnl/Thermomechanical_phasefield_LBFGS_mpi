@@ -6165,6 +6165,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
       m_output.output(m_time.get_timestep(),
                       m_parameters.m_poly_degree,
                       m_parameters.resultsDir,
+                      m_parameters.m_type_linear_solver,
+                      m_parameters.m_mpi_type,
                       m_solution,
                       m_quadrature_point_history);
       

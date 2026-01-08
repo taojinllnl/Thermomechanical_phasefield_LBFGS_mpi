@@ -98,6 +98,8 @@ public:
     void output(const unsigned int ithTimeStep,
                 const unsigned int polyDegree,
                 const std::string& dir,
+                const std::string& laSolver,
+                const std::string& mpiMode,
                 const BVector&     solution,
                 const CellDataStorage& qPntHistory) const;
 };
@@ -562,12 +564,16 @@ void OutputHelper<LATraits, Tria, PointHistory>
 ::output(const unsigned int ithTimeStep,
          const unsigned int polyDegree,
          const std::string& dir,
+         const std::string& laSolver,
+         const std::string& mpiMode,
          const BVector&     solution,
          const CellDataStorage& qPntHistory) const
 {
     using namespace dealii;
     
-    const std::string filename = "Solution-" + std::to_string(dim) + "d-";
+    const std::string filename = "Solution-" + std::to_string(dim) + "d_" + laSolver + "_" + mpiMode + "-";
+    
+    
     
     DataOut<dim> data_out;
     data_out.attach_dof_handler(__dof_handler);
