@@ -99,7 +99,7 @@ LASolver<LATraits>::__directSolve(BVector & LBFGS_r_vector,
         //            A_direct_t.vmult(LBFGS_r_vector.block(__T_group_ID),
         //                             LBFGS_q_vector.block(__T_group_ID));
         //        }
-        for (const unsigned int ithGroup : __blockDesc.groupIDs())
+        for (unsigned int ithGroup = 0; ithGroup < __blockDesc.nBlocks(); ++ithGroup)
         {
             SparseDirectUMFPACK A_direct;
             A_direct.initialize(tangent_matrix.block(ithGroup, ithGroup));
@@ -118,13 +118,16 @@ LASolver<LATraits>::__directSolve(BVector & LBFGS_r_vector,
         using PrecNone   = dealii::PETScWrappers::PreconditionNone;
         using MatBlock   = typename LATraits::MatrixBlock;
         
-        using InverseMatrix = InverseMatrix<MatBlock, PrecJacobi>;
         
-        for (const unsigned int ithGroup : __blockDesc.groupIDs())
+        
+        using PrecType = PrecNone;
+        using InverseMatrix = InverseMatrix<MatBlock, PrecType>;
+        
+        for (unsigned int ithGroup = 0; ithGroup < __blockDesc.nBlocks(); ++ithGroup)
         {
             SolverControl solver_control(__tolList[ithGroup].nIters,
                                          __tolList[ithGroup].tol);
-            PrecJacobi prec;
+            PrecType prec;
             prec.initialize(tangent_matrix.block(ithGroup, ithGroup));
             
             
@@ -161,13 +164,15 @@ LASolver<LATraits>::__directSolve(BVector & LBFGS_r_vector,
         using PrecI      = dealii::TrilinosWrappers::PreconditionIdentity;
         using MatBlock   = typename LATraits::MatrixBlock;
         
-        using InverseMatrix = InverseMatrix<MatBlock, PrecJacobi>;
         
-        for (const unsigned int ithGroup : __blockDesc.groupIDs())
+        using PrecType = PrecI;
+        using InverseMatrix = InverseMatrix<MatBlock, PrecType>;
+        
+        for (unsigned int ithGroup = 0; ithGroup < __blockDesc.nBlocks(); ++ithGroup)
         {
             SolverControl solver_control(__tolList[ithGroup].nIters,
                                          __tolList[ithGroup].tol);
-            PrecJacobi prec;
+            PrecType prec;
             prec.initialize(tangent_matrix.block(ithGroup, ithGroup));
             
             
@@ -238,7 +243,8 @@ LASolver<LATraits>::__cgSolve(BVector & LBFGS_r_vector,
         //                    LBFGS_q_vector.block(__T_group_ID),
         //                    preconditioner_tt);
         
-        for (const unsigned int ithGroup : __blockDesc.groupIDs()) {
+        for (unsigned int ithGroup = 0; ithGroup < __blockDesc.nBlocks(); ++ithGroup)
+        {
             SolverControl            solver_control(__tolList[ithGroup].nIters,
                                                     __tolList[ithGroup].tol);
             SolverCG<Vector<double>> cg(solver_control);
@@ -265,11 +271,14 @@ LASolver<LATraits>::__cgSolve(BVector & LBFGS_r_vector,
         
         using MatBlock   = typename LATraits::MatrixBlock;
         
+        
+        
+        using PrecType = PrecNone;
         using CGSolver   =  MPICGSolver<MatBlock, PETScWrappers::SolverCG>;
         
-        for (const unsigned int ithGroup : __blockDesc.groupIDs())
+        for (unsigned int ithGroup = 0; ithGroup < __blockDesc.nBlocks(); ++ithGroup)
         {
-            PrecJacobi prec;
+            PrecType prec;
             prec.initialize(tangent_matrix.block(ithGroup, ithGroup));
             
             CGSolver cg(__tolList[ithGroup].tol,
@@ -293,11 +302,13 @@ LASolver<LATraits>::__cgSolve(BVector & LBFGS_r_vector,
         
         using MatBlock   = typename LATraits::MatrixBlock;
         
-        using CGSolver   =  MPICGSolver<MatBlock, TrilinosWrappers::SolverCG>;
         
-        for (const unsigned int ithGroup : __blockDesc.groupIDs())
+        using PrecType = PrecI;
+        using CGSolver   =  MPICGSolver<MatBlock, TrilinosWrappers::SolverCG>;
+
+        for (unsigned int ithGroup = 0; ithGroup < __blockDesc.nBlocks(); ++ithGroup)
         {
-            PrecJacobi prec;
+            PrecType prec;
             prec.initialize(tangent_matrix.block(ithGroup, ithGroup));
             
             CGSolver cg(__tolList[ithGroup].tol,
