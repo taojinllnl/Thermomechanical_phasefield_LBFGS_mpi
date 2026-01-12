@@ -2270,8 +2270,12 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
     , m_output(m_mpiInfo,
                m_triangulation,
                m_dof_handler,
-               m_qf_cell)
-  {}
+               m_qf_cell,
+               m_parameters.m_scenario,
+               m_parameters.m_mpi_type)
+  {
+        m_logfile << Utilities::dealii_version_string() << std::endl;
+    }
 
 
 template <typename LATraits, typename Tria>
@@ -6166,7 +6170,6 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
                       m_parameters.m_poly_degree,
                       m_parameters.resultsDir,
                       m_parameters.m_type_linear_solver,
-                      m_parameters.m_mpi_type,
                       m_solution,
                       m_quadrature_point_history);
       

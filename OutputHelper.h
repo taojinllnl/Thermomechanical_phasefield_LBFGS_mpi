@@ -58,7 +58,8 @@ private:
     
     const DataComponentInterpretationList __data_component_L2;
     
-   
+    const std::string                     __solutionName;
+    const std::string                     __mpiType;
     
 private:
     static std::vector<std::string> __makeSolutionName();
@@ -92,14 +93,15 @@ public:
     OutputHelper(const MPIInfo&                   mpiInfo,
                  Tria&                            tria,
                  const dealii::DoFHandler<dim>&   dof_handler,
-                 const dealii::QGauss<dim>&       qf_cell);
+                 const dealii::QGauss<dim>&       qf_cell,
+                 const unsigned int caseID,
+                 const std::string& mpiType);
     
     
     void output(const unsigned int ithTimeStep,
                 const unsigned int polyDegree,
                 const std::string& dir,
                 const std::string& laSolver,
-                const std::string& mpiMode,
                 const BVector&     solution,
                 const CellDataStorage& qPntHistory) const;
 };
@@ -156,7 +158,9 @@ OutputHelper<LATraits, Tria, PointHistory>
 ::OutputHelper(const MPIInfo&                   mpiInfo,
                Tria&                            tria,
                const dealii::DoFHandler<dim>&   dof_handler,
-               const dealii::QGauss<dim>&       qf_cell)
+               const dealii::QGauss<dim>&       qf_cell,
+               const unsigned int caseID,
+               const std::string& mpiType)
 : __mpiInfo(mpiInfo)
 , __tria(tria)
 , __dof_handler(dof_handler)
@@ -164,6 +168,8 @@ OutputHelper<LATraits, Tria, PointHistory>
 , __solution_name(OutputHelper<LATraits, Tria, PointHistory>::__makeSolutionName())
 , __data_component_interpretation(OutputHelper<LATraits, Tria, PointHistory>::__makeDataComponentInterpretation())
 , __data_component_L2(OutputHelper<LATraits, Tria, PointHistory>::__makeL2DataComponentInterpretation())
+, __solutionName("Case_" + std::to_string(caseID) + "-" + std::to_string(dim) + "d_")
+, __mpiType(mpiType + std::to_string(__mpiInfo.nRanks()))
 {}
 
 
@@ -565,13 +571,12 @@ void OutputHelper<LATraits, Tria, PointHistory>
          const unsigned int polyDegree,
          const std::string& dir,
          const std::string& laSolver,
-         const std::string& mpiMode,
          const BVector&     solution,
          const CellDataStorage& qPntHistory) const
 {
     using namespace dealii;
     
-    const std::string filename = "Solution-" + std::to_string(dim) + "d_" + laSolver + "_" + mpiMode + "-";
+    const std::string filename = __solutionName + laSolver + "_" + __mpiType + "-";
     
     
     
