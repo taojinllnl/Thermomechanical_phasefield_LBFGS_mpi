@@ -64,7 +64,7 @@ public:
     const typename TraitsType::Vector& relevance() const;
     bool hasRelevance() const;
     
-    void initalize();
+    void initialize();
     
     BlockVectorWrapper&     operator= (const double s);
     BlockVectorWrapper&     operator= (const BlockVectorWrapper& v);

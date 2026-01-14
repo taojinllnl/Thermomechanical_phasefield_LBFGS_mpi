@@ -115,7 +115,7 @@ BlockVectorWrapper<TraitsType>
 template <typename TraitsType>
 void
 BlockVectorWrapper<TraitsType>
-::initalize()
+::initialize()
 {
     
     if constexpr (std::is_same_v<VecType, dealii::BlockVector<double>>)
