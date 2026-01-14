@@ -1538,7 +1538,7 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, Tria>::BVector;
   void PhaseFieldMonolithicSolve<LATraits, Tria>::get_error_residual(Errors &error_residual)
   {
     BVector error_res(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
-      error_res.initalize();
+      error_res.initialize();
       
       error_res.copyAndRemoveCst(m_system_rhs, m_constraints, m_dof_handler);
       // TODO: verify if the following operation is the same to the former one
@@ -1556,7 +1556,7 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, Tria>::BVector;
                                                         Errors & error_update)
   {
     BVector error_ud(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
-      error_ud.initalize();
+      error_ud.initialize();
       
       error_ud.copyAndRemoveCst(soln_update, m_constraints, m_dof_handler);
       // TODO: verify if the following operation is the same to the former one
@@ -3929,8 +3929,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 
       m_tangent_matrix.initalize(m_dof_handler, m_constraints, false);
       
-      m_system_rhs.initalize();
-      m_solution.initalize();
+      m_system_rhs.initialize();
+      m_solution.initialize();
       
     setup_qph();
 
@@ -5359,6 +5359,10 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
   {
     BVector g_old(m_system_rhs);
 
+      BVector g_old(m_mpiInfo, m_blocks_desc, /*relevance=*/false); // replace copy
+      g_old.initialize(); // replace copy
+      g_old.base() = m_system_rhs.base(); // replace copy
+      
     // BFGS_p_vector is the search direction
     BVector solution_delta_trial(solution_delta);
     // take a full step size 1.0
@@ -5706,7 +5710,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
     update_qph_incremental(solution_delta_trial, m_solution, false);
 
         BVector system_rhs(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
-        system_rhs.initalize();
+        system_rhs.initialize();
     assemble_system_rhs_LBFGS_parallel(m_solution, system_rhs);
     //m_constraints.condense(system_rhs);
 
@@ -5724,7 +5728,10 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
     // phi_prime(alpha) =  p^T * r(alpha)
     double phi_prime;
 
-    BVector solution_delta_trial(solution_delta);
+//    BVector solution_delta_trial(solution_delta); // replace copy
+        BVector solution_delta_trial(m_mpiInfo, m_blocks_desc, /*relevance=*/true);    // replace copy
+        solution_delta_trial.initialize();// replace copy
+        solution_delta_trial.base() = solution_delta.base();// replace copy
     solution_delta_trial.add(alpha, BFGS_p_vector);
 
         solution_delta_trial.updateRelevance();
@@ -5742,7 +5749,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
 
 //    BVector error_res(m_dofs_per_block);
         BVector error_res(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
-        error_res.initalize();
+        error_res.initialize();
 
         error_res.copyAndRemoveCst(m_system_rhs, m_constraints, m_dof_handler);
         // TODO: verify if the following operation is the same to the former one
@@ -5794,8 +5801,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
   solve_nonlinear_timestep_LBFGS(BVector & solution_delta,
 				 BVector & LBFGS_update_refine)
   {
-    BVector LBFGS_update(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
-      LBFGS_update.initalize();
+    BVector LBFGS_update(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
+      LBFGS_update.initialize();
 //    LBFGS_update = 0.0;
 
     m_error_residual.reset();
@@ -5810,14 +5817,14 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
 
     unsigned int LBFGS_iteration = 0;
 
-    BVector LBFGS_r_vector(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
-      LBFGS_r_vector.initalize();
+    BVector LBFGS_r_vector(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
+//      LBFGS_r_vector.initialize();
     BVector LBFGS_y_vector(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
-      LBFGS_y_vector.initalize();
+      LBFGS_y_vector.initialize();
     BVector LBFGS_q_vector(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
-      LBFGS_q_vector.initalize();
+      LBFGS_q_vector.initialize();
     BVector LBFGS_s_vector(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
-      LBFGS_s_vector.initalize();
+      LBFGS_s_vector.initialize();
     std::list<std::pair< std::pair<BVector,
                                    BVector>,
                          double>> LBFGS_vector_list;
