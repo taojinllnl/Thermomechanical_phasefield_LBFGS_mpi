@@ -1300,7 +1300,7 @@ namespace PhaseField_monolithic
       
 //    Logger  m_logfile;
       
-    std::ofstream      __ofstream;
+    std::unique_ptr<std::ofstream>     __ofstream;
     ConditionalOStream m_logfile;
       
 //    mutable TimerOutput m_timer;
@@ -2230,8 +2230,10 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
     , m_time(m_parameters.m_end_time)
     , m_mpiInfo(mpiInfo)
 //    , m_logfile(mpiInfo, parameters.m_output_dir, parameters.m_logfile_name, 0)
-    , __ofstream(parameters.m_output_dir + parameters.m_mpi_type + "_" + std::to_string(m_mpiInfo.nRanks()) +"_" + parameters.m_logfile_name)
-    , m_logfile(__ofstream, mpiInfo.rank() == 0)
+    , __ofstream(mpiInfo.rank() == 0
+                 ? std::make_unique<std::ofstream>(parameters.m_output_dir + parameters.m_logfile_name + "_" + parameters.m_mpi_type + "_" + std::to_string(m_mpiInfo.nRanks()) + "_" + parameters.m_type_linear_solver + ".log")
+                 : std::make_unique<std::ofstream>()) // only log file on rank 0
+    , m_logfile(*__ofstream, mpiInfo.rank() == 0)
 //    , m_timer(*m_mpiInfo.mpiCommPtr(), m_logfile, TimerOutput::summary, TimerOutput::wall_times)
     , m_timer(m_logfile, m_mpiInfo, TimerOutput::summary, TimerOutput::wall_times)
     , m_blocks_desc(m_mpiInfo,
