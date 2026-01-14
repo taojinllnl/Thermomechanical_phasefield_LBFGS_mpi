@@ -21,9 +21,5 @@ void VersionAdapter
 #  else
     constraints.reinit(locally_relevant_dofs);
 #  endif
-    
-    constraints.make_consistent_in_parallel(locally_owned_dofs,
-                                            locally_relevant_dofs,
-                                            mpiComm);
 }
 
