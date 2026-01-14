@@ -6361,7 +6361,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
 
     BVector       system_rhs(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
 //    system_rhs.reinit(m_dofs_per_block);
-      system_rhs.initalize();
+      system_rhs.initialize();
 
     Vector<double> cell_rhs(m_dofs_per_cell);
     std::vector<types::global_dof_index> local_dof_indices(m_dofs_per_cell);
@@ -6697,7 +6697,7 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
 {
     // This is the solution at (n+1) obtained from the old (coarse) mesh
     BVector solution_next_step(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
-    solution_next_step.initalize();
+    solution_next_step.initialize();
     solution_next_step.base() = m_solution.base() + solution_delta.base();
     solution_next_step.updateRelevance();
     
@@ -6904,7 +6904,8 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
             set_bcs_id();
 
             setup_system();
-            solution_next_step.initalize();
+
+            solution_next_step.initialize();
 
             
             dof_handler_L2.distribute_dofs(fe_L2);
@@ -7037,9 +7038,9 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
         BVector temp_solution_delta(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
         BVector temp_previous_solution(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
         //	temp_solution_delta = 0.0;
-        temp_solution_delta.initalize();
+        temp_solution_delta.initialize();
         //	temp_previous_solution = 0.0;
-        temp_previous_solution.initalize();
+        temp_previous_solution.initialize();
         
         temp_solution_delta.updateRelevance();
         temp_previous_solution.updateRelevance();
@@ -7163,7 +7164,7 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
 
         // initial guess for the resolve on the refined mesh
 	BVector LBFGS_update_refine(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
-          LBFGS_update_refine.initalize();
+          LBFGS_update_refine.initialize();
 //	LBFGS_update_refine = 0.0;
 
         // local adaptive mesh refinement loop
@@ -7174,7 +7175,7 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
 	      m_logfile << "\tAdaptive refinement-"<< adp_refine_iteration << ": " << std::endl;
 
 	    BVector solution_delta(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
-              solution_delta.initalize();
+              solution_delta.initialize();
 //	    solution_delta = 0.0;
 
 	    if (m_parameters.m_type_nonlinear_solver == "LBFGS")
