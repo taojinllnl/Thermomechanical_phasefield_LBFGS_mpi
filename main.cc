@@ -1255,6 +1255,7 @@ namespace PhaseField_monolithic
   template <typename LATraits, typename Tria>
   class PhaseFieldMonolithicSolve
   {
+      const static bool __debug = false;
   public:
       constexpr static int dim = Tria::dimension;
       using BSMatrix = ::la::BlockSparseMatrixWrapper<LATraits>;
@@ -1540,10 +1541,10 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, Tria>::BVector;
     BVector error_res(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
       error_res.initialize();
       
-      error_res.copyAndRemoveCst(m_system_rhs, m_constraints, m_dof_handler);
+//      error_res.copyAndRemoveCst(m_system_rhs, m_constraints, m_dof_handler);
       // TODO: verify if the following operation is the same to the former one
-//      error_res.base() = m_system_rhs.base();
-//      m_constraints.set_zero(error_res.base());
+      error_res.base() = m_system_rhs.base();
+      m_constraints.set_zero(error_res.base());
       
     error_residual.m_norm = error_res.l2_norm();
     error_residual.m_u    = error_res.block(m_u_dof).l2_norm();
@@ -1558,10 +1559,10 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, Tria>::BVector;
     BVector error_ud(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
       error_ud.initialize();
       
-      error_ud.copyAndRemoveCst(soln_update, m_constraints, m_dof_handler);
+//      error_ud.copyAndRemoveCst(soln_update, m_constraints, m_dof_handler);
       // TODO: verify if the following operation is the same to the former one
-//      error_ud.base() = m_system_rhs.base();
-//      m_constraints.set_zero(error_ud.base());
+      error_ud.base() = soln_update.base();
+      m_constraints.set_zero(error_ud.base());
 
     error_update.m_norm = error_ud.l2_norm();
     error_update.m_u    = error_ud.block(m_u_dof).l2_norm();
@@ -1799,6 +1800,7 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
 
     const BVector solution_total(get_total_solution(solution_delta));
 
+      
     const UpdateFlags uf_UQPH(update_values | update_gradients);
     PerTaskData_UQPH  per_task_data_UQPH;
     ScratchData_UQPH  scratch_data_UQPH(m_fe,
@@ -2278,9 +2280,7 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
                m_qf_cell,
                m_parameters.m_scenario,
                m_parameters.m_mpi_type)
-  {
-        m_logfile << Utilities::dealii_version_string() << std::endl;
-    }
+  {}
 
 
 template <typename LATraits, typename Tria>
@@ -2384,7 +2384,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
           if (face->at_boundary() == true)
             {
               if (std::fabs(face->center()[0] - 0.0 ) < 1.0e-9 )
-            face->set_boundary_id(0);
+            face->set_boundary_id(5);
               else if (std::fabs(face->center()[1] - 0.0 ) < 1.0e-9)
                 face->set_boundary_id(1);
               else if (std::fabs(face->center()[0] - 25.0 ) < 1.0e-9)
@@ -2411,7 +2411,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
           if (face->at_boundary() == true)
             {
               if (std::fabs(face->center()[0] - 0.0 ) < 1.0e-9 )
-            face->set_boundary_id(0);
+            face->set_boundary_id(6);
               else if (std::fabs(face->center()[1] - 0.0 ) < 1.0e-9)
                 face->set_boundary_id(1);
               else if (std::fabs(face->center()[0] - length ) < 1.0e-9)
@@ -2616,10 +2616,22 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
               << m_triangulation.n_used_vertices()
 	      << std::endl;
 
-    std::ofstream out(m_parameters.oriDir + "original_mesh.vtu");
-    GridOut       grid_out;
-    grid_out.write_vtu(m_triangulation, out);
-
+      if constexpr (is_mpi){ 
+          const std::string filename = "original_mesh";
+          DataOut<dim> data_out;
+          data_out.attach_dof_handler(m_dof_handler);
+          data_out.write_vtu_with_pvtu_record(m_parameters.oriDir,
+                                              filename,
+                                              0,
+                                              *m_mpiInfo.mpiCommPtr(),
+                                              1 /*n_digits*/,
+                                              0 /*n_groups*/);
+          
+      } else {
+          std::ofstream out(m_parameters.oriDir + "original_mesh.vtu");
+          GridOut       grid_out;
+          grid_out.write_vtu(m_triangulation, out);
+      }
     m_vol_reference = GridTools::volume(m_triangulation);
     m_logfile << "\t\tGrid:\n\t\t\tReference volume: " << m_vol_reference << std::endl;
   }
@@ -3870,21 +3882,29 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
     DoFRenumbering::Cuthill_McKee(m_dof_handler);
     DoFRenumbering::component_wise(m_dof_handler, block_component);
 
+      m_blocks_desc.updateDoFsInfo(m_dof_handler, false);
+      
     m_constraints.clear();
       if constexpr (is_mpi)
       {
           VersionAdapter::cstReinit(m_constraints,
                                     m_dof_handler.locally_owned_dofs(),
-                                    DoFTools::extract_locally_relevant_dofs(m_dof_handler),
+                                    *m_blocks_desc.localRelevantPartition(),
                                     *m_mpiInfo.mpiCommPtr());
       }
     DoFTools::make_hanging_node_constraints(m_dof_handler, m_constraints);
-    m_constraints.close();
-
+      if constexpr (is_mpi){
+          m_constraints.make_consistent_in_parallel(m_dof_handler.locally_owned_dofs(),
+                                                  *m_blocks_desc.localRelevantPartition(),
+                                                  *m_mpiInfo.mpiCommPtr());
+      }
+      m_constraints.close();
+      
+      
       // TODO: move m_dofs_per_block = DoFTools::count_dofs_per_fe_block(m_dof_handler, block_component); to m_blocks_desc.updateDoFsInfo(m_dof_handler);
-    m_dofs_per_block =
-      DoFTools::count_dofs_per_fe_block(m_dof_handler, block_component);
-      m_blocks_desc.updateDoFsInfo(m_dof_handler, false);
+//    m_dofs_per_block =
+//      DoFTools::count_dofs_per_fe_block(m_dof_handler, block_component);
+      
     
 
     m_logfile << "\t\tTriangulation:"
@@ -3976,11 +3996,9 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
             if (func(pnt))
                 m_solution(dof) = cool_down_temperature;
         }
-
-        if constexpr (is_mpi) {
-            m_solution.compress(dealii::VectorOperation::insert);
-            m_solution.updateRelevance();
-        }
+        
+        m_solution.compress(dealii::VectorOperation::insert);
+        m_solution.updateRelevance();
     } else {
         
         for (auto const & item : support_points_T)
@@ -4224,8 +4242,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
           Assert(false, ExcMessage("The scenario has not been implemented!"));
       }
       
-      if constexpr (is_mpi)
-          m_solution.updateRelevance();
+//      if constexpr (is_mpi)
+//          m_solution.updateRelevance();
   }
 
   template <typename LATraits, typename Tria>
@@ -4242,6 +4260,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
       
       if (m_parameters.m_output_iteration_history)
           m_logfile << " CST " << std::flush;
+      
+      set_bcs_id();
       
       if (apply_dirichlet_bc)
       {
@@ -4287,18 +4307,46 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
                                                        m_constraints,
                                                        m_fe.component_mask(temperature));
               
-              typename Triangulation<dim>::active_vertex_iterator vertex_itr;
-              vertex_itr = m_triangulation.begin_active_vertex();
               std::vector<types::global_dof_index> node_xy(m_fe.dofs_per_vertex);
               
-              for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
-              {
-                  if (   (std::fabs(vertex_itr->vertex()[0] - 0.0) < 1.0e-9)
-                      && (std::fabs(vertex_itr->vertex()[1] - 0.0) < 1.0e-9) )
+              if constexpr (is_mpi) {
+                  const unsigned int n_dofs = m_fe.dofs_per_vertex;
+                  std::vector<bool> locally_owned_vertices =  GridTools::get_locally_owned_vertices(m_dof_handler.get_triangulation());
+                  for (auto const & cell : m_dof_handler.active_cell_iterators()) {
+                      if (!cell->is_locally_owned() && !cell->at_boundary()) continue;
+                      
+                      for (const auto vertex : cell->vertex_indices())
+                      {
+                          // skip ghost cells
+                          if (!locally_owned_vertices[cell->vertex_index(vertex)]) continue;
+                          
+                          const Point<dim> point = cell->vertex(vertex);
+                          
+                          if (   (std::fabs(point[0] - 0.0) < 1.0e-9)
+                              && (std::fabs(point[1] - 0.0) < 1.0e-9) )
+                          {
+                              for (unsigned int i = 0; i < n_dofs; ++i)
+                                  node_xy[i] = cell->vertex_dof_index(vertex, i);
+                              
+                          }
+                      }
+                  }
+                  
+              } else {
+                  
+                  typename Triangulation<dim>::active_vertex_iterator vertex_itr;
+                  vertex_itr = m_triangulation.begin_active_vertex();
+                  
+                  for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
                   {
-                      node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
+                      if (   (std::fabs(vertex_itr->vertex()[0] - 0.0) < 1.0e-9)
+                          && (std::fabs(vertex_itr->vertex()[1] - 0.0) < 1.0e-9) )
+                      {
+                          node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
+                      }
                   }
               }
+              
               m_constraints.add_line(node_xy[0]);
               m_constraints.set_inhomogeneity(node_xy[0], 0.0);
               
@@ -4412,7 +4460,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
               // Remember, the essential B.C. is applied incrementally during each time step.
               // If a constant temperature is needed through time, the B.C should be set as zero.
               double delta_temperature = 0.0; // temperature change per load step
-              const int boundary_id_left_surface = 0;
+              const int boundary_id_left_surface = 5;
               VectorTools::interpolate_boundary_values(m_dof_handler,
                                                        boundary_id_left_surface,
                                                        Functions::ConstantFunction<dim>(
@@ -4459,6 +4507,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
                               for (unsigned int i = 0; i < n_dofs; ++i){
                                   node_xy[i] = cell->vertex_dof_index(vertex, i);
                                   hasCst = true;
+                                  break;
                               }
                           }
                       }
@@ -4476,9 +4525,9 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
                       {
                           node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
                           hasCst = true;
+                          break;
                       }
                   }
-                  
               }
               
               if (      hasCst
@@ -4490,7 +4539,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
               // Remember, the essential B.C. is applied incrementally during each time step.
               // If a constant temperature is needed through time, the B.C should be set as zero.
               double delta_temperature = 0.0; // temperature change per load step
-              const int boundary_id_left_surface = 0;
+              const int boundary_id_left_surface = 6;
               VectorTools::interpolate_boundary_values(m_dof_handler,
                                                        boundary_id_left_surface,
                                                        Functions::ConstantFunction<dim>(
@@ -4534,6 +4583,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
               vertex_itr = m_triangulation.begin_active_vertex();
               std::vector<types::global_dof_index> node_xy(m_fe.dofs_per_vertex);
               
+              // TODO: add_line
               for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
               {
                   if (   (std::fabs(vertex_itr->vertex()[0] -  0.0) < 1.0e-9)
@@ -4546,6 +4596,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
               m_constraints.add_line(node_xy[2]);
               m_constraints.set_inhomogeneity(node_xy[2], 0.0);
               
+              // TODO: add_line
               for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
               {
                   if (   (std::fabs(vertex_itr->vertex()[0] - 25.0) < 1.0e-9)
@@ -4558,6 +4609,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
               m_constraints.add_line(node_xy[2]);
               m_constraints.set_inhomogeneity(node_xy[2], 0.0);
               
+              // TODO: add_line
               for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
               {
                   if (   (std::fabs(vertex_itr->vertex()[0] -  0.0) < 1.0e-9)
@@ -4608,7 +4660,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
               typename Triangulation<dim>::active_vertex_iterator vertex_itr;
               vertex_itr = m_triangulation.begin_active_vertex();
               std::vector<types::global_dof_index> node_xy(m_fe.dofs_per_vertex);
-              
+              // TODO: add_line
               for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
               {
                   if (   (std::fabs(vertex_itr->vertex()[0] -  0.0) < 1.0e-9)
@@ -4620,7 +4672,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
               }
               m_constraints.add_line(node_xy[2]);
               m_constraints.set_inhomogeneity(node_xy[2], 0.0);
-              
+              // TODO: add_line
               for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
               {
                   if (   (std::fabs(vertex_itr->vertex()[0] -  5.0) < 1.0e-9)
@@ -4695,7 +4747,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
                                                        Functions::ZeroFunction<dim>(m_n_components),
                                                        m_constraints,
                                                        m_fe.component_mask(y_displacement));
-              
+              // TODO: add_line
               typename Triangulation<dim>::active_vertex_iterator vertex_itr;
               vertex_itr = m_triangulation.begin_active_vertex();
               std::vector<types::global_dof_index> node_xy(m_fe.dofs_per_vertex);
@@ -4738,7 +4790,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
                                                        Functions::ZeroFunction<dim>(m_n_components),
                                                        m_constraints,
                                                        m_fe.component_mask(y_displacement));
-              
+              // TODO: add_line
               typename Triangulation<dim>::active_vertex_iterator vertex_itr;
               vertex_itr = m_triangulation.begin_active_vertex();
               std::vector<types::global_dof_index> node_xy(m_fe.dofs_per_vertex);
@@ -4802,6 +4854,14 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
           }
           else
               Assert(false, ExcMessage("The scenario has not been implemented!"));
+          
+          if constexpr (is_mpi){
+              
+              m_constraints.make_consistent_in_parallel(m_dof_handler.locally_owned_dofs(),
+                                                        *m_blocks_desc.localRelevantPartition(),
+                                                        *m_mpiInfo.mpiCommPtr());
+              
+          }
       }
       else  // inhomogeneous constraints
       {
@@ -4810,16 +4870,29 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
               AffineConstraints<double> homogeneous_constraints(m_constraints);
               if constexpr (is_mpi)
               {
-                  std::vector<unsigned int> indices;
+                  std::vector<IndexSet::size_type> indices;
                   m_dof_handler.locally_owned_dofs().fill_index_vector(indices);
+                  
+//                  const IndexSet relevant = DoFTools::extract_locally_relevant_dofs(m_dof_handler);
+//                    std::vector<types::global_dof_index> indices;
+//                    relevant.fill_index_vector(indices);
+                  
                   for (unsigned int dof : indices)
                       if (homogeneous_constraints.is_inhomogeneously_constrained(dof))
                           homogeneous_constraints.set_inhomogeneity(dof, 0.0);
+                  
+                  homogeneous_constraints.make_consistent_in_parallel(m_dof_handler.locally_owned_dofs(),
+                                                          *m_blocks_desc.localRelevantPartition(),
+                                                          *m_mpiInfo.mpiCommPtr());
+                  
               } else {
                   for (unsigned int dof = 0; dof != m_dof_handler.n_dofs(); ++dof)
                       if (homogeneous_constraints.is_inhomogeneously_constrained(dof))
                           homogeneous_constraints.set_inhomogeneity(dof, 0.0);
               }
+              
+              homogeneous_constraints.close();
+              
               m_constraints.clear();
               if constexpr (is_mpi)
               {
@@ -4830,12 +4903,10 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
               }
               m_constraints.copy_from(homogeneous_constraints);
           }
+          
+          
       }
-      
-      
-      
       m_constraints.close();
-      
   }
 
   template <typename LATraits, typename Tria>
@@ -4895,6 +4966,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
           m_tangent_matrix.compress(VectorOperation::add);
           /*  *  *  *   *   *   *   *   *  MPI  *   *   *   *   *   *   *   *   */
           
+          if constexpr (__debug)
+          m_logfile << m_tangent_matrix.verificationInfo() << std::endl;
       }
 
     m_timer.leave_subsection(sectionName);
@@ -5357,29 +5430,37 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
   double PhaseFieldMonolithicSolve<LATraits, Tria>::line_search_stepsize_gradient_based(const BVector & BFGS_p_vector,
 				                                             const BVector & solution_delta)
   {
-    BVector g_old(m_system_rhs);
+//    BVector g_old(m_system_rhs); // replace copy
 
       BVector g_old(m_mpiInfo, m_blocks_desc, /*relevance=*/false); // replace copy
       g_old.initialize(); // replace copy
       g_old.base() = m_system_rhs.base(); // replace copy
       
     // BFGS_p_vector is the search direction
-    BVector solution_delta_trial(solution_delta);
+//    BVector solution_delta_trial(solution_delta); // replace copy
+      BVector solution_delta_trial(m_mpiInfo, m_blocks_desc, /*relevance=*/true); // replace copy
+      solution_delta_trial.initialize(); // replace copy
+      solution_delta_trial.base() = solution_delta.base(); // replace copy
     // take a full step size 1.0
     solution_delta_trial.add(1.0, BFGS_p_vector);
 
       
       solution_delta_trial.updateRelevance();
-
+      
+      if constexpr (__debug)
+      m_logfile << solution_delta_trial.verificationInfo("solution_delta_trial line search before qph" ) << std::endl;
+      if constexpr (__debug)
+      m_logfile << m_solution.verificationInfo("m_solution line search before qph" ) << std::endl;
       
     update_qph_incremental(solution_delta_trial, m_solution, false);
 
     BVector g_new(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
-      g_new.initalize();
+      g_new.initialize();
     assemble_system_rhs_LBFGS_parallel(m_solution, g_new);
-
+      if constexpr (__debug)
+      m_logfile << g_new.verificationInfo("g_new line search" ) << std::endl;
     BVector y_old(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
-      y_old.initalize();
+      y_old.initialize();
 
     y_old.base() = g_new.base() - g_old.base();
 
@@ -5419,7 +5500,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
           
         update_qph_incremental(solution_delta_trial, m_solution, false);
         assemble_system_rhs_LBFGS_parallel(m_solution, g_new);
-
+          if constexpr (__debug)
+          m_logfile << g_new.verificationInfo("g_new") << std::endl;
         y_old.base() = g_new.base() - g_old.base();
 
         delta_alpha_old = delta_alpha_new;
@@ -5701,7 +5783,10 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
     // the first component is phi(alpha), the second component is phi_prime(alpha),
     std::pair<double, double> phi_values;
 
-    BVector solution_delta_trial(solution_delta);
+//    BVector solution_delta_trial(solution_delta); // replace copy
+        BVector solution_delta_trial(m_mpiInfo, m_blocks_desc, /*relevance=*/true);// replace copy
+        solution_delta_trial.initialize(); // replace copy
+        solution_delta_trial.base() = solution_delta.base();// replace copy
     solution_delta_trial.add(alpha, BFGS_p_vector);
 
         solution_delta_trial.updateRelevance();
@@ -5712,6 +5797,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
         BVector system_rhs(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
         system_rhs.initialize();
     assemble_system_rhs_LBFGS_parallel(m_solution, system_rhs);
+        if constexpr (__debug)
+        m_logfile << system_rhs.verificationInfo("system_rhs cal_phi+phi'") << std::endl;
     //m_constraints.condense(system_rhs);
 
     phi_values.first = calculate_energy_functional();
@@ -5741,8 +5828,11 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
 
 //    BVector system_rhs(m_dofs_per_block);
         BVector system_rhs(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
-        system_rhs.initalize();
+        system_rhs.initialize();
     assemble_system_rhs_LBFGS_parallel(m_solution, system_rhs);
+        
+        if constexpr (__debug)
+        m_logfile << system_rhs.verificationInfo("system_rhs cal_phi'") << std::endl;
     //m_constraints.condense(system_rhs);
 
     //phi_prime = system_rhs * BFGS_p_vector;
@@ -5751,10 +5841,10 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
         BVector error_res(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
         error_res.initialize();
 
-        error_res.copyAndRemoveCst(m_system_rhs, m_constraints, m_dof_handler);
-        // TODO: verify if the following operation is the same to the former one
-  //      error_res.base() = m_system_rhs.base();
-  //      m_constraints.set_zero(error_res.base());
+//        error_res.copyAndRemoveCst(m_system_rhs, m_constraints, m_dof_handler);
+//         TODO: verify if the following operation is the same to the former one
+        error_res.base() = m_system_rhs.base();
+        m_constraints.set_zero(error_res.base());
 
     phi_prime = error_res.l2_norm();
 
@@ -5772,7 +5862,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
       assemble_system_B0();
       
       m_solver.solve(LBFGS_r_vector, LBFGS_q_vector, m_tangent_matrix);
-      
+      LBFGS_r_vector.updateRelevance();
       m_timer.leave_subsection(sectionName);
   }
 
@@ -5852,7 +5942,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
             // refined mesh as initial guess
             LBFGS_update = LBFGS_update_refine;
 
-            m_constraints.distribute(LBFGS_update.base());
+//            m_constraints.distribute(LBFGS_update.base());
+              LBFGS_update.distributeCst(m_constraints);
             solution_delta += LBFGS_update;
               solution_delta.updateRelevance();
               
@@ -5862,6 +5953,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
                 m_logfile << " --- " << std::flush;
               }
               
+              m_solution.updateRelevance();
               update_qph_incremental(solution_delta, m_solution, false);
             if (m_parameters.m_output_iteration_history)
               {
@@ -5877,6 +5969,9 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
 	    // NOT the negative gradient of the energy functional
 
               assemble_system_rhs_LBFGS_parallel(m_solution, m_system_rhs);
+              
+              if constexpr (__debug)
+              m_logfile << m_system_rhs.verificationInfo("m_system_rhs solve_nonlinear iter == 1") << std::endl;
 
 	    // We cannot simply zero out the dofs that are constrained, since we might
 	    // have hanging node constraints. In this case, we need to modify the RHS
@@ -6007,7 +6102,10 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
 
         // LBFGS algorithm
         LBFGS_q_vector = m_system_rhs;
-
+          
+          if constexpr (__debug)
+          m_logfile << LBFGS_q_vector.verificationInfo("LBFGS_q_vector before q += -alpha * y" ) << std::endl;
+          
         LBFGS_alpha_list.clear();
         for (auto itr = LBFGS_vector_list.begin(); itr != LBFGS_vector_list.end(); ++itr)
           {
@@ -6036,8 +6134,15 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
         LBFGS_q_vector *= scale_gamma;
         LBFGS_r_vector = LBFGS_q_vector;
 */
+          
+          if constexpr (__debug)
+          m_logfile << LBFGS_q_vector.verificationInfo("LBFGS_q_vector before LBFGS_B0" ) << std::endl;
         LBFGS_B0(LBFGS_r_vector,
 		 LBFGS_q_vector);
+          
+          
+          if constexpr (__debug)
+          m_logfile << LBFGS_r_vector.verificationInfo("LBFGS_r_vector after LBFGS_B0" ) << std::endl;
 
         for (auto itr = LBFGS_vector_list.rbegin(); itr != LBFGS_vector_list.rend(); ++itr)
           {
@@ -6055,14 +6160,29 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
 
         LBFGS_r_vector *= -1.0; // this is the p_vector (search direction)
 
-        m_constraints.distribute(LBFGS_r_vector.base());
-          
-          LBFGS_r_vector.updateRelevance();
+//        m_constraints.distribute(LBFGS_r_vector.base());
+          LBFGS_r_vector.distributeCst(m_constraints);
           
         // We need a line search algorithm to decide line_search_parameter
-
+          if constexpr (__debug)
+          m_logfile << LBFGS_r_vector.verificationInfo("LBFGS_r_vector before line search - " + std::to_string(LBFGS_iteration) ) << std::endl;
         line_search_parameter = line_search_stepsize_gradient_based(LBFGS_r_vector,
         							    solution_delta);
+          
+          if constexpr(is_mpi) {
+              line_search_parameter = std::round(line_search_parameter * 1e6) / 1e6;
+              line_search_parameter = Utilities::MPI::broadcast(*m_mpiInfo.mpiCommPtr(), line_search_parameter, /*root=*/0);
+          }
+          
+          const std::vector<double> x_all = Utilities::MPI::all_gather(*m_mpiInfo.mpiCommPtr(), line_search_parameter);
+          
+          if constexpr (__debug) {
+              m_logfile << "*********************************************" << std::endl;
+              m_logfile << LBFGS_iteration  << " line_search_parameter : " << std::endl;
+              for (const double alpha : x_all)
+                  m_logfile << std::setprecision(17) << alpha << "\n";
+              m_logfile << "*********************************************" << std::endl;
+          }
         // const double phi_0 = calculate_energy_functional();
         // const double phi_0_prime = m_system_rhs * LBFGS_r_vector;
 /*
@@ -6089,8 +6209,17 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
 
         // line_search_parameter = 1.0;
         LBFGS_r_vector *= line_search_parameter;
+          LBFGS_r_vector.updateRelevance();
         LBFGS_update = LBFGS_r_vector;
+          LBFGS_update.updateRelevance();
 
+          if constexpr (__debug)
+              m_logfile << LBFGS_r_vector.verificationInfo("LBFGS_r_vector after alpha * r - " + std::to_string(LBFGS_iteration) ) << std::endl;
+          if constexpr (__debug)
+              m_logfile << LBFGS_update.verificationInfo("LBFGS_update after assignment of alpha * r - " + std::to_string(LBFGS_iteration) ) << std::endl;
+              
+          
+          
         get_error_update(LBFGS_update, m_error_update);
         if (LBFGS_iteration == 1)
           m_error_update_0 = m_error_update;
@@ -6103,7 +6232,10 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
 
         solution_delta += LBFGS_update;
           solution_delta.updateRelevance();
-
+          
+          if constexpr (__debug)
+          m_logfile << solution_delta.verificationInfo("solution_delta after += LBFGS_update - " + std::to_string(LBFGS_iteration) ) << std::endl;
+          
           update_qph_incremental(solution_delta, m_solution, false);
 
         LBFGS_y_vector = m_system_rhs;
@@ -6111,10 +6243,16 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
           
 
           assemble_system_rhs_LBFGS_parallel(m_solution, m_system_rhs);
+          
+          if constexpr (__debug)
+          m_logfile << m_system_rhs.verificationInfo("m_system_rhs solve_nonlinear iter == " + std::to_string(LBFGS_iteration)) << std::endl;
         // if we use assemble_system_rhs_LBFGS_parallel, then condense() is not necessary
         //m_constraints.condense(m_system_rhs);
         LBFGS_y_vector += m_system_rhs;
-
+          
+          if constexpr (__debug)
+          m_logfile << LBFGS_y_vector.verificationInfo("LBFGS_y_vector after += m_system_rhs - " + std::to_string(LBFGS_iteration) ) << std::endl;
+          
         LBFGS_s_vector = LBFGS_update;
 /*
         if (LBFGS_iteration > LBFGS_m)
@@ -6803,13 +6941,25 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
             constraints.clear();
             if constexpr (is_mpi)
             {
+                const IndexSet& owned_L2 = dof_handler_L2.locally_owned_dofs();
+                const IndexSet relevant_L2 = DoFTools::extract_locally_relevant_dofs(dof_handler_L2);
+                
                 VersionAdapter::cstReinit(constraints,
-                                          m_dof_handler.locally_owned_dofs(),
-                                          DoFTools::extract_locally_relevant_dofs(m_dof_handler),
+                                          owned_L2,
+                                          relevant_L2,
                                           *m_mpiInfo.mpiCommPtr());
+                
+                DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
+                
+                constraints.make_consistent_in_parallel(owned_L2,
+                                                        relevant_L2,
+                                                        *m_mpiInfo.mpiCommPtr());
+            } else {
+                DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
             }
-            DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
             constraints.close();
+            
+            
             VecBType old_history_variable_field_L2;
             VecBType old_history_variable_field_L2_rele;
 
@@ -6925,7 +7075,13 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
                                           *m_mpiInfo.mpiCommPtr());
             }
             DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
+            if constexpr (is_mpi){
+                constraints.make_consistent_in_parallel(m_dof_handler.locally_owned_dofs(),
+                                                        *m_blocks_desc.localRelevantPartition(),
+                                                        *m_mpiInfo.mpiCommPtr());
+            } 
             constraints.close();
+            
             
             std::vector<VecType> tmp_solutions(2);
             if constexpr (is_mpi) {
@@ -6998,11 +7154,13 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
             
             // make sure the projected solutions still satisfy
             // hanging node constraints
-            m_constraints.distribute(solution_next_step.base());
-            m_constraints.distribute(m_solution.base());
+//            m_constraints.distribute(solution_next_step.base());
+            solution_next_step.distributeCst(m_constraints);
+//            m_constraints.distribute(m_solution.base());
+            m_solution.distributeCst(m_constraints);
             constraints.distribute(new_history_variable_field_L2);
-            
 
+            
             if constexpr (is_mpi) {
                 m_solution.updateRelevance();
                 solution_next_step.updateRelevance();
@@ -7049,15 +7207,13 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
         //	temp_previous_solution = 0.0;
         temp_previous_solution.initialize();
         
-        temp_solution_delta.updateRelevance();
-        temp_previous_solution.updateRelevance();
-
         update_qph_incremental(temp_solution_delta, temp_previous_solution, false);
 
         update_history_field_step();
 
         // initial guess for the resolve on the refined mesh
         LBFGS_update_refine.base() = solution_next_step.base() - m_solution.base();
+        LBFGS_update_refine.updateRelevance();
         
 
     }
@@ -7068,6 +7224,9 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
   template <typename LATraits, typename Tria>
   void PhaseFieldMonolithicSolve<LATraits, Tria>::print_parameter_information()
   {
+      
+      m_logfile << Utilities::dealii_version_string() << std::endl << std::endl;
+      
       
       m_logfile << "\nDir: \t" << m_parameters.m_output_dir << std::endl
       << "Type: \t" << m_parameters.m_mpi_type << std::endl
@@ -7141,14 +7300,17 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
   template <typename LATraits, typename Tria>
   void PhaseFieldMonolithicSolve<LATraits, Tria>::run()
   {
+      
     print_parameter_information();
 
-    read_material_data(m_parameters.m_config_dir + m_parameters.m_material_file_name,
+    read_material_data(m_parameters.m_config_dir 
+                       + m_parameters.m_material_file_name,
                        m_parameters.m_total_material_regions);
 
     std::vector<std::array<double, 4>> time_table;
 
-    read_time_data(m_parameters.m_config_dir + m_parameters.m_time_file_name,
+    read_time_data(m_parameters.m_config_dir 
+                   + m_parameters.m_time_file_name,
                    time_table);
 
     make_grid();
@@ -7190,6 +7352,7 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
 	    else
 	      AssertThrow(false, ExcMessage("Nonlinear solver type not implemented"));
 
+              solution_delta.updateRelevance();
 	    if (m_parameters.m_refinement_strategy == "adaptive-refine")
 	      {
 
@@ -7199,37 +7362,9 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
               m_solution.updateRelevance();
 		    break;
 		  }
-
+              LBFGS_update_refine.updateRelevance();
 		mesh_is_same = local_refine_and_solution_transfer(solution_delta,
 								  LBFGS_update_refine);
-
-              if(!mesh_is_same)
-              {
-                  if constexpr (is_mpi){
-                      const std::string filename = "refined_mesh";
-                      DataOut<dim> data_out;
-                      data_out.attach_dof_handler(m_dof_handler);
-                      
-                      const std::vector<std::string> solution_name;
-                      std::vector<dealii::DataComponentInterpretation::DataComponentInterpretation> data_component_interpretation;
-                      
-                      data_out.add_data_vector(m_solution.relevance(),
-                                               solution_name,
-                                               DataOut<dim>::type_dof_data,
-                                               data_component_interpretation);
-                      
-                      data_out.write_vtu_with_pvtu_record(m_parameters.oriDir,
-                                                          filename,
-                                                          adp_refine_iteration,
-                                                          *m_mpiInfo.mpiCommPtr(),
-                                                          4 /*n_digits*/,
-                                                          0 /*n_groups*/);
-                  } else {
-                      std::ofstream out(m_parameters.oriDir + "refined_mesh.vtu");
-                      GridOut       grid_out;
-                      grid_out.write_vtu(m_triangulation, out);
-                  }
-              }
               
 		if (mesh_is_same)
 		  {
@@ -7242,6 +7377,8 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
 	      {
 		m_solution += solution_delta;
               m_solution.updateRelevance();
+              if constexpr (__debug)
+              m_logfile << m_solution.verificationInfo("m_solution") << std::endl;
 	        break;
 	      }
 	    else
