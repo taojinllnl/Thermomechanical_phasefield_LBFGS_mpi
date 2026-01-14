@@ -1273,6 +1273,7 @@ namespace PhaseField_monolithic
       
       PhaseFieldMonolithicSolve(const Parameters::AllParameters& parameters,
                                 const MPIInfo& mpiInfo,
+                                ConditionalOStream& logfile,
                                 Tria& triangulation);
 
     virtual ~PhaseFieldMonolithicSolve() = default;
@@ -1300,8 +1301,8 @@ namespace PhaseField_monolithic
       
 //    Logger  m_logfile;
       
-    std::unique_ptr<std::ofstream>     __ofstream;
-    ConditionalOStream m_logfile;
+//    std::unique_ptr<std::ofstream>      __ofstream;
+    ConditionalOStream&                  m_logfile;
       
 //    mutable TimerOutput m_timer;
       mutable TimerOutputWrapper<LATraits> m_timer;
@@ -2223,6 +2224,7 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
   PhaseFieldMonolithicSolve<LATraits, Tria>
 ::PhaseFieldMonolithicSolve(const Parameters::AllParameters& parameters,
                             const MPIInfo& mpiInfo,
+                            ConditionalOStream& logfile,
                             Tria& triangulation)
     : m_parameters(parameters)
 //    , m_triangulation(Triangulation<dim>::maximum_smoothing)
@@ -2230,10 +2232,11 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
     , m_time(m_parameters.m_end_time)
     , m_mpiInfo(mpiInfo)
 //    , m_logfile(mpiInfo, parameters.m_output_dir, parameters.m_logfile_name, 0)
-    , __ofstream(mpiInfo.rank() == 0
-                 ? std::make_unique<std::ofstream>(parameters.m_output_dir + parameters.m_logfile_name + "_" + parameters.m_mpi_type + "_" + std::to_string(m_mpiInfo.nRanks()) + "_" + parameters.m_type_linear_solver + ".log")
-                 : std::make_unique<std::ofstream>()) // only log file on rank 0
-    , m_logfile(*__ofstream, mpiInfo.rank() == 0)
+//    , __ofstream(mpiInfo.rank() == 0
+//                 ? std::make_unique<std::ofstream>(parameters.m_output_dir + parameters.m_logfile_name + "_" + parameters.m_mpi_type + "_" + std::to_string(m_mpiInfo.nRanks()) + "_" + parameters.m_type_linear_solver + ".log")
+//                 : std::make_unique<std::ofstream>()) // only log file on rank 0
+//    , m_logfile(*__ofstream, mpiInfo.rank() == 0)
+    , m_logfile(logfile)
 //    , m_timer(*m_mpiInfo.mpiCommPtr(), m_logfile, TimerOutput::summary, TimerOutput::wall_times)
     , m_timer(m_logfile, m_mpiInfo, TimerOutput::summary, TimerOutput::wall_times)
     , m_blocks_desc(m_mpiInfo,
@@ -7382,13 +7385,23 @@ int main(int argc, char* argv[])
     }
 
     
+    std::ofstream log_fstream;
     if(mpiInfo.rank() == 0)
     {
         std::cout << "\nDir: \t" << parameters.m_output_dir << std::endl
         << "Type: \t" << parameters.m_mpi_type << std::endl
         << "Log: \t" << parameters.m_logfile_name << std::endl << std::endl;
+        
+        // only rank 0 create logfile to avoid overriding
+        log_fstream.open(parameters.m_output_dir 
+                         + parameters.m_logfile_name
+                         + "_" + parameters.m_mpi_type
+                         + "_" + std::to_string(mpiInfo.nRanks())
+                         + "_" + parameters.m_type_linear_solver + ".log");
     }
 
+    ConditionalOStream logfile(log_fstream, mpiInfo.rank() == 0);
+    
     
     // dimension by prm setting
     const unsigned int dim = parameters.m_dim;
@@ -7403,7 +7416,7 @@ int main(int argc, char* argv[])
                             Triangulation<2>::smoothing_on_coarsening),
                           DTria<2>::no_automatic_repartitioning);
             
-            PhaseFieldMonolithicSolve<la::Traits<la::TagPETSc>, DTria<2>> Phasefield2D(parameters, mpiInfo, tria);
+            PhaseFieldMonolithicSolve<la::Traits<la::TagPETSc>, DTria<2>> Phasefield2D(parameters, mpiInfo, logfile, tria);
             Phasefield2D.run();
         }
         else if (dim == 3)
@@ -7414,7 +7427,7 @@ int main(int argc, char* argv[])
                             Triangulation<3>::smoothing_on_coarsening),
                           DTria<3>::no_automatic_repartitioning);
             
-            PhaseFieldMonolithicSolve<la::Traits<la::TagPETSc>, DTria<3>> Phasefield3D(parameters, mpiInfo, tria);
+            PhaseFieldMonolithicSolve<la::Traits<la::TagPETSc>, DTria<3>> Phasefield3D(parameters, mpiInfo, logfile, tria);
             Phasefield3D.run();
         }
         else
@@ -7434,7 +7447,7 @@ int main(int argc, char* argv[])
                             Triangulation<2>::smoothing_on_coarsening),
                           DTria<2>::no_automatic_repartitioning);
             
-            PhaseFieldMonolithicSolve<la::Traits<la::TagTrilinos>, DTria<2>> Phasefield2D(parameters, mpiInfo, tria);
+            PhaseFieldMonolithicSolve<la::Traits<la::TagTrilinos>, DTria<2>> Phasefield2D(parameters, mpiInfo, logfile, tria);
             Phasefield2D.run();
         }
         else if (dim == 3)
@@ -7445,7 +7458,7 @@ int main(int argc, char* argv[])
                             Triangulation<3>::smoothing_on_coarsening),
                           DTria<3>::no_automatic_repartitioning);
             
-            PhaseFieldMonolithicSolve<la::Traits<la::TagTrilinos>, DTria<3>> Phasefield3D(parameters, mpiInfo, tria);
+            PhaseFieldMonolithicSolve<la::Traits<la::TagTrilinos>, DTria<3>> Phasefield3D(parameters, mpiInfo, logfile, tria);
             Phasefield3D.run();
         }
         else
@@ -7460,14 +7473,14 @@ int main(int argc, char* argv[])
         {
             RTria<2> tria(Triangulation<2>::maximum_smoothing);
             
-            PhaseFieldMonolithicSolve<la::Traits<la::TagSerial>, RTria<2>> Phasefield2D(parameters, mpiInfo, tria);
+            PhaseFieldMonolithicSolve<la::Traits<la::TagSerial>, RTria<2>> Phasefield2D(parameters, mpiInfo, logfile, tria);
             Phasefield2D.run();
         }
         else if (dim == 3)
         {
             RTria<3> tria(Triangulation<3>::maximum_smoothing);
             
-            PhaseFieldMonolithicSolve<la::Traits<la::TagSerial>, RTria<3>> Phasefield3D(parameters, mpiInfo, tria);
+            PhaseFieldMonolithicSolve<la::Traits<la::TagSerial>, RTria<3>> Phasefield3D(parameters, mpiInfo, logfile, tria);
             Phasefield3D.run();
         }
         else
