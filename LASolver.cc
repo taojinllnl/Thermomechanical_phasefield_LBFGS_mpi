@@ -182,14 +182,34 @@ LASolver<LATraits>::__directSolve(BVector & LBFGS_r_vector,
                            LBFGS_r_vector.block(ithGroup),
                            LBFGS_q_vector.block(ithGroup));
         }
-        //
-        //        {
-        //
-        //            ::LinearSolvers::InverseMatrix<LA::MPI::SparseMatrix, LA::PreconditionBase> A_direct_dd(m_tangent_matrix.block(m_d_dof, m_d_dof), precond_dd.preconditioner());
-        //            A_direct_dd.vmult(solver_control_dd,
-        //                              LBFGS_r_vector.block(m_d_dof),
-        //                              LBFGS_q_vector.block(m_d_dof));
-        //        }
+    } else if constexpr (std::is_same_v<typename LATraits::TMTag, ::la::TagPETSc>) {
+                
+        for (unsigned int ithGroup = 0; ithGroup < __blockDesc.nBlocks(); ++ithGroup)
+        {
+            SolverControl solver_control(__tolList[ithGroup].nIters,
+                                         __tolList[ithGroup].tol);
+            // https://dealii.org/current/doxygen/deal.II/classPETScWrappers_1_1SparseDirectMUMPS.html
+            PETScWrappers::SparseDirectMUMPS solver(solver_control,
+                                                    *__mpiInfo.mpiCommPtr());
+            solver.set_symmetric_mode(false);
+            solver.solve(tangent_matrix.block(ithGroup, ithGroup),
+                         LBFGS_r_vector.block(ithGroup),
+                         LBFGS_q_vector.block(ithGroup));
+
+        }
+    } else if constexpr (std::is_same_v<typename LATraits::TMTag, ::la::TagTrilinos>) {
+        
+        for (unsigned int ithGroup = 0; ithGroup < __blockDesc.nBlocks(); ++ithGroup)
+        {
+            SolverControl solver_control(__tolList[ithGroup].nIters,
+                                         __tolList[ithGroup].tol);
+            // https://dealii.org/current/doxygen/deal.II/classTrilinosWrappers_1_1SolverDirect.html
+            
+            TrilinosWrappers::SolverDirect A_direct_T(solver_control);
+            A_direct_T.initialize(tangent_matrix.block(ithGroup, ithGroup));
+            A_direct_T.vmult(LBFGS_r_vector.block(ithGroup),
+                             LBFGS_q_vector.block(ithGroup));
+        }
     }
 }
 
