@@ -6930,7 +6930,7 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
             std::vector<VecType> old_solutions;
             std::vector<VecType> old_solutions_rele;
             old_solutions.reserve(2);
-            old_solutions.emplace_back(m_solution.base());
+            
             old_solutions.emplace_back(solution_next_step.base());
             
             // history variable field L2 projection
