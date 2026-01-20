@@ -6932,6 +6932,7 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
             old_solutions.reserve(2);
             
             old_solutions.emplace_back(solution_next_step.base());
+            old_solutions.emplace_back(m_solution.base());
             
             // history variable field L2 projection
             DoFHandler<dim> dof_handler_L2(m_triangulation);
