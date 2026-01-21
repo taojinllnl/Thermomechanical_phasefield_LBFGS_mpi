@@ -160,7 +160,14 @@ BlockVectorWrapper<TraitsType>&
 BlockVectorWrapper<TraitsType>
 ::operator= (const BlockVectorWrapper<TraitsType>& v)
 {
-    TraitsType::Vector::operator=(static_cast<const typename TraitsType::Vector&>(v));
+    TraitsType::Vector::operator=(v.base());
+    if(v.__hasRelevance)
+    {
+        // only works for the relevance initialized in current object
+        if (__relevancePtr) {
+            (*__relevancePtr) = v.relevance();
+        }
+    }
     return *this;
 }
 
