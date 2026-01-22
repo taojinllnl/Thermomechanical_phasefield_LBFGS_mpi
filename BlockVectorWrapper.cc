@@ -38,18 +38,13 @@ template <typename TraitsType>
 BlockVectorWrapper<TraitsType>
 ::BlockVectorWrapper(const MPIInfo& mpiInfo,
                      const BlockDesc& blockDesc,
-                     const bool hasRelevance,
-                     const bool init)
+                     const bool hasRelevance)
 : TraitsType::Vector()
 , __hasRelevance(mpiInfo.isMPI() ? hasRelevance : false)
 , __relevancePtr(__hasRelevance? std::make_unique<VecType>() : nullptr)
 , __mpiInfo(mpiInfo)
 , __blockDesc(blockDesc)
-{
-    if (init) {
-        initalize();
-    }
-}
+{}
 
 
 
@@ -137,7 +132,7 @@ BlockVectorWrapper<TraitsType>
         {
             __initRelevance();
             
-            (*__relevancePtr) = 0.0;
+            updateRelevance();
         }
         /*  *  *  *   *   *   *   *   *  MPI  *   *   *   *   *   *   *   *   */
         
@@ -188,6 +183,17 @@ BlockVectorWrapper<TraitsType>
     return *this;
 }
 
+
+template <typename TraitsType>
+void
+BlockVectorWrapper<TraitsType>
+::distributeCst(const dealii::AffineConstraints<double>& constraints,
+                const bool updateGhostValues)
+{
+    constraints.distribute(base());
+    
+    if(updateGhostValues) updateRelevance();
+}
 
 
 template <typename TraitsType>
