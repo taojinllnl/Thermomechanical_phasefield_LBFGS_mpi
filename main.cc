@@ -7469,17 +7469,17 @@ int main(int argc, char* argv[])
   using namespace PhaseField_monolithic;
     
     
-  if (argc != 2)
+  if (argc < 2)
     AssertThrow(false,
-    		ExcMessage("The number of arguments provided to the program has to be 2!"));
+    		ExcMessage("Usage: ./main [options] <input.prm>"));
   
     // read prm by input command
-  Parameters::AllParameters parameters(argv[1]);
+  Parameters::AllParameters parameters(argv[argc-1]);
 
     // initialize MPI by prm settings
     MPIInfo mpiInfo(parameters.m_mpi_type == "PETSc" ||
                     parameters.m_mpi_type == "Trilinos",
-                    argc, argv);
+                    argc-1, argv);
 
     /**
      *
