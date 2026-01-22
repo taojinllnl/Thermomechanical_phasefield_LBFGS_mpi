@@ -2273,7 +2273,8 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
                m_parameters.m_cg_u_tol,
                m_parameters.m_cg_d_tol,
                m_parameters.m_cg_t_tol,
-               m_blocks_desc)
+               m_blocks_desc,
+               m_mpiInfo)
     , m_output(m_mpiInfo,
                m_triangulation,
                m_dof_handler,

@@ -9,6 +9,10 @@
 using namespace PhaseField_monolithic;
 using namespace dealii;
 
+
+using PETScPrecSelector = PrecSelector<::la::Traits<::la::TagPETSc>>;
+using TrilinosPrecSelector = PrecSelector<::la::Traits<::la::TagTrilinos>>;
+
 Tol::Tol(const unsigned int nIters,
          const double tol)
 : nIters(nIters)
@@ -25,7 +29,8 @@ LASolver<LATraits>
            const double        cg_u_tol,
            const double        cg_d_tol,
            const double        cg_T_tol,
-           const BlockDesc&    blockDesc)
+           const BlockDesc&    blockDesc,
+           const MPIInfo&      mpiInfo)
 : __type(type)
 , __cg_u_tol(cg_u_tol)
 , __cg_d_tol(cg_d_tol)
@@ -39,6 +44,7 @@ LASolver<LATraits>
     Tol(1e6, cg_T_tol)
 })
 , __blockDesc(blockDesc)
+, __mpiInfo(mpiInfo)
 {}
 
 
@@ -293,8 +299,8 @@ LASolver<LATraits>::__cgSolve(BVector & LBFGS_r_vector,
         
         
         
-        using PrecType = PrecNone;
-        using CGSolver   =  MPICGSolver<MatBlock, PETScWrappers::SolverCG>;
+        using PrecType = PrecSSOR;
+        using CGSolver = MPICGSolver<MatBlock, PETScWrappers::SolverCG>;
         
         for (unsigned int ithGroup = 0; ithGroup < __blockDesc.nBlocks(); ++ithGroup)
         {
@@ -339,7 +345,6 @@ LASolver<LATraits>::__cgSolve(BVector & LBFGS_r_vector,
                      LBFGS_q_vector.block(ithGroup),
                      prec);
         }
-        
     }
 }
 
