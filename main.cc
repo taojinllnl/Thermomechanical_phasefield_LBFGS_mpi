@@ -221,6 +221,7 @@ namespace PhaseField_monolithic
       double m_cg_d_tol;
       double m_cg_t_tol;
       std::string m_refinement_strategy;
+        double m_repartition_ratio;
       unsigned int m_LBFGS_m;
       unsigned int m_global_refine_times;
       unsigned int m_local_prerefine_times;
