@@ -1809,7 +1809,11 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
     if (is_print && m_parameters.m_output_iteration_history)
       m_logfile << " UQPH " << std::flush;
 
-    const BVector solution_total(get_total_solution(solution_delta));
+//    const BVector solution_total(get_total_solution(solution_delta)); // replace copy
+      BVector solution_total(m_mpiInfo, m_blocks_desc, /*relevance=*/true); // replace copy
+      solution_total.initialize(); // replace copy
+      solution_total.base() =  m_solution.base() + solution_delta.base(); // replace copy
+        solution_total.updateRelevance();
 
       
     const UpdateFlags uf_UQPH(update_values | update_gradients);
