@@ -7397,17 +7397,22 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
             constraints.clear();
             if constexpr (is_mpi)
             {
+                const IndexSet& owned_L2 = dof_handler_L2.locally_owned_dofs();
+                const IndexSet relevant_L2 = DoFTools::extract_locally_relevant_dofs(dof_handler_L2);
+                
                 VersionAdapter::cstReinit(constraints,
-                                          m_dof_handler.locally_owned_dofs(),
-                                          DoFTools::extract_locally_relevant_dofs(m_dof_handler),
+                                          owned_L2,
+                                          relevant_L2,
                                           *m_mpiInfo.mpiCommPtr());
-            }
-            DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
-            if constexpr (is_mpi){
-                constraints.make_consistent_in_parallel(m_dof_handler.locally_owned_dofs(),
-                                                        *m_blocks_desc.localRelevantPartition(),
+                
+                DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
+                
+                constraints.make_consistent_in_parallel(owned_L2,
+                                                        relevant_L2,
                                                         *m_mpiInfo.mpiCommPtr());
-            } 
+            } else {
+                DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
+            }
             constraints.close();
             
             
@@ -7428,8 +7433,8 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
             }
 
             
-            VecBType new_history_variable_field_L2;
-            VecBType new_history_variable_field_L2_rele;
+//            VecBType new_history_variable_field_L2;
+//            VecBType new_history_variable_field_L2_rele;
             if constexpr (is_mpi)
             {
                 const IndexSet relevant_dofs = DoFTools::extract_locally_relevant_dofs(dof_handler_L2);
@@ -7465,14 +7470,10 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
             if constexpr (is_mpi){
                 solution_transfer_history_variable.interpolate(new_history_variable_field_L2);
             } else
-            solution_transfer_history_variable.interpolate(old_history_variable_field_L2, new_history_variable_field_L2);
+                solution_transfer_history_variable.interpolate(old_history_variable_field_L2, new_history_variable_field_L2);
 #  endif
 
             
-            if constexpr (is_mpi) {
-                new_history_variable_field_L2_rele = new_history_variable_field_L2;
-                new_history_variable_field_L2_rele.update_ghost_values();
-            }
             
 
             solution_next_step.base()   = tmp_solutions[0];
