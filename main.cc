@@ -7679,6 +7679,8 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
 	      AssertThrow(false, ExcMessage("Nonlinear solver type not implemented"));
 
               solution_delta.updateRelevance();
+              LBFGS_update_refine.updateRelevance();
+              
 	    if (m_parameters.m_refinement_strategy == "adaptive-refine")
 	      {
 
@@ -7688,9 +7690,12 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
               m_solution.updateRelevance();
 		    break;
 		  }
-              LBFGS_update_refine.updateRelevance();
+              
 		mesh_is_same = local_refine_and_solution_transfer(solution_delta,
 								  LBFGS_update_refine);
+              
+              solution_delta.updateRelevance();
+              LBFGS_update_refine.updateRelevance();
               
 		if (mesh_is_same)
 		  {
