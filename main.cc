@@ -7172,6 +7172,14 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
     unsigned int material_id;
     double length_scale;
     double cell_length;
+    
+    // target H-vectors to avoid recalculating
+    using VecType  = typename BVector::VecType;
+    using VecBType = typename LATraits::VectorBlock;
+    
+    VecBType new_history_variable_field_L2;
+    VecBType new_history_variable_field_L2_rele;
+    
     while(cell_refine_flag)
     {
         cell_refine_flag = false;
@@ -7241,8 +7249,7 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
         // to the newly refined mesh
         if (cell_refine_flag)
         {
-            using VecType  = typename BVector::VecType;
-            using VecBType = typename LATraits::VectorBlock;
+
             
             mesh_is_same = false;
             
