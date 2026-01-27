@@ -304,6 +304,11 @@ namespace PhaseField_monolithic
                           "adaptive-refine",
                           Patterns::Selection("pre-refine|adaptive-refine"),
                           "Mesh refinement strategy: pre-refine or adaptive-refine");
+          
+          prm.declare_entry("Repartitioning ratio",
+                "2.0",
+                Patterns::Double(0.0),
+                "The threshold for repartitioning");
 
         prm.declare_entry("LBFGS m",
                           "40",
@@ -394,6 +399,7 @@ namespace PhaseField_monolithic
         m_cg_d_tol = prm.get_double("CG d tolerance");
         m_cg_t_tol = prm.get_double("CG T tolerance");
         m_refinement_strategy = prm.get("Mesh refinement strategy");
+          m_repartition_ratio = prm.get_double("Repartitioning ratio");
         m_LBFGS_m = prm.get_integer("LBFGS m");
         m_global_refine_times = prm.get_integer("Global refinement times");
         m_local_prerefine_times = prm.get_integer("Local prerefinement times");
@@ -7157,15 +7163,15 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
             // make sure the projected solutions still satisfy
             // hanging node constraints
 //            m_constraints.distribute(solution_next_step.base());
-            solution_next_step.distributeCst(m_constraints);
 //            m_constraints.distribute(m_solution.base());
-            m_solution.distributeCst(m_constraints);
+            solution_next_step.distributeCst(m_constraints); // ghost cells updated
+            m_solution.distributeCst(m_constraints);        // ghost cells updated
             constraints.distribute(new_history_variable_field_L2);
 
             
             if constexpr (is_mpi) {
-                m_solution.updateRelevance();
-                solution_next_step.updateRelevance();
+                new_history_variable_field_L2_rele = new_history_variable_field_L2;
+                new_history_variable_field_L2_rele.update_ghost_values();
             }
 
             // new_history_variable_field_L2 contains the history variable projected
@@ -7202,6 +7208,10 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
     // calculate field variables for newly refined cells
     if (!mesh_is_same)
     {
+        repartition(solution_next_step,
+                    new_history_variable_field_L2,
+                    new_history_variable_field_L2_rele);
+        
         BVector temp_solution_delta(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
         BVector temp_previous_solution(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
         //	temp_solution_delta = 0.0;
@@ -7215,7 +7225,7 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
 
         // initial guess for the resolve on the refined mesh
         LBFGS_update_refine.base() = solution_next_step.base() - m_solution.base();
-        LBFGS_update_refine.updateRelevance();
+//        LBFGS_update_refine.updateRelevance();
         
 
     }
