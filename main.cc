@@ -6856,6 +6856,307 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
 
 
 template <typename LATraits, typename Tria>
+void PhaseFieldMonolithicSolve<LATraits, Tria>
+::repartition(BVector & solution_next_step,
+              const typename LATraits::VectorBlock& old_history_variable_field_L2,
+              const typename LATraits::VectorBlock& old_history_variable_field_L2_rele)
+{
+    if constexpr (std::is_same_v<Tria, DTria<2>> ||
+                  std::is_same_v<Tria, DTria<3>>){
+        
+        const std::string sectionName = "Repartition";
+        m_timer.enter_subsection(sectionName);
+        
+        const unsigned int nOwnedCells = m_triangulation.n_locally_owned_active_cells();
+        const unsigned int max = Utilities::MPI::max(nOwnedCells,
+                                                     *m_mpiInfo.mpiCommPtr());
+        const unsigned int min = Utilities::MPI::min(nOwnedCells,
+                                                     *m_mpiInfo.mpiCommPtr());
+        
+        const double ratio = (double) max/min;
+        const bool will_repartition = (ratio > m_parameters.m_repartition_ratio);
+        
+        
+        m_logfile << "\t\twill repartition: " << will_repartition << " [ "<< ratio << ", " << m_parameters.m_repartition_ratio << " ] "  <<  std::endl;
+        m_logfile << "\t\t\tmax/min: " << ((double)max/min) << std::endl;
+        m_logfile << "\t\t\tmax n owned cells: " << max << std::endl;
+        m_logfile << "\t\t\tmin n owned cells: " << min << std::endl << std::endl;
+        
+        if(!will_repartition) return;
+        
+        
+        
+        for (const auto &cell : m_triangulation.active_cell_iterators())
+        {
+            if constexpr (is_mpi) {
+                if (!cell->is_locally_owned()) continue;
+            }
+            cell->clear_refine_flag();
+        }
+        
+        
+        
+        using VecType  = typename BVector::VecType;
+        using VecBType = typename LATraits::VectorBlock;
+        
+        
+        std::vector<VecType> old_solutions;
+        std::vector<VecType> old_solutions_rele;
+        old_solutions.reserve(2);
+        
+        old_solutions.emplace_back(solution_next_step.base());
+        old_solutions.emplace_back(m_solution.base());
+        
+        // history variable field L2 projection
+        DoFHandler<dim> dof_handler_L2(m_triangulation);
+        FE_DGQ<dim>     fe_L2(m_parameters.m_poly_degree); //Discontinuous Galerkin
+        dof_handler_L2.distribute_dofs(fe_L2);
+        AffineConstraints<double> constraints;
+        constraints.clear();
+        if constexpr (is_mpi)
+        {
+            const IndexSet& owned_L2 = dof_handler_L2.locally_owned_dofs();
+            const IndexSet relevant_L2 = DoFTools::extract_locally_relevant_dofs(dof_handler_L2);
+            
+            VersionAdapter::cstReinit(constraints,
+                                      owned_L2,
+                                      relevant_L2,
+                                      *m_mpiInfo.mpiCommPtr());
+            
+            DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
+            
+            constraints.make_consistent_in_parallel(owned_L2,
+                                                    relevant_L2,
+                                                    *m_mpiInfo.mpiCommPtr());
+        } else {
+            DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
+        }
+        constraints.close();
+        
+        
+//        VecBType old_history_variable_field_L2;
+//        VecBType old_history_variable_field_L2_rele;
+        
+        
+        
+        if constexpr(is_mpi) {
+            old_solutions_rele.reserve(2);
+            old_solutions_rele.emplace_back();
+            old_solutions_rele.emplace_back();
+            old_solutions_rele[0].reinit(*m_blocks_desc.ownedPartition(),
+                                         *m_blocks_desc.relevantPartition(),
+                                         *m_mpiInfo.mpiCommPtr());
+            old_solutions_rele[1].reinit(*m_blocks_desc.ownedPartition(),
+                                         *m_blocks_desc.relevantPartition(),
+                                         *m_mpiInfo.mpiCommPtr());
+            
+            old_solutions_rele[0] = old_solutions[0];
+            old_solutions_rele[1] = old_solutions[1];
+            
+            
+            old_solutions_rele[0].update_ghost_values();
+            old_solutions_rele[1].update_ghost_values();
+        }
+        
+        m_triangulation.prepare_coarsening_and_refinement();
+
+        
+        using SolTransBlockVector = typename SolutionTransferSelector<dim, VecType, is_mpi>::type;
+        using SolTransVector = typename SolutionTransferSelector<dim, VecBType, is_mpi>::type;
+        
+        SolTransBlockVector solution_transfer(m_dof_handler);
+        SolTransVector solution_transfer_history_variable(dof_handler_L2);
+        
+        if constexpr (is_mpi) {
+#  if DEAL_II_VERSION_GTE(9, 7, 0)
+            solution_transfer.prepare_for_coarsening_and_refinement(old_solutions_rele);
+            
+            solution_transfer_history_variable.prepare_for_coarsening_and_refinement(old_history_variable_field_L2_rele);
+#  else
+            
+            std::vector<const VecType*> old_solutions_ptrs = {
+                &old_solutions_rele[0],
+                &old_solutions_rele[1]};
+            
+            solution_transfer.prepare_for_coarsening_and_refinement(old_solutions_ptrs);
+            solution_transfer_history_variable.prepare_for_coarsening_and_refinement(old_history_variable_field_L2_rele);
+#  endif
+        } else {
+            solution_transfer.prepare_for_coarsening_and_refinement(old_solutions);
+            
+            solution_transfer_history_variable.prepare_for_coarsening_and_refinement(old_history_variable_field_L2);
+        }
+        
+        
+        
+        m_logfile << "\t\trepartitioning...." << std::endl;
+        m_triangulation.repartition();
+        m_logfile << "\t\trepartitioninged, data transferring...." << std::endl;
+        
+        
+        set_bcs_id();
+        
+        setup_system();
+        
+        m_logfile << "\t\tset up system" << std::endl;
+        
+        
+        
+        dof_handler_L2.distribute_dofs(fe_L2);
+        constraints.clear();
+        if constexpr (is_mpi)
+        {
+            const IndexSet& owned_L2 = dof_handler_L2.locally_owned_dofs();
+            const IndexSet relevant_L2 = DoFTools::extract_locally_relevant_dofs(dof_handler_L2);
+            
+            VersionAdapter::cstReinit(constraints,
+                                      owned_L2,
+                                      relevant_L2,
+                                      *m_mpiInfo.mpiCommPtr());
+            
+            DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
+            
+            constraints.make_consistent_in_parallel(owned_L2,
+                                                    relevant_L2,
+                                                    *m_mpiInfo.mpiCommPtr());
+        } else {
+            DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
+        }
+        constraints.close();
+        
+        
+        std::vector<VecType> tmp_solutions(2);
+        if constexpr (is_mpi) {
+            // target vectors should have info about ghost cells
+            tmp_solutions[0].reinit(*m_blocks_desc.ownedPartition(),
+                                    //                                        *m_blocks_desc.relevantPartition(),
+                                    *m_mpiInfo.mpiCommPtr());
+            tmp_solutions[1].reinit(*m_blocks_desc.ownedPartition(),
+                                    //                                        *m_blocks_desc.relevantPartition(),
+                                    *m_mpiInfo.mpiCommPtr());
+        } else {
+            //                tmp_solutions[0].reinit(m_dofs_per_block);
+            //                tmp_solutions[1].reinit(m_dofs_per_block);
+            tmp_solutions[0].reinit(*m_blocks_desc.dofsPerBlock());
+            tmp_solutions[1].reinit(*m_blocks_desc.dofsPerBlock());
+        }
+        
+        solution_next_step.initialize();
+
+        VecBType new_history_variable_field_L2;
+        VecBType new_history_variable_field_L2_rele;
+        if constexpr (is_mpi)
+        {
+            const IndexSet relevant_dofs = DoFTools::extract_locally_relevant_dofs(dof_handler_L2);
+            
+            new_history_variable_field_L2.reinit(dof_handler_L2.locally_owned_dofs(),
+                                                 *m_mpiInfo.mpiCommPtr());
+            new_history_variable_field_L2_rele.reinit(dof_handler_L2.locally_owned_dofs(),
+                                                      relevant_dofs,
+                                                      *m_mpiInfo.mpiCommPtr());
+        } else {
+            new_history_variable_field_L2.reinit(dof_handler_L2.n_dofs());
+        }
+        
+        m_logfile << "\t\ttransferring solutions" << std::endl;
+#  if DEAL_II_VERSION_GTE(9, 7, 0)
+        solution_transfer.interpolate(tmp_solutions);
+#  else
+        // If an older version of dealII is used, for example, 9.4.0, interpolate()
+        // needs to use the following interface.
+        if constexpr (is_mpi){
+            std::vector<VecType*> tmp_solutions_ptrs = { &tmp_solutions[0],
+                &tmp_solutions[1]
+            };
+            solution_transfer.interpolate(tmp_solutions_ptrs);
+        } else
+            solution_transfer.interpolate(old_solutions, tmp_solutions);
+#  endif
+        m_logfile << "\t\tsolutions transferred" << std::endl;
+       
+        m_logfile << "\t\ttransferring H" << std::endl;
+#  if DEAL_II_VERSION_GTE(9, 7, 0)
+        solution_transfer_history_variable.interpolate(new_history_variable_field_L2);
+#  else
+        // If an older version of dealII is used, for example, 9.4.0, interpolate()
+        // needs to use the following interface.
+        if constexpr (is_mpi){
+            solution_transfer_history_variable.interpolate(new_history_variable_field_L2);
+        } else
+            solution_transfer_history_variable.interpolate(old_history_variable_field_L2, new_history_variable_field_L2);
+#  endif
+        m_logfile << "\t\tH transferred" << std::endl;
+        
+
+        
+        
+        solution_next_step.base()   = tmp_solutions[0];
+        m_solution.base()           = tmp_solutions[1];
+        
+        
+        
+        // make sure the projected solutions still satisfy
+        // hanging node constraints
+        //            m_constraints.distribute(solution_next_step.base());
+        //            m_constraints.distribute(m_solution.base());
+        solution_next_step.distributeCst(m_constraints); // ghost cells updated
+        m_solution.distributeCst(m_constraints);        // ghost cells updated
+        constraints.distribute(new_history_variable_field_L2);
+        
+        
+        if constexpr (is_mpi) {
+            new_history_variable_field_L2_rele = new_history_variable_field_L2;
+            new_history_variable_field_L2_rele.update_ghost_values();
+        }
+        
+        m_logfile << "\t\tupdate H into QPnts" << std::endl;
+        // new_history_variable_field_L2 contains the history variable projected
+        // onto the newly refined mesh
+        FEValues<dim> fe_values(fe_L2,
+                                m_qf_cell,
+                                update_values | update_gradients |
+                                update_quadrature_points | update_JxW_values);
+        
+        for (const auto &cell : dof_handler_L2.active_cell_iterators())
+        {
+            if constexpr (is_mpi){
+                if (!cell->is_locally_owned()) continue;
+            }
+            fe_values.reinit(cell);
+            
+            const std::vector<std::shared_ptr<PointHistory<dim>>> lqph =
+            m_quadrature_point_history.get_data(cell);
+            
+            std::vector<double> history_variable_values_cell(m_n_q_points);
+            
+            fe_values.get_function_values(
+                                          new_history_variable_field_L2_rele, history_variable_values_cell);
+            
+            for (unsigned int q_point : fe_values.quadrature_point_indices())
+            {
+                lqph[q_point]->assign_history_variable(history_variable_values_cell[q_point]);
+            }
+        }
+        
+        {
+        
+            const unsigned int nOwnedCells = m_triangulation.n_locally_owned_active_cells();
+            const unsigned int max = Utilities::MPI::max(nOwnedCells,
+                                                         *m_mpiInfo.mpiCommPtr());
+            const unsigned int min = Utilities::MPI::min(nOwnedCells,
+                                                         *m_mpiInfo.mpiCommPtr());
+            m_logfile << "\t\trepartitioned: "  << std::endl;
+            m_logfile << "\t\t\tmax n owned cells: " << max << std::endl;
+            m_logfile << "\t\t\tmin n owned cells: " << min << std::endl << std::endl;
+            
+        }
+    }
+}
+
+
+
+
+template <typename LATraits, typename Tria>
 bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transfer(BVector & solution_delta,
                                                                                    BVector & LBFGS_update_refine)
 {
