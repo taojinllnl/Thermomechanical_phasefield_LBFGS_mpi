@@ -189,27 +189,46 @@ LASolver<LATraits>::__directSolve(BVector & LBFGS_r_vector,
                            LBFGS_q_vector.block(ithGroup));
         }
     } else if constexpr (std::is_same_v<typename LATraits::TMTag, ::la::TagPETSc>) {
-                
-        for (unsigned int ithGroup = 0; ithGroup < __blockDesc.nBlocks(); ++ithGroup)
-        {
-            SolverControl solver_control(__tolList[ithGroup].nIters,
-                                         __tolList[ithGroup].tol);
-            // https://dealii.org/current/doxygen/deal.II/classPETScWrappers_1_1SparseDirectMUMPS.html
-            PETScWrappers::SparseDirectMUMPS solver(solver_control,
-                                                    *__mpiInfo.mpiCommPtr());
-            solver.set_symmetric_mode(false);
-            solver.solve(tangent_matrix.block(ithGroup, ithGroup),
-                         LBFGS_r_vector.block(ithGroup),
-                         LBFGS_q_vector.block(ithGroup));
-
-        }
-    } else if constexpr (std::is_same_v<typename LATraits::TMTag, ::la::TagTrilinos>) {
+        // https://dealii.org/current/doxygen/deal.II/classPETScWrappers_1_1SparseDirectMUMPS.html
+        
+        using PrecJacobi = dealii::PETScWrappers::PreconditionBlockJacobi;
+        using PrecILU    = dealii::PETScWrappers::PreconditionILU;
+        using PrecICC    = dealii::PETScWrappers::PreconditionICC;
+        using PrecPSails = dealii::PETScWrappers::PreconditionParaSails;
+        using PrecSOR    = dealii::PETScWrappers::PreconditionSOR;
+        using PrecSSOR   = dealii::PETScWrappers::PreconditionSSOR;
+//        using PrecShell  = dealii::PETScWrappers::PreconditionShell;
+        using PrecNone   = dealii::PETScWrappers::PreconditionNone;
+        
+        using PrecType = PrecJacobi;
         
         for (unsigned int ithGroup = 0; ithGroup < __blockDesc.nBlocks(); ++ithGroup)
         {
             SolverControl solver_control(__tolList[ithGroup].nIters,
                                          __tolList[ithGroup].tol);
-            // https://dealii.org/current/doxygen/deal.II/classTrilinosWrappers_1_1SolverDirect.html
+          
+            PETScWrappers::SparseDirectMUMPS solver(solver_control,
+                                                    *__mpiInfo.mpiCommPtr());
+            solver.set_symmetric_mode(false);
+            
+//            PrecType preconditioner;
+//            preconditioner.initialize(tangent_matrix.block(ithGroup, ithGroup));
+//            solver.initialize(preconditioner);
+
+            solver.solve(tangent_matrix.block(ithGroup, ithGroup),
+                         LBFGS_r_vector.block(ithGroup),
+                         LBFGS_q_vector.block(ithGroup));
+
+
+        }
+    } else if constexpr (std::is_same_v<typename LATraits::TMTag, ::la::TagTrilinos>) {
+        // https://dealii.org/current/doxygen/deal.II/classTrilinosWrappers_1_1SolverDirect.html
+        
+        for (unsigned int ithGroup = 0; ithGroup < __blockDesc.nBlocks(); ++ithGroup)
+        {
+            SolverControl solver_control(__tolList[ithGroup].nIters,
+                                         __tolList[ithGroup].tol);
+           
             
             TrilinosWrappers::SolverDirect A_direct_T(solver_control);
             A_direct_T.initialize(tangent_matrix.block(ithGroup, ithGroup));
