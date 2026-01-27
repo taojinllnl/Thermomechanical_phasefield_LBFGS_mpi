@@ -251,11 +251,12 @@ OutputHelper<LATraits, Tria, PointHistory>
 //            }
 //    }
 
-    MappingQ<dim> mapping(polyDegree + 1);
+    
     
     for (unsigned int i = 0; i < dim; ++i)
         for (unsigned int j = i; j < dim; ++j)
         {
+            MappingQ<dim> mapping(polyDegree + 1);
             typename LATraits::VectorBlock stress_field_L2;
             typename LATraits::VectorBlock stress_field_L2_rele;
             
@@ -604,9 +605,16 @@ void OutputHelper<LATraits, Tria, PointHistory>
 //        constraints.reinit(locally_owned_dofs, locally_relevant_dofs);
     }
     DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
+    if constexpr (is_mpi){
+        const IndexSet &locally_owned_dofs = dof_handler_L2.locally_owned_dofs();
+        const IndexSet locally_relevant_dofs =
+            DoFTools::extract_locally_relevant_dofs(dof_handler_L2);
+        constraints.make_consistent_in_parallel(locally_owned_dofs,
+                                                locally_relevant_dofs,
+                                                *__mpiInfo.mpiCommPtr());
+    } 
+    
     constraints.close();
-    
-    
     
     __solution(data_out, solution);
 
