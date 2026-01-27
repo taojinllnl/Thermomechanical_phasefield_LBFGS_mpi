@@ -1530,6 +1530,10 @@ namespace PhaseField_monolithic
 
     bool local_refine_and_solution_transfer(BVector & solution_delta,
 					    BVector & LBFGS_update_refine);
+      
+      void repartition(BVector & solution_next_step,
+                       const typename LATraits::VectorBlock& H_vector,
+                       const typename LATraits::VectorBlock& H_vector_rele);
   }; // class PhaseFieldMonolithicSolve
 
 namespace type{
