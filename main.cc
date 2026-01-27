@@ -5484,9 +5484,11 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
 
     double delta_alpha_new;
 
-    unsigned int ls_max = 10;
+    unsigned int ls_max = 50;
 
-    for (unsigned int i = 1; i <= ls_max; ++i)
+      unsigned int i = 1;
+      
+    for (; i <= ls_max; ++i)
       {
 	delta_alpha_new = -delta_alpha_old
 	                * (g_new * BFGS_p_vector)/(y_old * BFGS_p_vector);
@@ -5519,9 +5521,14 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
         delta_alpha_old = delta_alpha_new;
       }
 
-    if (alpha < 1.0e-3)
-      alpha = 1.0;
+      if (alpha < 1.0e-3){
+          alpha = 1.0e-3;
+          m_logfile << i << "¬" << std::flush;
+      } else {
+          m_logfile << i << (i == ls_max ? "•" : "") << std::flush;
+      }
 
+      
     return alpha;
   }
 
