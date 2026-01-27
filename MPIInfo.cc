@@ -51,6 +51,12 @@ unsigned int MPIInfo::nRanks() const
     return __nRanks;
 }
 
+bool MPIInfo::isCurrentRank(const unsigned int rank) const
+{
+    return rank == __rank;
+}
+
+
 void MPIInfo::summary(std::ostream& stream)
 {
     if (__MPISupport) {

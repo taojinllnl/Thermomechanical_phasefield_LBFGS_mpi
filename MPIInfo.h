@@ -37,7 +37,7 @@ public:
     bool isMPI() const;
     unsigned int rank() const;
     unsigned int nRanks() const;
-    
+    bool isCurrentRank(const unsigned int rank = 0) const;
     
     void summary(std::ostream& stream);
     
