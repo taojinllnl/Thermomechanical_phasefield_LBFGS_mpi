@@ -7373,18 +7373,7 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
             
 
             m_triangulation.execute_coarsening_and_refinement();
-
-            
-//            if constexpr (std::is_same_v<Tria, DTria<2>> ||
-//                          std::is_same_v<Tria, DTria<3>>)
-//            {
-//                // once refinement applied, repartitioning may be required
-//                // TODO: flag for repartitioning
-//                if(true) {
-//                    m_triangulation.repartition();
-//                }
-//            }
-
+            m_logfile << "\t\trefinement executed." << std::endl;
 
             set_bcs_id();
 
@@ -7739,16 +7728,7 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
 		  << energy_pair.first << std::endl;
 	m_logfile << "\t\tCrack energy dissipation (J) = " << std::fixed << std::setprecision(10) << std::scientific
 		  << energy_pair.second << std::endl;
-          
-//          if constexpr (std::is_same_v<Tria, DTria<2>> ||
-//                        std::is_same_v<Tria, DTria<3>>)
-//          {
-//              // once refinement applied, repartitioning may be required
-//              // TODO: flag for repartitioning
-//              if(true) {
-//                  m_triangulation.repartition();
-//              }
-//          }
+        
 
 	std::pair<double, std::array<double, 3>> time_energy;
 	time_energy.first = m_time.current();
