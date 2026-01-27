@@ -15,7 +15,7 @@ subsection Scenario
   set Scenario number = 6
   
   # Name of the log file
-  set Log file name = quenching_structured.log
+  set Log file name = quenching_structured
   
   # Shall we write the iteration history to the log file? (yes or no)
   set Output iteration history = yes
