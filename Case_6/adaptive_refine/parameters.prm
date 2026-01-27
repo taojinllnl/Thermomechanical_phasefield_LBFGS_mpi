@@ -44,6 +44,9 @@ subsection Scenario
   # Mesh refinement strategy (pre-refine or adaptive-refine)
   set Mesh refinement strategy = adaptive-refine
   
+  # The threshold for repartitioning
+  set Repartitioning ratio = 1.5
+  
   # Number of vectors used in LBFGS
   set LBFGS m = 20
 
