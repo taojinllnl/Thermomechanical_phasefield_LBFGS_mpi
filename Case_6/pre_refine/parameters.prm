@@ -139,13 +139,13 @@ subsection Nonlinear solver
   set Tolerance temperature residual        = 1.0e-6
   
   # Displacement increment tolerance
-  set Tolerance displacement increment      = 1.0e-6
+  set Tolerance displacement increment      = 1.0e-3
   
   # Phasefield increment tolerance
-  set Tolerance phasefield increment        = 1.0e-6
+  set Tolerance phasefield increment        = 1.0e-3
   
   # Temperature increment tolerance
-  set Tolerance temperature increment       = 1.0e-6
+  set Tolerance temperature increment       = 1.0e-3        #in case 1e-1
 end
 
 subsection Time
