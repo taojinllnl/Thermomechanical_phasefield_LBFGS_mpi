@@ -78,6 +78,29 @@ BlockSparseMatrixWrapper<TraitsType>
 
 
 
+template <typename TraitsType>
+std::string BlockSparseMatrixWrapper<TraitsType>
+::verificationInfo()
+{
+    std::string content = "";
+    
+    content += "\n--------------------------------------------\n";
+    content += std::to_string(++ithVer) + "\n";
+    content += "frobenius_norm: " + std::to_string(this->frobenius_norm()) + "\n";
+    for (unsigned int ithGroup = 0; ithGroup < __blockDesc.nBlocks(); ++ithGroup)
+        for (unsigned int jthGroup = 0; jthGroup < __blockDesc.nBlocks(); ++jthGroup)
+        {
+            content += "\t\tBlock " + std::to_string(ithGroup) + ", " +  std::to_string(jthGroup) +  "\n";
+            const auto& block = base().block(ithGroup, jthGroup);
+            
+            content += "\t\tfrobenius_norm: " + std::to_string(block.frobenius_norm()) + "\n";
+        }
+    
+    content += "--------------------------------------------\n";
+    return content;
+}
+
+
 template class la::BlockSparseMatrixWrapper<la::Traits<TagSerial>>;
 template class la::BlockSparseMatrixWrapper<la::Traits<TagPETSc>>;
 template class la::BlockSparseMatrixWrapper<la::Traits<TagTrilinos>>;

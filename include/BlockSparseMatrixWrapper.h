@@ -70,6 +70,9 @@ public:
     
     typename TraitsType::Matrix& base();
     const typename TraitsType::Matrix& base() const;
+    
+    unsigned int ithVer = 0;
+    std::string verificationInfo();
 };
 
 

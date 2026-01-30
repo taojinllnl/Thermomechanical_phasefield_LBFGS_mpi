@@ -222,6 +222,55 @@ BlockVectorWrapper<TraitsType>
 }
 
 
+template <typename TraitsType>
+std::string BlockVectorWrapper<TraitsType>
+::verificationInfo(const std::string vectorName)
+{
+    std::string content = "";
+    
+    content += "\n--------------------------------------------\n";
+    content += vectorName + ": "+ std::to_string(++ithVer)  + "\n";
+    content += "l1_norm: " + std::to_string(this->l1_norm()) + "\n";
+    content += "l2_norm: " + std::to_string(this->l2_norm()) + "\n";
+    content += "linfty_norm: " + std::to_string(this->linfty_norm()) + "\n";
+    content += "mean: " + std::to_string(this->mean_value()) + "\n";
+    content += "dot: " + std::to_string(base() * base()) + "\n";
+    for (unsigned int ithGroup = 0; ithGroup < __blockDesc.nBlocks(); ++ithGroup)
+    {
+        content += "\t\tBlock " + std::to_string(ithGroup) + "\n";
+        const auto& block = base().block(ithGroup);
+        
+        content += "\t\tl1_norm: " + std::to_string(block.l1_norm()) + "\n";
+        content += "\t\tl2_norm: " + std::to_string(block.l2_norm()) + "\n";
+        content += "\t\tlinfty_norm: " + std::to_string(block.linfty_norm()) + "\n";
+        content += "\t\tmean: " + std::to_string(block.mean_value()) + "\n";
+        content += "\t\tdot: " + std::to_string(block * block) + "\n";
+    }
+    if constexpr (std::is_same_v<typename TraitsType::TMTag, ::la::TagPETSc>) {
+        if(__relevancePtr) {
+            content += "__relevancePtr: \n";
+            content += "l1_norm: " + std::to_string(__relevancePtr->l1_norm()) + "\n";
+            content += "l2_norm: " + std::to_string(__relevancePtr->l2_norm()) + "\n";
+            content += "linfty_norm: " + std::to_string(__relevancePtr->linfty_norm()) + "\n";
+            content += "mean: " + std::to_string(__relevancePtr->mean_value()) + "\n";
+            content += "dot: " + std::to_string((*__relevancePtr) * (*__relevancePtr)) + "\n";
+            for (unsigned int ithGroup = 0; ithGroup < __blockDesc.nBlocks(); ++ithGroup)
+            {
+                content += "\t\tBlock " + std::to_string(ithGroup) + "\n";
+                const auto& block = __relevancePtr->block(ithGroup);
+                
+                content += "\t\tl1_norm: " + std::to_string(block.l1_norm()) + "\n";
+                content += "\t\tl2_norm: " + std::to_string(block.l2_norm()) + "\n";
+                content += "\t\tlinfty_norm: " + std::to_string(block.linfty_norm()) + "\n";
+                content += "\t\tmean: " + std::to_string(block.mean_value()) + "\n";
+                content += "\t\tdot: " + std::to_string(block * block) + "\n";
+            }
+        }
+    }
+    content += "--------------------------------------------\n";
+    return content;
+}
+
 
 template class la::BlockVectorWrapper<la::Traits<TagSerial>>;
 template class la::BlockVectorWrapper<la::Traits<TagPETSc>>;

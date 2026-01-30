@@ -20,6 +20,50 @@ Tol::Tol(const unsigned int nIters,
 {}
 
 
+PETScPrecSelector::Type
+PETScPrecSelector
+::parse(const std::string &str)
+{
+    if      (str == "none")        return Type::none;
+    else if (str == "jacobi")      return Type::jacobi;
+    else if (str == "ilu")         return Type::ilu;
+    else if (str == "icc")         return Type::icc;
+    else if (str == "parasails")   return Type::parasails;
+    else if (str == "sor")         return Type::sor;
+    else if (str == "ssor")        return Type::ssor;
+    
+    throw std::runtime_error("Unknown preconditioner: " + str);
+}
+
+PETScPrecSelector
+::PrecSelector(const std::string& str)
+: type(PETScPrecSelector::parse(str))
+{}
+
+
+
+
+TrilinosPrecSelector::Type
+TrilinosPrecSelector
+::parse(const std::string &str)
+{
+    if      (str == "indentity")   return Type::indentity;
+    else if (str == "jacobi")      return Type::jacobi;
+    else if (str == "ilu")         return Type::ilu;
+    else if (str == "ic")          return Type::ic;
+    else if (str == "ilut")        return Type::ilut;
+    else if (str == "shebs")       return Type::shebs;
+    else if (str == "sor")         return Type::sor;
+    else if (str == "ssor")        return Type::ssor;
+    
+    throw std::runtime_error("Unknown preconditioner: " + str);
+}
+
+TrilinosPrecSelector
+::PrecSelector(const std::string& str)
+: type(TrilinosPrecSelector::parse(str))
+{}
+
 
 
 
@@ -110,82 +154,6 @@ LASolver<LATraits>::__directSolve(BVector & LBFGS_r_vector,
             SparseDirectUMFPACK A_direct;
             A_direct.initialize(tangent_matrix.block(ithGroup, ithGroup));
             A_direct.vmult(LBFGS_r_vector.block(ithGroup),
-                           LBFGS_q_vector.block(ithGroup));
-        }
-    } else if constexpr (std::is_same_v<typename LATraits::TMTag, ::la::TagPETSc>) {
-        
-        using PrecJacobi = dealii::PETScWrappers::PreconditionBlockJacobi;
-        using PrecILU    = dealii::PETScWrappers::PreconditionILU;
-        using PrecICC    = dealii::PETScWrappers::PreconditionICC;
-        using PrecPSails = dealii::PETScWrappers::PreconditionParaSails;
-        using PrecSOR    = dealii::PETScWrappers::PreconditionSOR;
-        using PrecSSOR   = dealii::PETScWrappers::PreconditionSSOR;
-//        using PrecShell  = dealii::PETScWrappers::PreconditionShell;
-        using PrecNone   = dealii::PETScWrappers::PreconditionNone;
-        using MatBlock   = typename LATraits::MatrixBlock;
-        
-        
-        
-        using PrecType = PrecNone;
-        using InverseMatrix = InverseMatrix<MatBlock, PrecType>;
-        
-        for (unsigned int ithGroup = 0; ithGroup < __blockDesc.nBlocks(); ++ithGroup)
-        {
-            SolverControl solver_control(__tolList[ithGroup].nIters,
-                                         __tolList[ithGroup].tol);
-            PrecType prec;
-            prec.initialize(tangent_matrix.block(ithGroup, ithGroup));
-            
-            
-            InverseMatrix A_direct(tangent_matrix.block(ithGroup, ithGroup),
-                                   prec);
-            A_direct.vmult(solver_control,
-                           LBFGS_r_vector.block(ithGroup),
-                           LBFGS_q_vector.block(ithGroup));
-            
-        }
-        
-        //        SolverControl solver_control_uu(1e6, __cg_u_tol);
-        //        SolverControl solver_control_dd(1e6, __cg_d_tol);
-        //        SolverControl solver_control_TT(1e6, __cg_T_tol);
-        //        MPIPreconditionerGen<LATraits> precond_uu(m_parameters.m_preconditioner_type,
-        //                                           tangent_matrix.block(__u_group_ID, __u_group_ID));
-        //
-        //        MPIPreconditionerGen<LATraits> precond_dd(m_parameters.m_preconditioner_type,
-        //                                                       tangent_matrix.block(__d_group_ID, __d_group_ID));
-        //        {
-        //            InverseMatrix<LA::MPI::SparseMatrix, LA::PreconditionBase> A_direct_uu(tangent_matrix.block(__u_group_ID, __u_group_ID), precond_uu.preconditioner());
-        //            A_direct_uu.vmult(solver_control_uu,
-        //                              LBFGS_r_vector.block(__u_group_ID),
-        //                              LBFGS_q_vector.block(__u_group_ID));
-        //        }
-    } else if constexpr (std::is_same_v<typename LATraits::TMTag, ::la::TagTrilinos>) {
-        using PrecJacobi = dealii::TrilinosWrappers::PreconditionBlockJacobi;
-        using PrecILU    = dealii::TrilinosWrappers::PreconditionILU;
-        using PrecIC     = dealii::TrilinosWrappers::PreconditionIC;
-        using PrecILUT   = dealii::TrilinosWrappers::PreconditionILUT;
-        using PrecSOR    = dealii::TrilinosWrappers::PreconditionSOR;
-        using PrecSSOR   = dealii::TrilinosWrappers::PreconditionSSOR;
-        using PrecShebs  = dealii::TrilinosWrappers::PreconditionChebyshev;
-        using PrecI      = dealii::TrilinosWrappers::PreconditionIdentity;
-        using MatBlock   = typename LATraits::MatrixBlock;
-        
-        
-        using PrecType = PrecI;
-        using InverseMatrix = InverseMatrix<MatBlock, PrecType>;
-        
-        for (unsigned int ithGroup = 0; ithGroup < __blockDesc.nBlocks(); ++ithGroup)
-        {
-            SolverControl solver_control(__tolList[ithGroup].nIters,
-                                         __tolList[ithGroup].tol);
-            PrecType prec;
-            prec.initialize(tangent_matrix.block(ithGroup, ithGroup));
-            
-            
-            InverseMatrix A_direct(tangent_matrix.block(ithGroup, ithGroup),
-                                   prec);
-            A_direct.vmult(solver_control,
-                           LBFGS_r_vector.block(ithGroup),
                            LBFGS_q_vector.block(ithGroup));
         }
     } else if constexpr (std::is_same_v<typename LATraits::TMTag, ::la::TagPETSc>) {
@@ -318,7 +286,7 @@ LASolver<LATraits>::__cgSolve(BVector & LBFGS_r_vector,
         
         
         
-        using PrecType = PrecSSOR;
+        using PrecType = PrecNone;
         using CGSolver = MPICGSolver<MatBlock, PETScWrappers::SolverCG>;
         
         for (unsigned int ithGroup = 0; ithGroup < __blockDesc.nBlocks(); ++ithGroup)

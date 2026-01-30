@@ -17,8 +17,8 @@ SET(TARGET "main")
 # or switch altogether to the large project CMakeLists.txt file discussed
 # in the "CMake in user projects" page accessible from the "User info"
 # page of the documentation.
-FILE(GLOB_RECURSE TARGET_SRC  "*.cc")
-FILE(GLOB_RECURSE TARGET_INC  "*.h")
+FILE(GLOB_RECURSE TARGET_SRC  "src/*.cc")
+FILE(GLOB_RECURSE TARGET_INC  "include/*.h")
 SET(TARGET_SRC ${TARGET_SRC}  ${TARGET_INC})
 
 # Usually, you will not need to modify anything beyond this point...

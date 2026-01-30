@@ -128,7 +128,7 @@
 
 #include "OutputHelper.h"
 
-#include "WorkloadBalancer.h"
+#include "WorkloadEstimator.h"
 
 #include "VersionAdapter.h"
 #include "InhomogeousCstHandler.h"
@@ -1403,6 +1403,10 @@ namespace PhaseField_monolithic
 
     Errors m_error_residual, m_error_residual_0, m_error_residual_norm, m_error_update,
       m_error_update_0, m_error_update_norm;
+      
+      
+      
+      WorkloadEstimator<Tria> m_workload;
 
     void get_error_residual(Errors &error_residual);
     void get_error_update(const BVector &soln_update,
@@ -1456,7 +1460,8 @@ namespace PhaseField_monolithic
 				             const BVector & solution_delta);
 
     double line_search_stepsize_gradient_based(const BVector & BFGS_p_vector,
-					       const BVector & solution_delta);
+					       const BVector & solution_delta,
+                                               unsigned int& iSmallSteps);
 
     double line_search_zoom_strong_wolfe(double phi_low, double phi_low_prime, double alpha_low,
 					 double phi_high, double phi_high_prime, double alpha_high,
@@ -2296,6 +2301,7 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
                m_qf_cell,
                m_parameters.m_scenario,
                m_parameters.m_mpi_type)
+    , m_workload(m_mpiInfo)
   {}
 
 
@@ -5444,7 +5450,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
 
   template <typename LATraits, typename Tria>
   double PhaseFieldMonolithicSolve<LATraits, Tria>::line_search_stepsize_gradient_based(const BVector & BFGS_p_vector,
-				                                             const BVector & solution_delta)
+				                                             const BVector & solution_delta,
+                                                                                        unsigned int& iSmallSteps)
   {
 //    BVector g_old(m_system_rhs); // replace copy
 
@@ -5483,6 +5490,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
     double alpha = 1.0;
 
     double alpha_old = 0.0;
+      double alpha__ = 0.0;
 
     double delta_alpha_old = alpha - alpha_old;
 
@@ -5503,6 +5511,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
 
         if (i == ls_max)
           {
+              alpha__ = alpha;
             alpha = 1.0;
             break;
           }
@@ -5526,10 +5535,18 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
       }
 
       if (alpha < 1.0e-3){
-          alpha = 1.0e-3;
-          m_logfile << i << "¬" << std::flush;
+          if(iSmallSteps++ < 3){
+              alpha = 1.0e-3;
+          } else{
+              alpha = 1.0;
+              iSmallSteps = 0;
+          }
+          
+          m_logfile << i << "¬" << alpha << std::flush;
       } else {
-          m_logfile << i << (i == ls_max ? "•" : "") << std::flush;
+          m_logfile << i << (i == ls_max ? "•" : "")<< std::flush;
+          if(i==ls_max)
+              m_logfile << alpha__ <<std::flush;
       }
 
       
@@ -5881,7 +5898,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
       const std::string sectionName = "Solve B0";
       m_timer.enter_subsection(sectionName);
       
-
+      
+      LBFGS_r_vector = 0.0;
       assemble_system_B0();
       
       m_solver.solve(LBFGS_r_vector, LBFGS_q_vector, m_tangent_matrix);
@@ -5914,6 +5932,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
   solve_nonlinear_timestep_LBFGS(BVector & solution_delta,
 				 BVector & LBFGS_update_refine)
   {
+      unsigned int iSmallSteps = 0;
     BVector LBFGS_update(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
       LBFGS_update.initialize();
 //    LBFGS_update = 0.0;
@@ -5931,7 +5950,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
     unsigned int LBFGS_iteration = 0;
 
     BVector LBFGS_r_vector(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
-//      LBFGS_r_vector.initialize();
+      LBFGS_r_vector.initialize();
     BVector LBFGS_y_vector(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
       LBFGS_y_vector.initialize();
     BVector LBFGS_q_vector(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
@@ -6190,16 +6209,19 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
           if constexpr (__debug)
           m_logfile << LBFGS_r_vector.verificationInfo("LBFGS_r_vector before line search - " + std::to_string(LBFGS_iteration) ) << std::endl;
         line_search_parameter = line_search_stepsize_gradient_based(LBFGS_r_vector,
-        							    solution_delta);
+        							    solution_delta, iSmallSteps);
           
           if constexpr(is_mpi) {
               line_search_parameter = std::round(line_search_parameter * 1e6) / 1e6;
               line_search_parameter = Utilities::MPI::broadcast(*m_mpiInfo.mpiCommPtr(), line_search_parameter, /*root=*/0);
           }
           
-          const std::vector<double> x_all = Utilities::MPI::all_gather(*m_mpiInfo.mpiCommPtr(), line_search_parameter);
+          
           
           if constexpr (__debug) {
+              const std::vector<double> x_all = Utilities::MPI::all_gather(*m_mpiInfo.mpiCommPtr(), line_search_parameter);
+          
+          
               m_logfile << "*********************************************" << std::endl;
               m_logfile << LBFGS_iteration  << " line_search_parameter : " << std::endl;
               for (const double alpha : x_all)
@@ -6866,7 +6888,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>
               const typename LATraits::VectorBlock& old_history_variable_field_L2_rele)
 {
     if constexpr (std::is_same_v<Tria, DTria<2>> ||
-                  std::is_same_v<Tria, DTria<3>>){
+                  std::is_same_v<Tria, DTria<3>>)
+    {
         
         const std::string sectionName = "Repartition";
         m_timer.enter_subsection(sectionName);
@@ -6886,7 +6909,12 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>
         m_logfile << "\t\t\tmax n owned cells: " << max << std::endl;
         m_logfile << "\t\t\tmin n owned cells: " << min << std::endl << std::endl;
         
-        if(!will_repartition) return;
+        
+        if(!will_repartition)
+        {
+            m_timer.leave_subsection(sectionName);
+            return;
+        }
         
         
         
@@ -7154,6 +7182,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>
             m_logfile << "\t\t\tmin n owned cells: " << min << std::endl << std::endl;
             
         }
+        
+        m_timer.leave_subsection(sectionName);
     }
 }
 
@@ -7651,6 +7681,11 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
 
     while(m_time.current() < m_time.end() + m_time.get_delta_t()*1.0e-6)
       {
+          
+          if (m_mpiInfo.isCurrentRank()) {
+              std::cout << "Timestep " << m_time.get_timestep() << " @ " << m_time.current()
+              << 's' << std::endl;
+          }
 	m_logfile << std::endl
 		  << "Timestep " << m_time.get_timestep() << " @ " << m_time.current()
 		  << 's' << std::endl;

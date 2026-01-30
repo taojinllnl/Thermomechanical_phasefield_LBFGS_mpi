@@ -78,7 +78,9 @@ public:
     
     void distributeCst(const dealii::AffineConstraints<double>& constraints,
                        const bool updateGhostValues = true);
-
+    unsigned int ithVer = 0;
+    std::string verificationInfo(const std::string vectorName);
+    
     template <int dim, int spacedim = dim>
     void copyNoncst(const BlockVectorWrapper& other,
                     const dealii::AffineConstraints<double>& constraints,

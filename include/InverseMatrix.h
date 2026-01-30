@@ -56,7 +56,7 @@ void InverseMatrix<MatrixType, PreconditionerType>
     using namespace dealii;
     SolverCG<VectorType> cg(solver_control);
     
-    dst = 0.;
+//    dst = 0.;
     
     try
     {
