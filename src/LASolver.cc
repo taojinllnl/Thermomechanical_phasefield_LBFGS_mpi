@@ -4,7 +4,7 @@
 //
 //
 
-#include "LASolver.h"
+#include "../include/LASolver.h"
 
 using namespace PhaseField_monolithic;
 using namespace dealii;

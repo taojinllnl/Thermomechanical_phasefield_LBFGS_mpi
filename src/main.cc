@@ -111,27 +111,27 @@
 
 
 
-#include "SpectrumDecomposition.h"
-#include "Utilities.h"
-#include "FileSystem.h"
+#include "../include/SpectrumDecomposition.h"
+#include "../include/Utilities.h"
+#include "../include/FileSystem.h"
 
-#include "MPIInfo.h"
-#include "Logger.h"
-#include "TimerOutputWrapper.h"
+#include "../include/MPIInfo.h"
+#include "../include/Logger.h"
+#include "../include/TimerOutputWrapper.h"
 
 
-#include "BlockVectorWrapper.h"
-#include "BlockSparseMatrixWrapper.h"
-#include "BlockDesc.h"
+#include "../include/BlockVectorWrapper.h"
+#include "../include/BlockSparseMatrixWrapper.h"
+#include "../include/BlockDesc.h"
 
-#include "LASolver.h"
+#include "../include/LASolver.h"
 
-#include "OutputHelper.h"
+#include "../include/OutputHelper.h"
 
-#include "WorkloadEstimator.h"
+#include "../include/WorkloadEstimator.h"
 
-#include "VersionAdapter.h"
-#include "InhomogeousCstHandler.h"
+#include "../include/VersionAdapter.h"
+#include "../include/InhomogeousCstHandler.h"
 
 //template <int dim, int spacedim = dim>
 //using RTria = ::dealii::Triangulation<dim, spacedim>;

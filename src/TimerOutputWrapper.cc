@@ -4,7 +4,7 @@
 //
 //
 
-#include "TimerOutputWrapper.h"
+#include "../include/TimerOutputWrapper.h"
 
 using namespace dealii;
 using OutputFrequency   =  dealii::TimerOutput::OutputFrequency;
