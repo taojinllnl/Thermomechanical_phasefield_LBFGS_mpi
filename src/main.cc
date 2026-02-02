@@ -5486,7 +5486,6 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
     double alpha = 1.0;
 
     double alpha_old = 0.0;
-      double alpha__ = 0.0;
 
     double delta_alpha_old = alpha - alpha_old;
 
@@ -5534,7 +5533,6 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
 
         if (i == ls_max)
           {
-              alpha__ = alpha;
             alpha = 1.0;
             break;
           }
@@ -5564,12 +5562,13 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
               alpha = 1.0;
               iSmallSteps = 0;
           }
-          
-          m_logfile << i << "¬" << alpha << std::flush;
+          m_logfile << i << "¬" << (y_old * BFGS_p_vector) << std::flush;
       } else {
-          m_logfile << i << (i == ls_max ? "•" : "")<< std::flush;
-          if(i==ls_max)
-              m_logfile << alpha__ <<std::flush;
+          if(iSmallSteps)
+          {
+              iSmallSteps = 0;
+          }
+          m_logfile << i << (i == ls_max ? "•" : "") << std::flush;
       }
 
       
