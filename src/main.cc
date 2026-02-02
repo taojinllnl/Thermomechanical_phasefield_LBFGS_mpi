@@ -4988,8 +4988,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
           m_tangent_matrix.compress(VectorOperation::add);
           /*  *  *  *   *   *   *   *   *  MPI  *   *   *   *   *   *   *   *   */
           
-          if constexpr (__debug)
-          m_logfile << m_tangent_matrix.verificationInfo() << std::endl;
+          
       }
 
     m_timer.leave_subsection(sectionName);
@@ -5470,18 +5469,15 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
       
       solution_delta_trial.updateRelevance();
       
-      if constexpr (__debug)
-      m_logfile << solution_delta_trial.verificationInfo("solution_delta_trial line search before qph" ) << std::endl;
-      if constexpr (__debug)
-      m_logfile << m_solution.verificationInfo("m_solution line search before qph" ) << std::endl;
+      
       
     update_qph_incremental(solution_delta_trial, m_solution, false);
 
     BVector g_new(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
       g_new.initialize();
     assemble_system_rhs_LBFGS_parallel(m_solution, g_new);
-      if constexpr (__debug)
-      m_logfile << g_new.verificationInfo("g_new line search" ) << std::endl;
+      
+      
     BVector y_old(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
       y_old.initialize();
 
@@ -5505,6 +5501,33 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
 	delta_alpha_new = -delta_alpha_old
 	                * (g_new * BFGS_p_vector)/(y_old * BFGS_p_vector);
 	alpha += delta_alpha_new;
+          
+          
+         /*
+	 const double den = y_old * BFGS_p_vector;
+          const double num = g_new * BFGS_p_vector;
+          
+          const double denMin = Utilities::MPI::min(den, *m_mpiInfo.mpiCommPtr());
+          const double denMax = Utilities::MPI::max(den,
+                                                    *m_mpiInfo.mpiCommPtr());
+          
+          const double numMin = Utilities::MPI::min(num,
+                                                    *m_mpiInfo.mpiCommPtr());
+          const double numMax = Utilities::MPI::max(num,
+                                                    *m_mpiInfo.mpiCommPtr());
+          
+          
+          if (m_mpiInfo.isCurrentRank()) {
+
+              std::cout <<  std::scientific << std::setprecision(15)
+              << num << "," << den
+              << "|\t" << numMax << "," << numMin
+              << "=\t" << (numMax - numMin)
+              << "|\t" << denMax << "," << denMin
+              << "=\t" << (denMax - denMin)
+              << std::endl;
+          }
+	  */
 
 	if (std::fabs(delta_alpha_new) < 1.0e-5)
 	  break;
@@ -5527,8 +5550,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
           
         update_qph_incremental(solution_delta_trial, m_solution, false);
         assemble_system_rhs_LBFGS_parallel(m_solution, g_new);
-          if constexpr (__debug)
-          m_logfile << g_new.verificationInfo("g_new") << std::endl;
+          
+          
         y_old.base() = g_new.base() - g_old.base();
 
         delta_alpha_old = delta_alpha_new;
@@ -5837,8 +5860,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
         BVector system_rhs(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
         system_rhs.initialize();
     assemble_system_rhs_LBFGS_parallel(m_solution, system_rhs);
-        if constexpr (__debug)
-        m_logfile << system_rhs.verificationInfo("system_rhs cal_phi+phi'") << std::endl;
+        
     //m_constraints.condense(system_rhs);
 
     phi_values.first = calculate_energy_functional();
@@ -5871,8 +5893,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
         system_rhs.initialize();
     assemble_system_rhs_LBFGS_parallel(m_solution, system_rhs);
         
-        if constexpr (__debug)
-        m_logfile << system_rhs.verificationInfo("system_rhs cal_phi'") << std::endl;
+        
     //m_constraints.condense(system_rhs);
 
     //phi_prime = system_rhs * BFGS_p_vector;
@@ -6012,8 +6033,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
 
               assemble_system_rhs_LBFGS_parallel(m_solution, m_system_rhs);
               
-              if constexpr (__debug)
-              m_logfile << m_system_rhs.verificationInfo("m_system_rhs solve_nonlinear iter == 1") << std::endl;
+              
 
 	    // We cannot simply zero out the dofs that are constrained, since we might
 	    // have hanging node constraints. In this case, we need to modify the RHS
@@ -6145,8 +6165,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
         // LBFGS algorithm
         LBFGS_q_vector = m_system_rhs;
           
-          if constexpr (__debug)
-          m_logfile << LBFGS_q_vector.verificationInfo("LBFGS_q_vector before q += -alpha * y" ) << std::endl;
+          
           
         LBFGS_alpha_list.clear();
         for (auto itr = LBFGS_vector_list.begin(); itr != LBFGS_vector_list.end(); ++itr)
@@ -6177,14 +6196,12 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
         LBFGS_r_vector = LBFGS_q_vector;
 */
           
-          if constexpr (__debug)
-          m_logfile << LBFGS_q_vector.verificationInfo("LBFGS_q_vector before LBFGS_B0" ) << std::endl;
+          
         LBFGS_B0(LBFGS_r_vector,
 		 LBFGS_q_vector);
           
           
-          if constexpr (__debug)
-          m_logfile << LBFGS_r_vector.verificationInfo("LBFGS_r_vector after LBFGS_B0" ) << std::endl;
+          
 
         for (auto itr = LBFGS_vector_list.rbegin(); itr != LBFGS_vector_list.rend(); ++itr)
           {
@@ -6206,8 +6223,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
           LBFGS_r_vector.distributeCst(m_constraints);
           
         // We need a line search algorithm to decide line_search_parameter
-          if constexpr (__debug)
-          m_logfile << LBFGS_r_vector.verificationInfo("LBFGS_r_vector before line search - " + std::to_string(LBFGS_iteration) ) << std::endl;
+          
         line_search_parameter = line_search_stepsize_gradient_based(LBFGS_r_vector,
         							    solution_delta, iSmallSteps);
           
@@ -6218,16 +6234,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
           
           
           
-          if constexpr (__debug) {
-              const std::vector<double> x_all = Utilities::MPI::all_gather(*m_mpiInfo.mpiCommPtr(), line_search_parameter);
           
-          
-              m_logfile << "*********************************************" << std::endl;
-              m_logfile << LBFGS_iteration  << " line_search_parameter : " << std::endl;
-              for (const double alpha : x_all)
-                  m_logfile << std::setprecision(17) << alpha << "\n";
-              m_logfile << "*********************************************" << std::endl;
-          }
         // const double phi_0 = calculate_energy_functional();
         // const double phi_0_prime = m_system_rhs * LBFGS_r_vector;
 /*
@@ -6258,10 +6265,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
         LBFGS_update = LBFGS_r_vector;
           LBFGS_update.updateRelevance();
 
-          if constexpr (__debug)
-              m_logfile << LBFGS_r_vector.verificationInfo("LBFGS_r_vector after alpha * r - " + std::to_string(LBFGS_iteration) ) << std::endl;
-          if constexpr (__debug)
-              m_logfile << LBFGS_update.verificationInfo("LBFGS_update after assignment of alpha * r - " + std::to_string(LBFGS_iteration) ) << std::endl;
+          
               
           
           
@@ -6278,8 +6282,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
         solution_delta += LBFGS_update;
           solution_delta.updateRelevance();
           
-          if constexpr (__debug)
-          m_logfile << solution_delta.verificationInfo("solution_delta after += LBFGS_update - " + std::to_string(LBFGS_iteration) ) << std::endl;
+          
           
           update_qph_incremental(solution_delta, m_solution, false);
 
@@ -6289,14 +6292,12 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
 
           assemble_system_rhs_LBFGS_parallel(m_solution, m_system_rhs);
           
-          if constexpr (__debug)
-          m_logfile << m_system_rhs.verificationInfo("m_system_rhs solve_nonlinear iter == " + std::to_string(LBFGS_iteration)) << std::endl;
+         
         // if we use assemble_system_rhs_LBFGS_parallel, then condense() is not necessary
         //m_constraints.condense(m_system_rhs);
         LBFGS_y_vector += m_system_rhs;
           
-          if constexpr (__debug)
-          m_logfile << LBFGS_y_vector.verificationInfo("LBFGS_y_vector after += m_system_rhs - " + std::to_string(LBFGS_iteration) ) << std::endl;
+         
           
         LBFGS_s_vector = LBFGS_update;
 /*
@@ -7743,8 +7744,7 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
 	      {
 		m_solution += solution_delta;
               m_solution.updateRelevance();
-              if constexpr (__debug)
-              m_logfile << m_solution.verificationInfo("m_solution") << std::endl;
+              
 	        break;
 	      }
 	    else
