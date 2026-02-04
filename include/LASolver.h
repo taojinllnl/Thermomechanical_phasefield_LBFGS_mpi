@@ -21,7 +21,6 @@
 #include "BlockDesc.h"
 #include "MPIInfo.h"
 
-#include "InverseMatrix.h"
 #include "MPICGSolver.h"
 
 namespace PhaseField_monolithic {
