@@ -128,7 +128,6 @@
 
 #include "../include/OutputHelper.h"
 
-#include "../include/WorkloadEstimator.h"
 
 #include "../include/VersionAdapter.h"
 #include "../include/InhomogeousCstHandler.h"
@@ -1406,7 +1405,6 @@ namespace PhaseField_monolithic
       
       
       
-      WorkloadEstimator<Tria> m_workload;
 
     void get_error_residual(Errors &error_residual);
     void get_error_update(const BVector &soln_update,
@@ -2301,7 +2299,6 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
                m_qf_cell,
                m_parameters.m_scenario,
                m_parameters.m_mpi_type)
-    , m_workload(m_mpiInfo)
   {}
 
 
