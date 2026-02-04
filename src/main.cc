@@ -1269,13 +1269,9 @@ namespace PhaseField_monolithic
       using CellDataStorageT = CellDataStorage<typename Tria::cell_iterator,
       PointHistory<dim>>;
       
+      // variable to tell if this is class is for mpi mode
       static constexpr bool is_mpi =
           !std::is_same_v<typename LATraits::TMTag, ::la::TagSerial>;
-//            using BSMatrix = la::BlockSparseMatrixWrapper<la::Traits<la::TagSerial>>;
-//            using BVector  = la::BlockVectorWrapper<la::Traits<la::TagSerial>>;
-      
-//      using BSMatrix = BlockSparseMatrix<double>;
-//      using BVector  = BlockVector<double>;
       
       PhaseFieldMonolithicSolve(const Parameters::AllParameters& parameters,
                                 const MPIInfo& mpiInfo,
@@ -1305,12 +1301,11 @@ namespace PhaseField_monolithic
       
     const MPIInfo& m_mpiInfo;
       
-//    Logger  m_logfile;
       
-//    std::unique_ptr<std::ofstream>      __ofstream;
+      // use ConditionalOStream as logfile stream to allow only on rank to do so
     ConditionalOStream&                  m_logfile;
       
-//    mutable TimerOutput m_timer;
+      //    use TimerOutputWrapper to support both MPI and serial modes
       mutable TimerOutputWrapper<LATraits> m_timer;
       
       BlockDesc                     m_blocks_desc;
@@ -2246,17 +2241,10 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
                             ConditionalOStream& logfile,
                             Tria& triangulation)
     : m_parameters(parameters)
-//    , m_triangulation(Triangulation<dim>::maximum_smoothing)
     , m_triangulation(triangulation)
     , m_time(m_parameters.m_end_time)
     , m_mpiInfo(mpiInfo)
-//    , m_logfile(mpiInfo, parameters.m_output_dir, parameters.m_logfile_name, 0)
-//    , __ofstream(mpiInfo.rank() == 0
-//                 ? std::make_unique<std::ofstream>(parameters.m_output_dir + parameters.m_logfile_name + "_" + parameters.m_mpi_type + "_" + std::to_string(m_mpiInfo.nRanks()) + "_" + parameters.m_type_linear_solver + ".log")
-//                 : std::make_unique<std::ofstream>()) // only log file on rank 0
-//    , m_logfile(*__ofstream, mpiInfo.rank() == 0)
     , m_logfile(logfile)
-//    , m_timer(*m_mpiInfo.mpiCommPtr(), m_logfile, TimerOutput::summary, TimerOutput::wall_times)
     , m_timer(m_logfile, m_mpiInfo, TimerOutput::summary, TimerOutput::wall_times)
     , m_blocks_desc(m_mpiInfo,
                     {
@@ -2308,11 +2296,6 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
     {
         for(const auto& face : m_triangulation.active_face_iterators())
         {
-            
-//        }
-//        for (const auto &cell : m_triangulation.active_cell_iterators())
-//          for (const auto &face : cell->face_iterators())
-//        {
           if (face->at_boundary() == true)
             {
               if (std::fabs(face->center()[1] + 0.5 ) < 1.0e-9 )
@@ -2329,10 +2312,6 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
         for(const auto& face : m_triangulation.active_face_iterators())
         {
             
-//        }
-//        for (const auto &cell : m_triangulation.active_cell_iterators())
-//          for (const auto &face : cell->face_iterators())
-//        {
           if (face->at_boundary() == true)
             {
               if (std::fabs(face->center()[1] + 0.5 ) < 1.0e-9 )
@@ -2351,11 +2330,6 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
     {
         for(const auto& face : m_triangulation.active_face_iterators())
         {
-            
-//        }
-//        for (const auto &cell : m_triangulation.active_cell_iterators())
-//          for (const auto &face : cell->face_iterators())
-//        {
           if (face->at_boundary() == true)
             {
               if (std::fabs(face->center()[1] - 0.0 ) < 1.0e-9 )
@@ -2371,11 +2345,6 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
     {
         for(const auto& face : m_triangulation.active_face_iterators())
         {
-            
-//        }
-//        for (const auto &cell : m_triangulation.active_cell_iterators())
-//          for (const auto &face : cell->face_iterators())
-//        {
           if (face->at_boundary() == true)
             {
               if (std::fabs(face->center()[1] - 0.0 ) < 1.0e-9 )
@@ -2394,11 +2363,6 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
     {
         for(const auto& face : m_triangulation.active_face_iterators())
         {
-            
-//        }
-//        for (const auto &cell : m_triangulation.active_cell_iterators())
-//          for (const auto &face : cell->face_iterators())
-//        {
           if (face->at_boundary() == true)
             {
               if (std::fabs(face->center()[0] - 0.0 ) < 1.0e-9 )
@@ -2421,11 +2385,6 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
         
         for(const auto& face : m_triangulation.active_face_iterators())
         {
-            
-//        }
-//        for (const auto &cell : m_triangulation.active_cell_iterators())
-//          for (const auto &face : cell->face_iterators())
-//        {
           if (face->at_boundary() == true)
             {
               if (std::fabs(face->center()[0] - 0.0 ) < 1.0e-9 )
@@ -2449,11 +2408,6 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
         
         for(const auto& face : m_triangulation.active_face_iterators())
         {
-            
-//        }
-//        for (const auto &cell : m_triangulation.active_cell_iterators())
-//          for (const auto &face : cell->face_iterators())
-//        {
           if (face->at_boundary() == true)
             {
               if (std::fabs(face->center()[0] - 0.0 ) < 1.0e-9 )
@@ -2481,11 +2435,6 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
         
         for(const auto& face : m_triangulation.active_face_iterators())
         {
-            
-//        }
-//        for (const auto &cell : m_triangulation.active_cell_iterators())
-//            for (const auto &face : cell->face_iterators())
-//            {
                 if (face->at_boundary() == true)
                 {
                     if (std::fabs(face->center()[0] - 0.0 ) < 1.0e-9 )
@@ -2513,11 +2462,6 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
         
         for(const auto& face : m_triangulation.active_face_iterators())
         {
-            
-//        }
-//        for (const auto &cell : m_triangulation.active_cell_iterators())
-//            for (const auto &face : cell->face_iterators())
-//            {
                 if (face->at_boundary() == true)
                 {
                     if (std::fabs(face->center()[0] - 0.0 ) < 1.0e-9 )
@@ -2545,11 +2489,6 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
         
         for(const auto& face : m_triangulation.active_face_iterators())
         {
-            
-//        }
-//        for (const auto &cell : m_triangulation.active_cell_iterators())
-//            for (const auto &face : cell->face_iterators())
-//            {
                 if (face->at_boundary() == true)
                 {
                     if (std::fabs(face->center()[0] - 0.0 ) < 1.0e-9 )
@@ -2573,11 +2512,6 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
     {
         for(const auto& face : m_triangulation.active_face_iterators())
         {
-            
-//        }
-//        for (const auto &cell : m_triangulation.active_cell_iterators())
-//            for (const auto &face : cell->face_iterators())
-//            {
                 if (face->at_boundary() == true)
                 {
                     if (std::fabs(face->center()[0] - 0.0 ) < 1.0e-9 )
