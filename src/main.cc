@@ -5501,32 +5501,6 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
 	                * (g_new * BFGS_p_vector)/(y_old * BFGS_p_vector);
 	alpha += delta_alpha_new;
           
-          
-         /*
-	 const double den = y_old * BFGS_p_vector;
-          const double num = g_new * BFGS_p_vector;
-          
-          const double denMin = Utilities::MPI::min(den, *m_mpiInfo.mpiCommPtr());
-          const double denMax = Utilities::MPI::max(den,
-                                                    *m_mpiInfo.mpiCommPtr());
-          
-          const double numMin = Utilities::MPI::min(num,
-                                                    *m_mpiInfo.mpiCommPtr());
-          const double numMax = Utilities::MPI::max(num,
-                                                    *m_mpiInfo.mpiCommPtr());
-          
-          
-          if (m_mpiInfo.isCurrentRank()) {
-
-              std::cout <<  std::scientific << std::setprecision(15)
-              << num << "," << den
-              << "|\t" << numMax << "," << numMin
-              << "=\t" << (numMax - numMin)
-              << "|\t" << denMax << "," << denMin
-              << "=\t" << (denMax - denMin)
-              << std::endl;
-          }
-	  */
 
 	if (std::fabs(delta_alpha_new) < 1.0e-5)
 	  break;
@@ -5556,16 +5530,18 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
       }
 
       if (alpha < 1.0e-3){
+          const double alpha_tmp = alpha;
           if(iSmallSteps++ < 3){
               alpha = 1.0e-3;
           } else{
               alpha = 1.0;
               iSmallSteps = 0;
           }
-          m_logfile << i << "¬" << (y_old * BFGS_p_vector) << std::flush;
+          m_logfile << i << "¬" << alpha_tmp << std::flush;
       } else {
           if(iSmallSteps)
           {
+              m_logfile << "«" << std::flush;
               iSmallSteps = 0;
           }
           m_logfile << i << (i == ls_max ? "•" : "") << std::flush;
