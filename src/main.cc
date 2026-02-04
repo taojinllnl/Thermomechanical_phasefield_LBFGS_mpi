@@ -3716,23 +3716,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
       {
           m_solution.assignDoubleOverABlock(m_t_dof,
                                             m_parameters.m_ref_temperature);
+
           
-//          const double cool_down_temperature = 293.15; // Kelvin
-//          
-//          std::map<types::global_dof_index, Point<dim> > support_points_T;
-//          ComponentMask temperature_mask = m_fe.component_mask(m_t_fe);
-//          support_points_T = DoFTools::map_dofs_to_support_points (MappingQ1<dim>(),
-//                                                                   m_dof_handler,
-//                                                                   temperature_mask);
-//          
-//          for (auto const & item : support_points_T)
-//          {
-//              if (   (std::fabs(item.second[0] -  0.0) < 1.0e-9)
-//                  || (std::fabs(item.second[1] -  0.0) < 1.0e-9))
-//              {
-//                  m_solution(item.first) = cool_down_temperature;
-//              }
-//          }
           
           addSupportTemperature([](const Point<dim>& pnt) -> bool {
               return (std::fabs(pnt[0] -  0.0) < 1.0e-9)
@@ -3743,25 +3728,6 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
       {
           m_solution.assignDoubleOverABlock(m_t_dof,
                                             m_parameters.m_ref_temperature);
-          
-          
-//          const double cool_down_temperature = 293.15; // Kelvin
-//          
-//          std::map<types::global_dof_index, Point<dim> > support_points_T;
-//          ComponentMask temperature_mask = m_fe.component_mask(m_t_fe);
-//          support_points_T = DoFTools::map_dofs_to_support_points (MappingQ1<dim>(),
-//                                                                   m_dof_handler,
-//                                                                   temperature_mask);
-//          
-//          for (auto const & item : support_points_T)
-//          {
-//              if (   (std::fabs(item.second[0] -  0.0) < 1.0e-9)
-//                  || (std::fabs(item.second[1] -  0.0) < 1.0e-9)
-//                  || (std::fabs(item.second[1] -  10.0) < 1.0e-9))
-//              {
-//                  m_solution(item.first) = cool_down_temperature;
-//              }
-//          }
           
           
           addSupportTemperature([](const Point<dim>& pnt) -> bool {
@@ -3776,25 +3742,6 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
                                             m_parameters.m_ref_temperature);
           
           
-//          const double cool_down_temperature = 293.15; // Kelvin
-//          
-//          std::map<types::global_dof_index, Point<dim> > support_points_T;
-//          ComponentMask temperature_mask = m_fe.component_mask(m_t_fe);
-//          support_points_T = DoFTools::map_dofs_to_support_points (MappingQ1<dim>(),
-//                                                                   m_dof_handler,
-//                                                                   temperature_mask);
-//          
-//          for (auto const & item : support_points_T)
-//          {
-//              if (   (std::fabs(item.second[0] -  0.0) < 1.0e-9)
-//                  || (std::fabs(item.second[1] -  0.0) < 1.0e-9)
-//                  //|| (std::fabs(item.second[2] -  0.0) < 1.0e-9)
-//                  //|| (std::fabs(item.second[2] -  0.25) < 1.0e-9)
-//                  )
-//              {
-//                  m_solution(item.first) = cool_down_temperature;
-//              }
-//          }
           
           addSupportTemperature([](const Point<dim>& pnt) -> bool {
               return (std::fabs(pnt[0] -  0.0) < 1.0e-9)
@@ -3807,25 +3754,6 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
                                             m_parameters.m_ref_temperature);
           
           
-//          const double cool_down_temperature = 293.15; // Kelvin
-//          
-//          std::map<types::global_dof_index, Point<dim> > support_points_T;
-//          ComponentMask temperature_mask = m_fe.component_mask(m_t_fe);
-//          support_points_T = DoFTools::map_dofs_to_support_points (MappingQ1<dim>(),
-//                                                                   m_dof_handler,
-//                                                                   temperature_mask);
-//          
-//          for (auto const & item : support_points_T)
-//          {
-//              if (   (std::fabs(item.second[0] -  0.0) < 1.0e-9)
-//                  || (std::fabs(item.second[1] -  0.0) < 1.0e-9)
-//                  || (std::fabs(item.second[2] -  0.0) < 1.0e-9)
-//                  || (std::fabs(item.second[2] -  1.0) < 1.0e-9)
-//                  )
-//              {
-//                  m_solution(item.first) = cool_down_temperature;
-//              }
-//          }
           
           addSupportTemperature([](const Point<dim>& pnt) -> bool {
               return   (std::fabs(pnt[0] -  0.0) < 1.0e-9)
@@ -3840,22 +3768,6 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
                                             m_parameters.m_ref_temperature);
           
           
-//          const double cool_down_temperature = 293.15; // Kelvin
-//          
-//          std::map<types::global_dof_index, Point<dim> > support_points_T;
-//          ComponentMask temperature_mask = m_fe.component_mask(m_t_fe);
-//          support_points_T = DoFTools::map_dofs_to_support_points (MappingQ1<dim>(),
-//                                                                   m_dof_handler,
-//                                                                   temperature_mask);
-//          
-//          for (auto const & item : support_points_T)
-//          {
-//              if ( (std::fabs(item.second[2] -  0.0) < 1.0e-9)
-//                  )
-//              {
-//                  m_solution(item.first) = cool_down_temperature;
-//              }
-//          }
           
           addSupportTemperature([](const Point<dim>& pnt) -> bool {
               return (std::fabs(pnt[2] -  0.0) < 1.0e-9);
@@ -3867,23 +3779,6 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
                                             m_parameters.m_ref_temperature);
           
           
-//          const double cool_down_temperature = 293.15; // Kelvin
-//          
-//          std::map<types::global_dof_index, Point<dim> > support_points_T;
-//          ComponentMask temperature_mask = m_fe.component_mask(m_t_fe);
-//          support_points_T = DoFTools::map_dofs_to_support_points (MappingQ1<dim>(),
-//                                                                   m_dof_handler,
-//                                                                   temperature_mask);
-//          
-//          for (auto const & item : support_points_T)
-//          {
-//              if ( (std::fabs(item.second[1] -  0.0) < 1.0e-9)
-//                  )
-//              {
-//                  m_solution(item.first) = cool_down_temperature;
-//              }
-//          }
-          
           addSupportTemperature([](const Point<dim>& pnt) -> bool {
               return (std::fabs(pnt[1] -  0.0) < 1.0e-9);
           });
@@ -3894,36 +3789,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
                                             m_parameters.m_ref_temperature);
           
           
-//          const double cool_down_temperature = 293.15; // Kelvin
-//          
-//          std::map<types::global_dof_index, Point<dim> > support_points_T;
-//          ComponentMask temperature_mask = m_fe.component_mask(m_t_fe);
-//          support_points_T = DoFTools::map_dofs_to_support_points (MappingQ1<dim>(),
-//                                                                   m_dof_handler,
-//                                                                   temperature_mask);
-//          
-//          // This radius has to be consistent with the radius value
-//          // used in make_grid_case_11()
-//          const double radius = 5.0;
-//          for (auto const & item : support_points_T)
-//          {
-//              double distance2center = std::sqrt( item.second[0]*item.second[0]
-//                                                 + item.second[1]*item.second[1]
-//                                                 + item.second[2]*item.second[2]
-//                                                 );
-//              
-//              if (std::fabs(distance2center - radius) < 1.0e-6)
-//              {
-//                  m_solution(item.first) = cool_down_temperature;
-//              }
-//          }
-          
           addSupportTemperature([](const Point<dim>& pnt) -> bool {
               const double radius = 5.0;
-//              double distance2center = std::sqrt(  pnt[0]*pnt[0]
-//                                                 + pnt[1]*pnt[1]
-//                                                 + pnt[2]*pnt[2]
-//                                                 );
               return std::fabs(pnt.distance(Point<dim>()) - radius) < 1.0e-6;
           });
           
@@ -3933,8 +3800,6 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
           Assert(false, ExcMessage("The scenario has not been implemented!"));
       }
       
-//      if constexpr (is_mpi)
-//          m_solution.updateRelevance();
   }
 
   template <typename LATraits, typename Tria>
