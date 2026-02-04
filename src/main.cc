@@ -3638,27 +3638,6 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 	      << (*m_blocks_desc.dofsPerBlock())[m_t_dof]
               << std::endl;
 
-//
-//    m_tangent_matrix.clear();
-//    {
-//      BlockDynamicSparsityPattern dsp(m_dofs_per_block, m_dofs_per_block);
-//
-//      Table<2, DoFTools::Coupling> coupling(m_n_components, m_n_components);
-//      for (unsigned int ii = 0; ii < m_n_components; ++ii)
-//        for (unsigned int jj = 0; jj < m_n_components; ++jj)
-//          coupling[ii][jj] = DoFTools::always;
-//
-//      DoFTools::make_sparsity_pattern(
-//        m_dof_handler, coupling, dsp, m_constraints, false);
-//      m_sparsity_pattern.copy_from(dsp);
-//    }
-//
-//    m_tangent_matrix.reinit(m_sparsity_pattern);
-      
-
-//    m_system_rhs.reinit(m_dofs_per_block);
-//    m_solution.reinit(m_dofs_per_block);
-
       m_tangent_matrix.initalize(m_dof_handler, m_constraints, false);
       
       m_system_rhs.initialize();
