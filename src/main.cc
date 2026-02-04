@@ -5514,7 +5514,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
             // refined mesh as initial guess
             LBFGS_update = LBFGS_update_refine;
 
-//            m_constraints.distribute(LBFGS_update.base());
+              // distribute and update relevance
               LBFGS_update.distributeCst(m_constraints);
             solution_delta += LBFGS_update;
               solution_delta.updateRelevance();
@@ -6467,8 +6467,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>
         
         // make sure the projected solutions still satisfy
         // hanging node constraints
-        //            m_constraints.distribute(solution_next_step.base());
-        //            m_constraints.distribute(m_solution.base());
+        
+        // distribute and update relevance
         solution_next_step.distributeCst(m_constraints); // ghost cells updated
         m_solution.distributeCst(m_constraints);        // ghost cells updated
         constraints.distribute(new_history_variable_field_L2);
@@ -6844,8 +6844,8 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
             
             // make sure the projected solutions still satisfy
             // hanging node constraints
-//            m_constraints.distribute(solution_next_step.base());
-//            m_constraints.distribute(m_solution.base());
+
+            // distribute and update relevance
             solution_next_step.distributeCst(m_constraints); // ghost cells updated
             m_solution.distributeCst(m_constraints);        // ghost cells updated
             constraints.distribute(new_history_variable_field_L2);
