@@ -5728,7 +5728,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
 
         LBFGS_r_vector *= -1.0; // this is the p_vector (search direction)
 
-//        m_constraints.distribute(LBFGS_r_vector.base());
+          // distribute and update relevance
           LBFGS_r_vector.distributeCst(m_constraints);
           
         // We need a line search algorithm to decide line_search_parameter
