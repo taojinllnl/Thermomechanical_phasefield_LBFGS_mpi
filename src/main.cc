@@ -2606,21 +2606,6 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
     std::ifstream f("square_tension_unstructured.msh");
     gridin.read_msh(f);
 
-//    for (const auto &cell : m_triangulation.active_cell_iterators())
-//      for (const auto &face : cell->face_iterators())
-//	{
-//	  if (face->at_boundary() == true)
-//	    {
-//	      if (std::fabs(face->center()[1] + 0.5 ) < 1.0e-9 )
-//		face->set_boundary_id(0);
-//	      else if (std::fabs(face->center()[1] - 0.5 ) < 1.0e-9)
-//	        face->set_boundary_id(1);
-//	      else
-//	        face->set_boundary_id(2);
-//	    }
-//	}
-      
-
     m_triangulation.refine_global(m_parameters.m_global_refine_times);
 
     if (m_parameters.m_refinement_strategy == "pre-refine")
@@ -2710,23 +2695,6 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
     std::ifstream f("square_shear_unstructured.msh");
     gridin.read_msh(f);
 
-//    for (const auto &cell : m_triangulation.active_cell_iterators())
-//      for (const auto &face : cell->face_iterators())
-//	{
-//	  if (face->at_boundary() == true)
-//	    {
-//	      if (std::fabs(face->center()[1] + 0.5 ) < 1.0e-9 )
-//		face->set_boundary_id(0);
-//	      else if (std::fabs(face->center()[1] - 0.5 ) < 1.0e-9)
-//	        face->set_boundary_id(1);
-//	      else if (   (std::fabs(face->center()[0] - 0.0 ) < 1.0e-9)
-//		       || (std::fabs(face->center()[0] - 1.0 ) < 1.0e-9))
-//	        face->set_boundary_id(2);
-//	      else
-//	        face->set_boundary_id(3);
-//	    }
-//	}
-      
 
     m_triangulation.refine_global(m_parameters.m_global_refine_times);
 
@@ -2815,20 +2783,6 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
     std::ifstream f("square_tension_structured.msh");
     gridin.read_msh(f);
 
-//    for (const auto &cell : m_triangulation.active_cell_iterators())
-//      for (const auto &face : cell->face_iterators())
-//	{
-//	  if (face->at_boundary() == true)
-//	    {
-//	      if (std::fabs(face->center()[1] - 0.0 ) < 1.0e-9 )
-//		face->set_boundary_id(0);
-//	      else if (std::fabs(face->center()[1] - 1.0 ) < 1.0e-9)
-//	        face->set_boundary_id(1);
-//	      else
-//	        face->set_boundary_id(2);
-//	    }
-//	}
-      
       
 
     m_triangulation.refine_global(m_parameters.m_global_refine_times);
@@ -2918,22 +2872,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
     std::ifstream f("square_shear_structured.msh");
     gridin.read_msh(f);
 
-//    for (const auto &cell : m_triangulation.active_cell_iterators())
-//      for (const auto &face : cell->face_iterators())
-//	{
-//	  if (face->at_boundary() == true)
-//	    {
-//	      if (std::fabs(face->center()[1] - 0.0 ) < 1.0e-9 )
-//		face->set_boundary_id(0);
-//	      else if (std::fabs(face->center()[1] - 1.0 ) < 1.0e-9)
-//	        face->set_boundary_id(1);
-//	      else if (   (std::fabs(face->center()[0] - 0.0 ) < 1.0e-9)
-//		       || (std::fabs(face->center()[0] - 1.0 ) < 1.0e-9))
-//	        face->set_boundary_id(2);
-//	      else
-//	        face->set_boundary_id(3);
-//	    }
-//	}
+
       
       
 
@@ -3031,24 +2970,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 					      Point<dim>( 0.0,      0.0 ),
 					      Point<dim>( length,   width ) );
 
-//    for (const auto &cell : m_triangulation.active_cell_iterators())
-//      for (const auto &face : cell->face_iterators())
-//	{
-//	  if (face->at_boundary() == true)
-//	    {
-//	      if (std::fabs(face->center()[0] - 0.0 ) < 1.0e-9 )
-//		face->set_boundary_id(0);
-//	      else if (std::fabs(face->center()[1] - 0.0 ) < 1.0e-9)
-//	        face->set_boundary_id(1);
-//	      else if (std::fabs(face->center()[0] - 25.0 ) < 1.0e-9)
-//	        face->set_boundary_id(2);
-//	      else if (std::fabs(face->center()[1] - 5.0 ) < 1.0e-9)
-//	        face->set_boundary_id(3);
-//	      else
-//	        face->set_boundary_id(4);
-//	    }
-//	}
-      
+
       
     if (m_parameters.m_refinement_strategy == "pre-refine")
       {
@@ -3165,70 +3087,11 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 					      repetitions,
 					      Point<dim>( 0.0,      0.0 ),
 					      Point<dim>( length,   width ) );
-
-//    for (const auto &cell : m_triangulation.active_cell_iterators())
-//      for (const auto &face : cell->face_iterators())
-//	{
-//	  if (face->at_boundary() == true)
-//	    {
-//	      if (std::fabs(face->center()[0] - 0.0 ) < 1.0e-9 )
-//		face->set_boundary_id(0);
-//	      else if (std::fabs(face->center()[1] - 0.0 ) < 1.0e-9)
-//	        face->set_boundary_id(1);
-//	      else if (std::fabs(face->center()[0] - length ) < 1.0e-9)
-//	        face->set_boundary_id(2);
-//	      else if (std::fabs(face->center()[1] - width ) < 1.0e-9)
-//	        face->set_boundary_id(3);
-//	      else
-//	        face->set_boundary_id(4);
-//	    }
-//	}
-      
       
 
     if (m_parameters.m_refinement_strategy == "pre-refine")
       {
 	m_triangulation.refine_global(m_parameters.m_global_refine_times);
-	/*
-	unsigned int material_id;
-	double length_scale;
-	bool initiation_point_refine_unfinished = true;
-	while (initiation_point_refine_unfinished)
-	  {
-	    initiation_point_refine_unfinished = false;
-	    for (const auto &cell : m_triangulation.active_cell_iterators())
-	      {
-     if constexpr (is_mpi) {
-         if (!cell->is_locally_owned()) continue;
-     }
-		if (   (cell->center()[0] >  0.0 && cell->center()[0] <  3.0)
-		    || (cell->center()[1] >  0.0 && cell->center()[1] <  3.0)
-		    || (cell->center()[1] >  width - 3.0)
-		    )
-		  {
-		    // Because the mesh is not imported from gmsh, there is no
-		    // material ID associated with each cell. We need to manually
-		    // set this ID based on the materialDateFIle
-		    material_id = cell->material_id();
-		    length_scale = m_material_data[material_id][2];
-		    if (  std::sqrt(cell->measure())
-			> length_scale * m_parameters.m_allowed_max_h_l_ratio )
-		      {
-			cell->set_refine_flag();
-			initiation_point_refine_unfinished = true;
-		      }
-		  }
-	      }
-	    m_triangulation.execute_coarsening_and_refinement();
-     if constexpr (is_mpi) {
-         // accumulate local flag over all ranks
-         const unsigned int local_flag = initiation_point_refine_unfinished ? 1u : 0u;
-         const unsigned int global_flag =
-             Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
-         initiation_point_refine_unfinished = (global_flag > 0u);
-     }
-	  }
-	  */
       }
     else if (m_parameters.m_refinement_strategy == "adaptive-refine")
       {
@@ -3305,28 +3168,6 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 					      Point<dim>( 0.0,      0.0,    0.0),
 					      Point<dim>( length,   width,  thickness ) );
 
-//    for (const auto &cell : m_triangulation.active_cell_iterators())
-//      for (const auto &face : cell->face_iterators())
-//	{
-//	  if (face->at_boundary() == true)
-//	    {
-//	      if (std::fabs(face->center()[0] - 0.0 ) < 1.0e-9 )
-//		face->set_boundary_id(0);
-//	      else if (std::fabs(face->center()[1] - 0.0 ) < 1.0e-9)
-//	        face->set_boundary_id(1);
-//	      else if (std::fabs(face->center()[2] - 0.0 ) < 1.0e-9)
-//	        face->set_boundary_id(2);
-//	      else if (std::fabs(face->center()[0] - length ) < 1.0e-9)
-//	        face->set_boundary_id(3);
-//	      else if (std::fabs(face->center()[1] - width ) < 1.0e-9)
-//	        face->set_boundary_id(4);
-//	      else if (std::fabs(face->center()[2] - thickness ) < 1.0e-9)
-//	        face->set_boundary_id(5);
-//	      else
-//	        face->set_boundary_id(6);
-//	    }
-//	}
-      
 
     if (m_parameters.m_refinement_strategy == "pre-refine")
       {
@@ -3406,28 +3247,6 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 					      repetitions,
 					      Point<dim>( 0.0,      0.0,    0.0),
 					      Point<dim>( length,   width,  thickness ) );
-
-//    for (const auto &cell : m_triangulation.active_cell_iterators())
-//      for (const auto &face : cell->face_iterators())
-//	{
-//	  if (face->at_boundary() == true)
-//	    {
-//	      if (std::fabs(face->center()[0] - 0.0 ) < 1.0e-9 )
-//		face->set_boundary_id(0);
-//	      else if (std::fabs(face->center()[1] - 0.0 ) < 1.0e-9)
-//	        face->set_boundary_id(1);
-//	      else if (std::fabs(face->center()[2] - 0.0 ) < 1.0e-9)
-//	        face->set_boundary_id(2);
-//	      else if (std::fabs(face->center()[0] - length ) < 1.0e-9)
-//	        face->set_boundary_id(3);
-//	      else if (std::fabs(face->center()[1] - width ) < 1.0e-9)
-//	        face->set_boundary_id(4);
-//	      else if (std::fabs(face->center()[2] - thickness ) < 1.0e-9)
-//	        face->set_boundary_id(5);
-//	      else
-//	        face->set_boundary_id(6);
-//	    }
-//	}
       
 
     if (m_parameters.m_refinement_strategy == "pre-refine")
@@ -3510,28 +3329,6 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 					      repetitions,
 					      Point<dim>( 0.0,      0.0,    0.0),
 					      Point<dim>( length,   width,  thickness ) );
-
-//    for (const auto &cell : m_triangulation.active_cell_iterators())
-//      for (const auto &face : cell->face_iterators())
-//	{
-//	  if (face->at_boundary() == true)
-//	    {
-//	      if (std::fabs(face->center()[0] - 0.0 ) < 1.0e-9 )
-//		face->set_boundary_id(0);
-//	      else if (std::fabs(face->center()[1] - 0.0 ) < 1.0e-9)
-//	        face->set_boundary_id(1);
-//	      else if (std::fabs(face->center()[2] - 0.0 ) < 1.0e-9)
-//	        face->set_boundary_id(2);
-//	      else if (std::fabs(face->center()[0] - length ) < 1.0e-9)
-//	        face->set_boundary_id(3);
-//	      else if (std::fabs(face->center()[1] - width ) < 1.0e-9)
-//	        face->set_boundary_id(4);
-//	      else if (std::fabs(face->center()[2] - thickness ) < 1.0e-9)
-//	        face->set_boundary_id(5);
-//	      else
-//	        face->set_boundary_id(6);
-//	    }
-//	}
       
 
     if (m_parameters.m_refinement_strategy == "pre-refine")
@@ -3614,30 +3411,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 					      repetitions,
 					      Point<dim>( 0.0,      0.0,    0.0),
 					      Point<dim>( length,   width,  thickness ) );
-
-//    for (const auto &cell : m_triangulation.active_cell_iterators())
-//      for (const auto &face : cell->face_iterators())
-//	{
-//	  if (face->at_boundary() == true)
-//	    {
-//	      if (std::fabs(face->center()[0] - 0.0 ) < 1.0e-9 )
-//		face->set_boundary_id(0);
-//	      else if (std::fabs(face->center()[1] - 0.0 ) < 1.0e-9)
-//	        face->set_boundary_id(1);
-//	      else if (std::fabs(face->center()[2] - 0.0 ) < 1.0e-9)
-//	        face->set_boundary_id(2);
-//	      else if (std::fabs(face->center()[0] - length ) < 1.0e-9)
-//	        face->set_boundary_id(3);
-//	      else if (std::fabs(face->center()[1] - width ) < 1.0e-9)
-//	        face->set_boundary_id(4);
-//	      else if (std::fabs(face->center()[2] - thickness ) < 1.0e-9)
-//	        face->set_boundary_id(5);
-//	      else
-//	        face->set_boundary_id(6);
-//	    }
-//	}
       
-
     if (m_parameters.m_refinement_strategy == "pre-refine")
       {
 	AssertThrow(false,
@@ -3705,21 +3479,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
     const double radius = 5.0;
     GridGenerator::quarter_hyper_ball(m_triangulation, Point<dim>(), radius);
 
-//    for (const auto &cell : m_triangulation.active_cell_iterators())
-//      for (const auto &face : cell->face_iterators())
-//	{
-//	  if (face->at_boundary() == true)
-//	    {
-//	      if (std::fabs(face->center()[0] - 0.0 ) < 1.0e-9 )
-//		face->set_boundary_id(0);
-//	      else if (std::fabs(face->center()[1] - 0.0 ) < 1.0e-9)
-//	        face->set_boundary_id(1);
-//	      else if (std::fabs(face->center()[2] - 0.0 ) < 1.0e-9)
-//	        face->set_boundary_id(2);
-//	      else
-//	        face->set_boundary_id(3);
-//	    }
-//	}
+
       
 
     m_triangulation.refine_global(m_parameters.m_global_refine_times);
