@@ -116,7 +116,7 @@
 #include "../include/FileSystem.h"
 
 #include "../include/MPIInfo.h"
-#include "../include/Logger.h"
+
 #include "../include/TimerOutputWrapper.h"
 
 
