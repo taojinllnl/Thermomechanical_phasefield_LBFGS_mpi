@@ -7019,11 +7019,6 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
 
     while(m_time.current() < m_time.end() + m_time.get_delta_t()*1.0e-6)
       {
-          
-          if (m_mpiInfo.isCurrentRank()) {
-              std::cout << "Timestep " << m_time.get_timestep() << " @ " << m_time.current()
-              << 's' << std::endl;
-          }
 	m_logfile << std::endl
 		  << "Timestep " << m_time.get_timestep() << " @ " << m_time.current()
 		  << 's' << std::endl;
