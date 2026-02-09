@@ -6676,20 +6676,15 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
                                  [&] (const typename DoFHandler<dim>::active_cell_iterator & cell,
                                       const unsigned int q) -> double
                                  {
+                return m_quadrature_point_history.get_data(cell)[q]->get_history_max_positive_strain_energy();
                 
-                if constexpr (is_mpi)
-                {
-                    if (cell->is_locally_owned())
-                        return m_quadrature_point_history.get_data(cell)[q]->get_history_max_positive_strain_energy();
-                    else
-                        return 0.0;
-                } else {   
-                    return m_quadrature_point_history.get_data(cell)[q]->get_history_max_positive_strain_energy();
-                }
             },
                                  old_history_variable_field_L2);
+            
+        
 
             if constexpr(is_mpi) {
+                old_history_variable_field_L2.compress(dealii::VectorOperation::insert);
                 old_solutions_rele.reserve(2);
                 old_solutions_rele.emplace_back();
                 old_solutions_rele.emplace_back();
