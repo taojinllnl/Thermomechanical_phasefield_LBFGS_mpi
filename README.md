@@ -36,7 +36,8 @@ This project is implemented using the deal.II finite element library and support
 
 ### Build
 
-An out-of-source CMake build is recommended:
+An out-of-source CMake build is recommended.
+Run the following commands in the root directory of this project:
 
 ```bash
 cmake -S . -B build
