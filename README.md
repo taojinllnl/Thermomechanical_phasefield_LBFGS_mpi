@@ -115,3 +115,8 @@ Run on Slurm clusters:
 srun -n <N> ./build/main path/to/parameter.prm
 ```
 
+
+#### Output directory
+
+
+#### Configuration directory
