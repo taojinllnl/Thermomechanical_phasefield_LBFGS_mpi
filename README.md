@@ -42,4 +42,76 @@ An out-of-source CMake build is recommended:
 cmake -S . -B build
 cmake --build build 
 ```
-The executable will be generated inside the `build/` directory.
+The executable `main` will be generated inside the `build/` directory.
+
+
+
+## How to run
+
+### Parameter file
+
+Execution requires a necessary parameter file (`.prm`) that defines dimension, test case, solver type, tolerances, directories, and all run-time settings. 
+The path to the `.prm` file must be provided as a command-line argument to the executable, such as: 
+
+```bash
+./build/main path/to/parameter.prm
+```
+
+### Execution modes
+
+The MPI and serial modes can be selected in the `.prm` file. 
+Two MPI backends are supported: PETSc and Trilinos.
+
+
+#### Serial mode
+
+For serial execution, set the following option in the `.prm` file:
+
+```  
+# underlying mpi type: (PETSc | Trilinos | Serial)
+set mpi type = Serial
+```
+
+Execute:
+
+```bash
+./build/main path/to/parameter.prm
+```
+
+#### MPI mode
+
+For MPI execution, set the backend to either `PETSc` or `Trilinos` in the `.prm` file, for example:
+
+```  
+# underlying mpi type: (PETSc|Trilinos|Serial)
+set mpi type = PETSc
+```
+
+or
+
+```  
+set mpi type = Trilinos
+```
+
+Run on a single machine with MPI: 
+
+- using `mpirun`:
+
+```bash
+mpirun -np <N> ./build/main path/to/parameter.prm
+```
+
+
+- uisng `mpiexec`:
+
+```bash
+mpiexec -n <N> ./build/main path/to/parameter.prm
+```
+
+
+Run on Slurm clusters:
+
+```bash
+srun -n <N> ./build/main path/to/parameter.prm
+```
+
