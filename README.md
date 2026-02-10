@@ -18,3 +18,28 @@ The main features include:
 - Historical variable: quadrature-point history field storing the maximum positive strain energy to enforce irreversibility.
 - Dimension-independent implementation: the code works for both 2D and 3D simulations. 
 
+
+## How to Build
+
+This project is implemented using the deal.II finite element library and supports both serial and MPI-enabled monolithic L-BFGS finite element simulations.
+
+### Requirements
+
+- tested with deal.II v9.6.0 (last verified: 2026-02-10)
+- C++17 compatible compiler
+- deal.II configured with:
+  - MPI
+  - Trilinos / PETSc
+  - BLAS / LAPACK
+  - TBB (Threading Building Blocks)
+  - UMFPACK
+
+### Build
+
+An out-of-source CMake build is recommended:
+
+```bash
+cmake -S . -B build
+cmake --build build 
+```
+The executable will be generated inside the `build/` directory.
