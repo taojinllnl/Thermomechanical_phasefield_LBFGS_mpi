@@ -93,7 +93,7 @@ or
 set mpi type = Trilinos
 ```
 
-Run on a single machine with MPI: 
+1. Run on a single machine with MPI: 
 
 - using `mpirun`:
 
@@ -109,7 +109,7 @@ mpiexec -n <N> ./build/main path/to/parameter.prm
 ```
 
 
-Run on Slurm clusters:
+2. Run on Slurm clusters:
 
 ```bash
 srun -n <N> ./build/main path/to/parameter.prm
