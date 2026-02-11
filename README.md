@@ -50,7 +50,6 @@ The executable `main` will be generated inside the `build/` directory.
 
 ## How to run
 
----
 ### Parameter file
 
 Execution requires a necessary parameter file (`.prm`) that defines dimension, test case, solver type, tolerances, directories, and all run-time settings. 
