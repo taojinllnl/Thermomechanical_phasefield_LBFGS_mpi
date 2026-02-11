@@ -18,6 +18,7 @@ The main features include:
 - Historical variable: quadrature-point history field storing the maximum positive strain energy to enforce irreversibility.
 - Dimension-independent implementation: the code works for both 2D and 3D simulations. 
 
+---
 
 ## How to Build
 
@@ -45,10 +46,11 @@ cmake --build build
 ```
 The executable `main` will be generated inside the `build/` directory.
 
-
+---
 
 ## How to run
 
+---
 ### Parameter file
 
 Execution requires a necessary parameter file (`.prm`) that defines dimension, test case, solver type, tolerances, directories, and all run-time settings. 
@@ -57,6 +59,8 @@ The path to the `.prm` file must be provided as a command-line argument to the e
 ```bash
 ./build/main path/to/parameter.prm
 ```
+
+---
 
 ### Execution modes
 
@@ -116,7 +120,7 @@ mpiexec -n <N> ./build/main path/to/parameter.prm
 srun -n <N> ./build/main path/to/parameter.prm
 ```
 
-
+---
 #### Configuration directory and data files
 
 The monolithic thermomechanically coupled phase-field solver requires two data files:
