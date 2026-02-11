@@ -151,7 +151,10 @@ set Config dir = ./path/to/data/dir
 
 The solver resolves the full path as: `<Config dir>/<file name>`.
 All paths are interpreted with respect to the **working directory** from which the executable is launched. 
-For example, if the executable is launched from the project root directory, `project_root`, then, `set Config dir = ./path/to/config_dir`, the directory path will be referred to `<project_root>/path/to/config_dir`. 
+For example, if the executable is launched from the project root directory, `project_root`, then 
+```set Config dir = ./path/to/config_dir```,
+the directory path will be referred to
+```<project_root>/path/to/config_dir```.
 
 
 
