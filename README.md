@@ -117,6 +117,46 @@ srun -n <N> ./build/main path/to/parameter.prm
 ```
 
 
+#### Configuration directory and data files
+
+The monolithic thermomechanically coupled phase-field solver requires two data files:
+
+- a time data file
+- a material data file
+
+Their file names (without directory path) are specified in the `.prm` file, which is passed as a command-line argument when launching the executable.
+
+
+- Time data file name:
+
+```
+# Time data groups
+set Time data file = timeDataFile
+```
+
+- Material data file name:
+
+```
+# Material data file name
+set Material data file = materialDataFile
+```
+
+
+These data files should be placed in the directory specified by:
+
+```
+# Configuration directory
+set Config dir = ./path/to/data/dir
+```
+
+The solver resolves the full path as: `<Config dir>/<file name>`.
+All paths are interpreted with respect to the **working directory** from which the executable is launched. 
+For example, if the executable is launched from the project root directory, then: `set Config dir = ./path/to/config_dir`, it will be referred to `<project_root>/path/to/config_dir`. 
+
+
+
+
+
 #### Output directory
 
 
