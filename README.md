@@ -1,6 +1,6 @@
 # Thermomechanical_phasefield_LBFGS_mpi
 
-The MPI version of the L-BFGS monolithic solver for phasefield crack modeling under thermomechanically coupled loading. 
+An MPI-enabled the L-BFGS monolithic solver for phasefield crack modeling under thermomechanically coupled loading. 
 
 
 ## Purpose
@@ -13,9 +13,9 @@ The main features include:
 - Configurable execution modes: selectable via a parameter (`.prm`) configuration file, supporting both serial execution and Message Passing Interface (MPI) parallelization with non-overlapping mesh decomposition over ranks.
 - Adaptive mesh refinement (AMR) with optional repartitioning: in MPI mode, dynamic repartitioning can be conducted based on a user-defined imbalance threshold (ratio between the maximum and minimum number of cells per compute rank) to maintain load balance.
 - Selectable linear algebra backends: the solver infrastructure supports both *PETSc* and *Trilinos* backends for distributed vectors, matrices, and solvers through a unified wrapper interface.
-- Selectable linear solvers: the *Direct sparse* or *iterative* solvers (e.g., Conjugate Gradient (CG)) can be selected for the linear algebra system.
-- Quasi-Newton algorithm: Serial and MPI-enabled monolithic limited-memory BFGS (L-BFGS) method for thermomechanically coupled phase-field fracture problems.
-- Historical variable: quadrature-point history field storing the maximum positive strain energy to enforce irreversibility.
+- Selectable linear solvers: the *sparse direct* or *iterative* solvers (e.g., Conjugate Gradient (CG)) can be selected for the linear algebra system.
+- Quasi-Newton nonlinear solver: Serial and MPI-enabled monolithic limited-memory BFGS (L-BFGS) method for thermomechanically coupled phase-field fracture problems.
+- History variable: quadrature-point history field storing the maximum positive strain energy to enforce irreversibility.
 - Dimension-independent implementation: the code works for both 2D and 3D simulations. 
 
 ---
@@ -26,7 +26,7 @@ This project is implemented using the deal.II finite element library and support
 
 ### Requirements
 
-- tested with deal.II v9.6.0 (last verified: 2026-02-10)
+- developed with deal.II v9.6.0 (last verified: 2026-02-10)
 - C++17 compatible compiler
 - deal.II configured with:
   - MPI
@@ -52,7 +52,7 @@ The executable `main` will be generated inside the `build/` directory.
 
 ### Parameter file
 
-Execution requires a necessary parameter file (`.prm`) that defines dimension, test case, solver type, tolerances, directories, and all run-time settings. 
+Execution requires a parameter file (`.prm`) that defines dimension, test case, solver type, tolerances, directories, and all run-time settings. 
 The path to the `.prm` file must be provided as a command-line argument to the executable, such as: 
 
 ```bash
@@ -87,7 +87,7 @@ Execute:
 For MPI execution, set the backend to either `PETSc` or `Trilinos` in the `.prm` file, for example:
 
 ```  
-# underlying mpi type: (PETSc|Trilinos|Serial)
+# underlying mpi type: (PETSc | Trilinos | Serial)
 set mpi type = PETSc
 ```
 
@@ -106,7 +106,7 @@ mpirun -np <N> ./build/main path/to/parameter.prm
 ```
 
 
-- uisng `mpiexec`:
+- using `mpiexec`:
 
 ```bash
 mpiexec -n <N> ./build/main path/to/parameter.prm
@@ -153,7 +153,8 @@ set Config dir = ./path/to/data/dir
 ```
 
 The solver resolves the full path as: `<Config dir>/<file name>`.
-All paths are interpreted with respect to the **working directory** from which the executable is launched, if starting with `./`. 
+All paths are interpreted with respect to the **working directory** from which the executable is launched. 
+Moreover, the absolute dirctory is **not** allowed.
 For example, if the executable is launched from the project root directory, `project_root`, then 
 ```set Config dir = ./path/to/config_dir```,
 the directory path will be referred to
