@@ -156,6 +156,7 @@ For example, if the executable is launched from the project root directory, `pro
 the directory path will be referred to
 ```<project_root>/path/to/config_dir/```.
 
+---
 
 #### Output directory
 
