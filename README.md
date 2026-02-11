@@ -157,10 +157,41 @@ the directory path will be referred to
 ```<project_root>/path/to/config_dir/```.
 
 
-
-
-
 #### Output directory
 
+The output directory can be defined in the `.prm` file, for example: 
+
+```
+# Output directory
+set Output dir = ./path/to/output/dir
+```
+
+For each run, the executable automatically creates a unique numbered subdirectory to avoid overwriting previous results.
+The actual output path has the form:
+
+```
+<Output dir>/<run_id>/
+```
+
+where `<run_id>` is an integer starting from **0**.  
+It is assigned as one greater than the largest existing numeric subdirectory name in the output directory.
+
+
+The output folder of each test contains:
+
+- `.log`: solver log file
+- `.vtu`: visualization files
+  - original mesh:  
+    ```
+    <Output dir>/<run_id>/ori/
+    ```
+  - solution and field results:  
+    ```
+    <Output dir>/<run_id>/results/
+    ```
+- `.hist`: history data files (e.g., energy history and reaction force history):
+    ```
+    <Output dir>/<run_id>/hist/
+    ```
 
 
