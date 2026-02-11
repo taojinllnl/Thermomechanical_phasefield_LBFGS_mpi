@@ -120,7 +120,7 @@ srun -n <N> ./build/main path/to/parameter.prm
 ```
 
 ---
-#### Configuration directory and data files
+### Configuration directory and data files
 
 The monolithic thermomechanically coupled phase-field solver requires two data files:
 
@@ -161,7 +161,7 @@ the directory path will be referred to
 
 ---
 
-#### Output directory
+### Output directory
 
 The output directory can be defined in the `.prm` file, for example: 
 
