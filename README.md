@@ -154,7 +154,7 @@ All paths are interpreted with respect to the **working directory** from which t
 For example, if the executable is launched from the project root directory, `project_root`, then 
 ```set Config dir = ./path/to/config_dir```,
 the directory path will be referred to
-```<project_root>/path/to/config_dir```.
+```<project_root>/path/to/config_dir/```.
 
 
 
@@ -163,4 +163,4 @@ the directory path will be referred to
 #### Output directory
 
 
-#### Configuration directory
+
