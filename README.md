@@ -115,8 +115,19 @@ mpiexec -n <N> ./build/main path/to/parameter.prm
 
 2. Run on Slurm clusters:
 
+On clusters, the parallel executions may require submission of a job via `.sh` script. 
+If the executable will run on 32 ranks with 32 GB memory in 10 hours, the script can be an example:  
+
 ```bash
-srun -n <N> ./build/main path/to/parameter.prm
+#!/bin/bash
+#SBATCH --ntasks=32              # number of MPI processes
+#SBATCH --mem-per-cpu=1G      # memory; default unit is megabytes
+#SBATCH --time=0-10:00           # time (DD-HH:MM)
+
+#SBATCH --mail-user=your.email@address.com
+#SBATCH --mail-type=ALL
+
+srun ./build/main path/to/parameter.prm          # mpirun or mpiexec also work
 ```
 
 ---
