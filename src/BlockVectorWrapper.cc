@@ -59,8 +59,8 @@ BlockVectorWrapper<TraitsType>
     }
     
     if constexpr (!std::is_same_v<VecType, dealii::BlockVector<double>>)
-        __relevancePtr->reinit(*(__blockDesc.ownedPartition()),
-                               *(__blockDesc.relevantPartition()),
+        __relevancePtr->reinit(*(__blockDesc.ownedPartitionPtr()),
+                               *(__blockDesc.relevantPartitionPtr()),
                                *(__mpiInfo.mpiCommPtr()));
 }
 
@@ -116,7 +116,7 @@ BlockVectorWrapper<TraitsType>
     if constexpr (std::is_same_v<VecType, dealii::BlockVector<double>>)
     {
         /*  *  *  *   *   *   *  serial version   *   *   *   *   *   *   *   */
-        TraitsType::Vector::reinit(*__blockDesc.dofsPerBlock());
+        TraitsType::Vector::reinit(*__blockDesc.dofsPerBlockPtr());
         /*  *  *  *   *   *   *  serial version   *   *   *   *   *   *   *   */
     } else {
         if(!__mpiInfo.isMPI())
@@ -124,7 +124,7 @@ BlockVectorWrapper<TraitsType>
             return;
         }
         /*  *  *  *   *   *   *   *   *  MPI  *   *   *   *   *   *   *   *   */
-        TraitsType::Vector::reinit(*(__blockDesc.ownedPartition()),
+        TraitsType::Vector::reinit(*(__blockDesc.ownedPartitionPtr()),
                                    *(__mpiInfo.mpiCommPtr()));
         TraitsType::Vector::operator=(0.0);
         
@@ -214,7 +214,7 @@ BlockVectorWrapper<TraitsType>
         updateRelevance();
     } else {
         
-        for(unsigned int i = 0; i < (*__blockDesc.dofsPerBlock())[groupID]; ++i)
+        for(unsigned int i = 0; i < (*__blockDesc.dofsPerBlockPtr())[groupID]; ++i)
         {
             TraitsType::Vector::block(groupID)(i) = value;
         }
