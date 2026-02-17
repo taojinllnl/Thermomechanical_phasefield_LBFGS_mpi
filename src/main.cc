@@ -1804,7 +1804,7 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
       m_logfile << " UQPH " << std::flush;
 
       BVector solution_total(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
-      solution_total.initialize(); 
+      solution_total.initialize();
       solution_total.base() =  m_solution.base() + solution_delta.base();
         solution_total.updateRelevance();
 
@@ -7131,18 +7131,14 @@ int main(int argc, char* argv[])
      * In MPI mode, runtime MPI configuration information is printed.
      *
      * [ Warning ]
-     * Whether the MPI functionality is initialized is only determined by the
-     * settings in prm via `MPIInfo`.
-     * If `Serial` is specified in the parameter file but the executable is
-     * launched via `srun` or `mpirun`, MPI will NOT be initialized inside the
-     * program. In this case, the launcher will start multiple independent
-     * instances of the same executable.
+     * Whether the MPI functionality is initialized, the mode is only determined by the settings in `.prm` via `MPIInfo`.
+     * If `Serial` is specified in the `.prm` file but the executable is launched via `mpiexec` or `mpirun`, MPI will NOT be initialized inside the program.
+     * In this case, the launcher will start multiple independent instances of the same executable.
      *
      * As a consequence, the program is executed repeatedly for `n` times,
-     * where `n` is the number of processes requested by `srun` or `mpirun`.
-     * The program has no reliable way to detect this situation, and all
-     * terminal outputs (non-MPI) will appear multiple times. If it's not what
-     * you want, please teminate the progam immediatedly.
+     * where `n` is the number of processes requested by `mpiexec` or `mpirun`.
+     * The program does not automatically detect or prevent this situation.
+     * If this is unintended, please terminate the job immediately.
      *
      */
     if(mpiInfo.rank() == 0)
