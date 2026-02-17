@@ -3631,11 +3631,11 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
               << "\n\t\t\t Number of degrees of freedom (total): "
 	      << m_dof_handler.n_dofs()
 	      << "\n\t\t\t Number of degrees of freedom (disp): "
-	      << (*m_blocks_desc.dofsPerBlock())[m_u_dof]
+	      << (*m_blocks_desc.dofsPerBlockPtr())[m_u_dof]
 	      << "\n\t\t\t Number of degrees of freedom (phasefield): "
-	      << (*m_blocks_desc.dofsPerBlock())[m_d_dof]
+	      << (*m_blocks_desc.dofsPerBlockPtr())[m_d_dof]
 	      << "\n\t\t\t Number of degrees of freedom (temperature): "
-	      << (*m_blocks_desc.dofsPerBlock())[m_t_dof]
+	      << (*m_blocks_desc.dofsPerBlockPtr())[m_t_dof]
               << std::endl;
 
       m_tangent_matrix.initalize(m_dof_handler, m_constraints, false);
@@ -6313,11 +6313,11 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>
             old_solutions_rele.reserve(2);
             old_solutions_rele.emplace_back();
             old_solutions_rele.emplace_back();
-            old_solutions_rele[0].reinit(*m_blocks_desc.ownedPartition(),
-                                         *m_blocks_desc.relevantPartition(),
+            old_solutions_rele[0].reinit(*m_blocks_desc.ownedPartitionPtr(),
+                                         *m_blocks_desc.relevantPartitionPtr(),
                                          *m_mpiInfo.mpiCommPtr());
-            old_solutions_rele[1].reinit(*m_blocks_desc.ownedPartition(),
-                                         *m_blocks_desc.relevantPartition(),
+            old_solutions_rele[1].reinit(*m_blocks_desc.ownedPartitionPtr(),
+                                         *m_blocks_desc.relevantPartitionPtr(),
                                          *m_mpiInfo.mpiCommPtr());
             
             old_solutions_rele[0] = old_solutions[0];
@@ -6398,17 +6398,17 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>
         std::vector<VecType> tmp_solutions(2);
         if constexpr (is_mpi) {
             // target vectors should have info about ghost cells
-            tmp_solutions[0].reinit(*m_blocks_desc.ownedPartition(),
+            tmp_solutions[0].reinit(*m_blocks_desc.ownedPartitionPtr(),
                                     //                                        *m_blocks_desc.relevantPartition(),
                                     *m_mpiInfo.mpiCommPtr());
-            tmp_solutions[1].reinit(*m_blocks_desc.ownedPartition(),
+            tmp_solutions[1].reinit(*m_blocks_desc.ownedPartitionPtr(),
                                     //                                        *m_blocks_desc.relevantPartition(),
                                     *m_mpiInfo.mpiCommPtr());
         } else {
             //                tmp_solutions[0].reinit(m_dofs_per_block);
             //                tmp_solutions[1].reinit(m_dofs_per_block);
-            tmp_solutions[0].reinit(*m_blocks_desc.dofsPerBlock());
-            tmp_solutions[1].reinit(*m_blocks_desc.dofsPerBlock());
+            tmp_solutions[0].reinit(*m_blocks_desc.dofsPerBlockPtr());
+            tmp_solutions[1].reinit(*m_blocks_desc.dofsPerBlockPtr());
         }
         
         solution_next_step.initialize();
@@ -6688,11 +6688,11 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
                 old_solutions_rele.reserve(2);
                 old_solutions_rele.emplace_back();
                 old_solutions_rele.emplace_back();
-                old_solutions_rele[0].reinit(*m_blocks_desc.ownedPartition(),
-                                             *m_blocks_desc.relevantPartition(),
+                old_solutions_rele[0].reinit(*m_blocks_desc.ownedPartitionPtr(),
+                                             *m_blocks_desc.relevantPartitionPtr(),
                                              *m_mpiInfo.mpiCommPtr());
-                old_solutions_rele[1].reinit(*m_blocks_desc.ownedPartition(),
-                                             *m_blocks_desc.relevantPartition(),
+                old_solutions_rele[1].reinit(*m_blocks_desc.ownedPartitionPtr(),
+                                             *m_blocks_desc.relevantPartitionPtr(),
                                              *m_mpiInfo.mpiCommPtr());
                 
                 old_solutions_rele[0] = old_solutions[0];
@@ -6775,17 +6775,17 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
             std::vector<VecType> tmp_solutions(2);
             if constexpr (is_mpi) {
                 // target vectors should have info about ghost cells
-                tmp_solutions[0].reinit(*m_blocks_desc.ownedPartition(),
+                tmp_solutions[0].reinit(*m_blocks_desc.ownedPartitionPtr(),
 //                                        *m_blocks_desc.relevantPartition(),
                                         *m_mpiInfo.mpiCommPtr());
-                tmp_solutions[1].reinit(*m_blocks_desc.ownedPartition(),
+                tmp_solutions[1].reinit(*m_blocks_desc.ownedPartitionPtr(),
 //                                        *m_blocks_desc.relevantPartition(),
                                         *m_mpiInfo.mpiCommPtr());
             } else {
 //                tmp_solutions[0].reinit(m_dofs_per_block);
 //                tmp_solutions[1].reinit(m_dofs_per_block);
-                tmp_solutions[0].reinit(*m_blocks_desc.dofsPerBlock());
-                tmp_solutions[1].reinit(*m_blocks_desc.dofsPerBlock());
+                tmp_solutions[0].reinit(*m_blocks_desc.dofsPerBlockPtr());
+                tmp_solutions[1].reinit(*m_blocks_desc.dofsPerBlockPtr());
             }
 
             
