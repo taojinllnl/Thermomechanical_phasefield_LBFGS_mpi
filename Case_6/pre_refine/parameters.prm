@@ -33,7 +33,7 @@ subsection Scenario
   set Linear solver type = CG
   
   # If the linear solver is CG, set the CG converge tolerance of inverse K_uu
-  set CG u tolerance = 1.0e-6  
+  set CG u tolerance = 1.0e-9  
 
   # If the linear solver is CG, set the CG converge tolerance of inverse K_dd
   set CG d tolerance = 1.0e-9  
@@ -43,12 +43,12 @@ subsection Scenario
 
   # Mesh refinement strategy (pre-refine or adaptive-refine)
   set Mesh refinement strategy = pre-refine
-  
-  # The threshold for repartitioning
+ 
+   # The threshold for repartitioning
   set Repartitioning ratio = 1.5
-  
+
   # Number of vectors used in LBFGS
-  set LBFGS m = 20
+  set LBFGS m = 40
 
   # Global refinement times across the entire domain
   set Global refinement times = 2
@@ -82,10 +82,10 @@ subsection Scenario
   set Reaction force face ID = 0
   
   # underlying mpi type: (PETSc|Trilinos|Serial)
-  set mpi type = Trilinos
+  set mpi type = PETSc
   
   # Configuration directory
-  set Config dir = ../Case_6/pre_refine/
+  set Config dir = ./Case_6/pre_refine/
   
   # Output directory
   set Output dir = ./output/Case_6/pre_refine/
@@ -145,7 +145,7 @@ subsection Nonlinear solver
   set Tolerance phasefield increment        = 1.0e-3
   
   # Temperature increment tolerance
-  set Tolerance temperature increment       = 1.0e-3        #in case 1e-1
+  set Tolerance temperature increment       = 1.0e-3
 end
 
 subsection Time

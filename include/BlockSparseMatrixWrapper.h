@@ -30,7 +30,7 @@ namespace la
  * This class is a light-weight wrapper for a specific type of BlockSparseMatrix defined in `TraitsType` for both serial and MPI modes.
  *
  *  This class maintains `::dealii::DoFTools::Coupling` for initialize during constrution.
- *  Once the requied couplings are set, call `initalize()` for newly refined or genenrated meshes.
+ *  Once the requied couplings are set, call `initalize()` for newly refined or genenrated meshes. 
  *
  */
 

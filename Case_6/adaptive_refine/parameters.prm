@@ -30,25 +30,25 @@ subsection Scenario
   set Nonlinear solver type = LBFGS
 
   # Linear solver type for B0 (Direct or CG)
-  set Linear solver type = CG
-  
+  set Linear solver type = Direct
+
   # If the linear solver is CG, set the CG converge tolerance of inverse K_uu
-  set CG u tolerance = 1.0e-6  
+  set CG u tolerance = 1.0e-9
 
   # If the linear solver is CG, set the CG converge tolerance of inverse K_dd
-  set CG d tolerance = 1.0e-9  
+  set CG d tolerance = 1.0e-9
 
   # If the linear solver is CG, set the CG converge tolerance of inverse K_TT
   set CG T tolerance = 1.0e-9
 
   # Mesh refinement strategy (pre-refine or adaptive-refine)
   set Mesh refinement strategy = adaptive-refine
-  
+ 
   # The threshold for repartitioning
-  set Repartitioning ratio = 1.5
-  
+  set Repartitioning ratio = 1.3
+
   # Number of vectors used in LBFGS
-  set LBFGS m = 20
+  set LBFGS m = 40
 
   # Global refinement times across the entire domain
   set Global refinement times = 2
@@ -86,7 +86,7 @@ subsection Scenario
   set mpi type = Trilinos
   
   # Configuration directory
-  set Config dir = ../Case_6/adaptive_refine/
+  set Config dir = ./Case_6/adaptive_refine/
   
   # Output directory
   set Output dir = ./output/Case_6/adaptive_refine/
@@ -140,13 +140,13 @@ subsection Nonlinear solver
   set Tolerance temperature residual        = 1.0e-6
   
   # Displacement increment tolerance
-  set Tolerance displacement increment      = 1.0e-6
+  set Tolerance displacement increment      = 1.0e-3
   
   # Phasefield increment tolerance
-  set Tolerance phasefield increment        = 1.0e-6
+  set Tolerance phasefield increment        = 1.0e-3
   
   # Temperature increment tolerance
-  set Tolerance temperature increment       = 1.0e-6
+  set Tolerance temperature increment       = 1.0e-3
 end
 
 subsection Time

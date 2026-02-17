@@ -29,14 +29,24 @@ subsection Scenario
   set Nonlinear solver type = LBFGS
 
   # Linear solver type for B0 (Direct or CG)
-  set Linear solver type = Direct
-  
+  set Linear solver type = CG
+ 
+
+  # If the linear solver is CG, set the CG converge tolerance of inverse K_uu
+  set CG u tolerance = 1.0e-9
+  # If the linear solver is CG, set the CG converge tolerance of inverse K_dd
+  set CG d tolerance = 1.0e-9
+  # If the linear solver is CG, set the CG converge tolerance of inverse K_TT
+  set CG T tolerance = 1.0e-9
+
+
   # Mesh refinement strategy (pre-refine or adaptive-refine)
   set Mesh refinement strategy = pre-refine
-  
+
+
   # The threshold for repartitioning
   set Repartitioning ratio = 1.5
-  
+
   # Number of vectors used in LBFGS
   set LBFGS m = 40
 
@@ -75,7 +85,7 @@ subsection Scenario
   set mpi type = Trilinos
   
   # Configuration directory
-  set Config dir = ../Case_5/pre_refine/
+  set Config dir = ./Case_5/pre_refine/
   
   # Output directory
   set Output dir = ./output/Case_5/pre_refine/
