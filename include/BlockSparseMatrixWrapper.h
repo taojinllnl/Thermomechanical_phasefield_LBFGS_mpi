@@ -102,8 +102,8 @@ BlockSparseMatrixWrapper<TraitsType>
     if constexpr (std::is_same_v<MatType, ::dealii::BlockSparseMatrix<double>>)
     {
         /*  *  *  *   *   *   *  serial version   *   *   *   *   *   *   *   */
-        BlockDynamicSparsityPattern dsp(*__blockDesc.dofsPerBlock(),
-                                        *__blockDesc.dofsPerBlock());
+        BlockDynamicSparsityPattern dsp(*__blockDesc.dofsPerBlockPtr(),
+                                        *__blockDesc.dofsPerBlockPtr());
         
         
         DoFTools::make_sparsity_pattern(dof_handler,
@@ -125,8 +125,8 @@ BlockSparseMatrixWrapper<TraitsType>
         }
         
         /*  *  *  *   *   *   *   *   *  MPI  *   *   *   *   *   *   *   *   */
-        const std::vector<IndexSet>& ownedPartition = *__blockDesc.ownedPartition();
-        const std::vector<IndexSet>& relevPartition = *__blockDesc.relevantPartition();
+        const std::vector<IndexSet>& ownedPartition = *__blockDesc.ownedPartitionPtr();
+        const std::vector<IndexSet>& relevPartition = *__blockDesc.relevantPartitionPtr();
         const IndexSet& locallOwnedDoFs = dof_handler.locally_owned_dofs();
         const IndexSet& locallyRelevantDoFs = *__blockDesc.localRelevantPartition();
         
