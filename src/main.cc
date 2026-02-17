@@ -1341,9 +1341,6 @@ namespace PhaseField_monolithic
     AffineConstraints<double> m_constraints;
     BlockSparsityPattern      m_sparsity_pattern;
 
-//      BlockSparseMatrix<double> m_tangent_matrix;
-//      BlockVector<double>       m_system_rhs;
-//      BlockVector<double>       m_solution;
 
     BSMatrix                  m_tangent_matrix;
     BVector                   m_system_rhs;
@@ -1806,10 +1803,9 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
     if (is_print && m_parameters.m_output_iteration_history)
       m_logfile << " UQPH " << std::flush;
 
-//    const BVector solution_total(get_total_solution(solution_delta)); // replace copy
-      BVector solution_total(m_mpiInfo, m_blocks_desc, /*relevance=*/true); // replace copy
-      solution_total.initialize(); // replace copy
-      solution_total.base() =  m_solution.base() + solution_delta.base(); // replace copy
+      BVector solution_total(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
+      solution_total.initialize(); 
+      solution_total.base() =  m_solution.base() + solution_delta.base();
         solution_total.updateRelevance();
 
       
@@ -4986,17 +4982,14 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
 				                                             const BVector & solution_delta,
                                                                                         unsigned int& iSmallSteps)
   {
-//    BVector g_old(m_system_rhs); // replace copy
-
-      BVector g_old(m_mpiInfo, m_blocks_desc, /*relevance=*/false); // replace copy
-      g_old.initialize(); // replace copy
-      g_old.base() = m_system_rhs.base(); // replace copy
+      BVector g_old(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
+      g_old.initialize();
+      g_old.base() = m_system_rhs.base(); 
       
     // BFGS_p_vector is the search direction
-//    BVector solution_delta_trial(solution_delta); // replace copy
-      BVector solution_delta_trial(m_mpiInfo, m_blocks_desc, /*relevance=*/true); // replace copy
-      solution_delta_trial.initialize(); // replace copy
-      solution_delta_trial.base() = solution_delta.base(); // replace copy
+      BVector solution_delta_trial(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
+      solution_delta_trial.initialize();
+      solution_delta_trial.base() = solution_delta.base();
     // take a full step size 1.0
     solution_delta_trial.add(1.0, BFGS_p_vector);
 
@@ -5355,10 +5348,9 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
     // the first component is phi(alpha), the second component is phi_prime(alpha),
     std::pair<double, double> phi_values;
 
-//    BVector solution_delta_trial(solution_delta); // replace copy
-        BVector solution_delta_trial(m_mpiInfo, m_blocks_desc, /*relevance=*/true);// replace copy
-        solution_delta_trial.initialize(); // replace copy
-        solution_delta_trial.base() = solution_delta.base();// replace copy
+        BVector solution_delta_trial(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
+        solution_delta_trial.initialize();
+        solution_delta_trial.base() = solution_delta.base();
     solution_delta_trial.add(alpha, BFGS_p_vector);
 
         solution_delta_trial.updateRelevance();
@@ -5386,10 +5378,9 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
     // phi_prime(alpha) =  p^T * r(alpha)
     double phi_prime;
 
-//    BVector solution_delta_trial(solution_delta); // replace copy
-        BVector solution_delta_trial(m_mpiInfo, m_blocks_desc, /*relevance=*/true);    // replace copy
-        solution_delta_trial.initialize();// replace copy
-        solution_delta_trial.base() = solution_delta.base();// replace copy
+        BVector solution_delta_trial(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
+        solution_delta_trial.initialize();
+        solution_delta_trial.base() = solution_delta.base();
     solution_delta_trial.add(alpha, BFGS_p_vector);
 
         solution_delta_trial.updateRelevance();
@@ -6305,11 +6296,6 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>
         constraints.close();
         
         
-//        VecBType old_history_variable_field_L2;
-//        VecBType old_history_variable_field_L2_rele;
-        
-        
-        
         if constexpr(is_mpi) {
             old_solutions_rele.reserve(2);
             old_solutions_rele.emplace_back();
@@ -6400,14 +6386,10 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>
         if constexpr (is_mpi) {
             // target vectors should have info about ghost cells
             tmp_solutions[0].reinit(*m_blocks_desc.ownedPartitionPtr(),
-                                    //                                        *m_blocks_desc.relevantPartition(),
                                     *m_mpiInfo.mpiCommPtr());
             tmp_solutions[1].reinit(*m_blocks_desc.ownedPartitionPtr(),
-                                    //                                        *m_blocks_desc.relevantPartition(),
                                     *m_mpiInfo.mpiCommPtr());
         } else {
-            //                tmp_solutions[0].reinit(m_dofs_per_block);
-            //                tmp_solutions[1].reinit(m_dofs_per_block);
             tmp_solutions[0].reinit(*m_blocks_desc.dofsPerBlockPtr());
             tmp_solutions[1].reinit(*m_blocks_desc.dofsPerBlockPtr());
         }
