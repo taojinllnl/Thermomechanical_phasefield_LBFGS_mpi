@@ -6898,11 +6898,17 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
         
         update_qph_incremental(temp_solution_delta, temp_previous_solution, false);
 
-        update_history_field_step();
+        
+        /* 
+         Note: The history variable has already been re-assigned. If H is re-updated by `update_history_field_step()` at the timestep 1, it will misuse a nonzero strain energy caused by temperature drop on the BCs set at timestep 0. This will result in unexpected crack initiations.
+         */
+//        update_history_field_step();
 
         // initial guess for the resolve on the refined mesh
         LBFGS_update_refine.base() = solution_next_step.base() - m_solution.base();
-//        LBFGS_update_refine.updateRelevance();
+        LBFGS_update_refine.updateRelevance();
+        
+        solution_delta.updateRelevance();
         
 
     }
