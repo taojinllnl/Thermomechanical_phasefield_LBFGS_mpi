@@ -105,13 +105,12 @@ public:
 
     
     template <int dim, int spacedim=dim>
-    void updateDoFsInfo(dealii::DoFHandler<dim, spacedim>& dof_handler,
-                        const bool componentWise = true);
+    void updateDoFsInfo(dealii::DoFHandler<dim, spacedim>& dof_handler);
     
-    const std::vector<dealii::types::global_dof_index>* dofsPerBlock() const;
+    const std::vector<dealii::types::global_dof_index>* dofsPerBlockPtr() const;
     
-    const std::vector<IndexSet>* ownedPartition() const;
-    const std::vector<IndexSet>* relevantPartition() const;
+    const std::vector<IndexSet>* ownedPartitionPtr() const;
+    const std::vector<IndexSet>* relevantPartitionPtr() const;
     
     const IndexSet* localRelevantPartition() const;
     

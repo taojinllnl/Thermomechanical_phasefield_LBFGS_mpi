@@ -140,7 +140,7 @@ std::size_t BlockDesc::nBlocks() const
 }
 
 const std::vector<dealii::types::global_dof_index>*
-BlockDesc::dofsPerBlock() const
+BlockDesc::dofsPerBlockPtr() const
 {
     if(!__dofs_per_block)
     {
@@ -151,7 +151,7 @@ BlockDesc::dofsPerBlock() const
 }
 
 const std::vector<BlockDesc::IndexSet>*
-BlockDesc::ownedPartition() const
+BlockDesc::ownedPartitionPtr() const
 {
     if (!__mpiInfo.isMPI() || !__owned_partitioning) 
     {
@@ -162,7 +162,7 @@ BlockDesc::ownedPartition() const
 }
 
 const std::vector<BlockDesc::IndexSet>*
-BlockDesc::relevantPartition() const
+BlockDesc::relevantPartitionPtr() const
 {
     if (!__mpiInfo.isMPI() || !__relevant_partitioning) 
     {
