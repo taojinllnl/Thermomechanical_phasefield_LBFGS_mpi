@@ -3584,17 +3584,17 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
   {
       const std::string sectionName = "Setup system";
     m_timer.enter_subsection(sectionName);
-
-    std::vector<unsigned int> block_component(m_n_components,
-                                              m_u_dof); // displacement
-    block_component[m_d_component] = m_d_dof;           // phasefield
-    block_component[m_t_component] = m_t_dof;           // temperature
+//
+//    std::vector<unsigned int> block_component(m_n_components,
+//                                              m_u_dof); // displacement
+//    block_component[m_d_component] = m_d_dof;           // phasefield
+//    block_component[m_t_component] = m_t_dof;           // temperature
 
     m_dof_handler.distribute_dofs(m_fe);
     DoFRenumbering::Cuthill_McKee(m_dof_handler);
-    DoFRenumbering::component_wise(m_dof_handler, block_component);
+    DoFRenumbering::component_wise(m_dof_handler, m_blocks_desc.groupIDs());
 
-      m_blocks_desc.updateDoFsInfo(m_dof_handler, false);
+      m_blocks_desc.updateDoFsInfo(m_dof_handler);
       
     m_constraints.clear();
       if constexpr (is_mpi)
