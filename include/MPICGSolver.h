@@ -10,6 +10,16 @@
 #include <deal.II/lac/generic_linear_algebra.h>
 #include <deal.II/base/mpi.h>
 
+
+/**
+ *
+ * This class wraps a CG solver for MPI/distributed runs to enforce a global iteration budget.
+ * In some specific versions of dealii, the MPI-version CG solver ignores the upper limit for the number of iterations given by `dealii::SolverControl` and throws an exception at 10,000 iterations even if the residual is close to the prescribed tolerance.
+ * That's not suitable for strongly coupled problems.
+ * Therefore, this wrapper catches such exceptions and restarts the CG solve, so that the solve only fails (i.e., propagates a NoConvergence) when the global iteration limit is reached.
+ *
+ */
+
 template <typename MatrixType, typename CGType>
 class MPICGSolver
 : public dealii::Subscriptor

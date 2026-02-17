@@ -51,6 +51,7 @@ struct Tol
 };
 
 
+
 template <typename LATraits>
 class LASolver
 {
