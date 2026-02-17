@@ -25,6 +25,17 @@
 
 namespace PhaseField_monolithic {
 
+
+/**
+ *
+ * The class `LASolver` is an integrated interface for selection of different types of linear algebra solvers in serial or MPI modes.
+ * It supports:
+ * - Sparse direct solver
+ * - Iterative solver (conjugate gradient solver)
+ *
+ *
+ */
+
 enum class SolverType
 {
     Direct, CG
