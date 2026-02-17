@@ -26,7 +26,7 @@ This project is implemented using the deal.II finite element library and support
 
 ### Requirements
 
-- developed with deal.II v9.6.0 (last verified: 2026-02-10)
+- developed with deal.II v9.6.0 (last verified: 2026-02-17)
 - C++17 compatible compiler
 - deal.II configured with:
   - MPI
@@ -42,7 +42,7 @@ Run the following commands in the root directory of this project:
 
 ```bash
 cmake -S . -B build
-cmake --build build 
+cmake --build ./build 
 ```
 The executable `main` will be generated inside the `build/` directory.
 
