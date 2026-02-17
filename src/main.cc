@@ -6669,6 +6669,9 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
             } else {
                 old_history_variable_field_L2.reinit(dof_handler_L2.n_dofs());
             }
+            old_history_variable_field_L2 = 0.0;
+            
+            
             MappingQ<dim> mapping(m_parameters.m_poly_degree + 1);
             VectorTools::project(mapping,
                                  dof_handler_L2,
