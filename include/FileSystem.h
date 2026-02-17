@@ -57,11 +57,8 @@ public:
                                 std::string& rel_dir,
                                 std::string& sub_dir_path,
                                 std::vector<SubDir>& sub_dirs);
-    
-    //    static bool outputDirSystem(const MPIInfo& mpiInfo,
-    //                                std::string& rel_dir,
-    //                                std::string& sub_dir_path,
-    //                                const std::initializer_list<std::string> sub_dirs);
+
+
     
     static std::string find_next_numeric_subdir(const std::string &path_str);
     
