@@ -6028,7 +6028,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
           DoFTools::map_dof_to_boundary_indices(m_dof_handler,
                                                 boundary_ids,
                                                 mapping);
-          const std::size_t nDoFsOnDisp = (*m_blocks_desc.dofsPerBlock())[m_u_dof];
+          const std::size_t nDoFsOnDisp = (*m_blocks_desc.dofsPerBlockPtr())[m_u_dof];
           for (unsigned int i = 0; i < nDoFsOnDisp; ++i)
           {
               if (mapping[i] != numbers::invalid_dof_index)
