@@ -27,6 +27,24 @@
 namespace la
 {
 
+
+/**
+ *
+ * This class is a light-weight wrapper for deal.II BlockVector type ( defined in `TraitsType::Vector`), providing convenience operations in both serial and distributed (MPI) executions.
+ *
+ * This wrapper derives from the underlying vector type so it can be used in the same way as deal.II vectors.
+ * When an API requires an exact reference to the underlying type, `base()` can be used to access real type of the vector.
+ * The locally owned (non-ghosted) vector will be returned in mpi mode.
+ *
+ * In MPI mode, the wrapper can optionally maintain a locally relevant (ghosted) vector to simplify ghost value updates.
+ * The ghosted vector is accessed via `relevance()` and gets uppated by `updateRelevance()`.
+ *
+ * Notes:
+ * 1. `initialize()` must be called after construction to (re)initialize internal storage for the one with locally relevant (ghosted) vector.
+ * 2. `base()` always returns the locally owned (non-ghosted) vector.
+ *
+ */
+
 template <typename TraitsType>
 class BlockVectorWrapper
 : public TraitsType::Vector
