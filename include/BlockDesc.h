@@ -119,20 +119,17 @@ public:
 
 
 template <int dim, int spacedim>
-void BlockDesc::updateDoFsInfo(dealii::DoFHandler<dim, spacedim>& dof_handler,
-                               const bool componentWise)
+void BlockDesc::updateDoFsInfo(dealii::DoFHandler<dim, spacedim>& dof_handler)
 {
     using namespace dealii;
 
-    if(componentWise)
-        DoFRenumbering::component_wise(dof_handler, __groupIDs);
 
     if(!__dofs_per_block)
     {
         __dofs_per_block = std::make_unique<std::vector<dealii::types::global_dof_index>>();
     }
     
-
+    // the __dofs_per_block is rand-independent 
     (*__dofs_per_block) = DoFTools::count_dofs_per_fe_block(dof_handler, __groupIDs);
 
     
@@ -143,6 +140,7 @@ void BlockDesc::updateDoFsInfo(dealii::DoFHandler<dim, spacedim>& dof_handler,
         {
             __owned_partitioning =
                 std::make_unique<std::vector<IndexSet>>(__nBlocks);
+            __owned_partitioning->resize(__nBlocks);
         }
         else if (__owned_partitioning->size() != __nBlocks)
         {
@@ -153,6 +151,7 @@ void BlockDesc::updateDoFsInfo(dealii::DoFHandler<dim, spacedim>& dof_handler,
         {
             __relevant_partitioning =
             std::make_unique<std::vector<IndexSet>>(__nBlocks);
+            __relevant_partitioning->resize(__nBlocks);
         }
         else if (__relevant_partitioning->size() != __nBlocks)
         {
@@ -170,8 +169,6 @@ void BlockDesc::updateDoFsInfo(dealii::DoFHandler<dim, spacedim>& dof_handler,
         (*__localRelevantDoFs) = DoFTools::extract_locally_relevant_dofs(dof_handler);
         
         
-        __owned_partitioning->resize(__nBlocks);
-        __relevant_partitioning->resize(__nBlocks);
         
         std::vector<IndexSet::size_type> dofsOffsets(__nBlocks+1, 0);
         for(unsigned int i = 0; i < __nBlocks; ++i)
