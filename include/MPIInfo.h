@@ -12,6 +12,23 @@
 #include <memory>
 #include <ostream>
 
+/**
+ * MPIInfo is a small wrapper that provides a unified interface for
+ * serial execution and MPI-parallel execution.
+ *
+ * - If MPI support is disabled (serial mode), this class does not perform
+ *   MPI initialization and does not expose a communicator;
+ *      - `mpiCommPtr()` returns `nullptr`
+ *      - `rank()` returns 0
+ *      - `nRanks()` returns 1
+ *
+ * - If MPI support is enabled (MPI mode), this class initializes MPI
+ *   (via `dealii::Utilities::MPI::MPI_InitFinalize`) during construction and
+ *   provides access to the communicator `MPI_Comm`.
+ *   This class must be initialized before calling any MPI-related functions and keep alive during entire executable running. 
+ */
+
+
 class MPIInfo
 {
 private:
@@ -37,7 +54,7 @@ public:
     bool isMPI() const;
     unsigned int rank() const;
     unsigned int nRanks() const;
-    bool isCurrentRank(const unsigned int rank = 0) const;
+    bool isRankEqualsTo(const unsigned int rank = 0) const;
     
     void summary(std::ostream& stream);
     
