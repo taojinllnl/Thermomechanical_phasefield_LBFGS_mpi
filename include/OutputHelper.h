@@ -30,6 +30,18 @@
 
 namespace PhaseField_monolithic {
 
+
+/**
+ *
+ * This class is used to output the results, shortening the length of the main.cc.
+ * It includes:
+ * - solution: displacement, temperature, phase-field
+ * - L2 projected stress
+ * - L2 projected heat flux
+ * - partitioning in MPI mode
+ *
+ */
+
 template <typename LATraits, typename Tria, typename PointHistory>
 class OutputHelper
 {
