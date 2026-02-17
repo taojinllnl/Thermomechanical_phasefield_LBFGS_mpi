@@ -52,65 +52,6 @@ struct Tol
 
 
 template <typename LATraits>
-struct PrecSelector;
-
-template <>
-struct PrecSelector<::la::Traits<::la::TagPETSc>>
-{
-    
-    using PrecJacobi = dealii::PETScWrappers::PreconditionBlockJacobi;
-    using PrecILU    = dealii::PETScWrappers::PreconditionILU;
-    using PrecICC    = dealii::PETScWrappers::PreconditionICC;
-    using PrecPSails = dealii::PETScWrappers::PreconditionParaSails;
-    using PrecSOR    = dealii::PETScWrappers::PreconditionSOR;
-    using PrecSSOR   = dealii::PETScWrappers::PreconditionSSOR;
-//        using PrecShell  = dealii::PETScWrappers::PreconditionShell;
-    using PrecNone   = dealii::PETScWrappers::PreconditionNone;
-
-    
-    enum class Type {
-      none, jacobi, ilu, icc, parasails, sor, ssor
-    };
-    
-    const Type type;
-    
-    static Type parse(const std::string& str);
-    
-    PrecSelector(const std::string& str);
-    
-//    dealii::PETScWrappers::PreconditionBase&
-};
-
-
-template <>
-struct PrecSelector<::la::Traits<::la::TagTrilinos>>
-{
-    
-    using PrecJacobi = dealii::TrilinosWrappers::PreconditionBlockJacobi;
-    using PrecILU    = dealii::TrilinosWrappers::PreconditionILU;
-    using PrecIC     = dealii::TrilinosWrappers::PreconditionIC;
-    using PrecILUT   = dealii::TrilinosWrappers::PreconditionILUT;
-    using PrecSOR    = dealii::TrilinosWrappers::PreconditionSOR;
-    using PrecSSOR   = dealii::TrilinosWrappers::PreconditionSSOR;
-    using PrecShebs  = dealii::TrilinosWrappers::PreconditionChebyshev;
-    using PrecI      = dealii::TrilinosWrappers::PreconditionIdentity;
-    
-    using PrecCollect = std::variant<PrecJacobi, PrecILU, PrecIC, PrecILUT, PrecSOR, PrecSSOR, PrecShebs, PrecI>;
-    
-    enum class Type {
-      indentity, jacobi, ilu, ic, ilut, shebs, sor, ssor
-    };
-    
-    const Type type;
-    
-    
-    static Type parse(const std::string& str);
-    PrecSelector(const std::string& str);
-    
-};
-
-
-template <typename LATraits>
 class LASolver
 {
 public:
