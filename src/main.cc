@@ -7120,29 +7120,6 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
 } // namespace PhaseField_monolithic
 
 
-void init_dirs(PhaseField_monolithic::Parameters::AllParameters &parameters)
-{
-    // verify if output dir is existed. if not, create
-    ::FileSystem::dir(parameters.m_output_dir);
-    
-    // find out the potential subdir name for output
-    parameters.subDir  = ::FileSystem::find_next_numeric_subdir(parameters.m_output_dir);
-    
-    // update output dir and sub-dirs
-    parameters.m_output_dir = parameters.m_output_dir + parameters.subDir + "/";
-    parameters.oriDir       = parameters.m_output_dir + "ori/";
-    parameters.histDir      = parameters.m_output_dir + "hist/";
-    parameters.resultsDir   = parameters.m_output_dir + "results/";
-    
-    // create sub-dirs
-    ::FileSystem::dir(parameters.oriDir);
-    ::FileSystem::dir(parameters.histDir);
-    ::FileSystem::dir(parameters.resultsDir);
-}
-
-
-
-
 
 int main(int argc, char* argv[])
 {
@@ -7189,40 +7166,32 @@ int main(int argc, char* argv[])
         mpiInfo.summary(std::cout);
     
     // create dirctories
-    if(mpiInfo.isMPI())
     {
-        // only rank 0 creates dirs to avoid repeated creations
-        std::vector<std::string> dirNames;
-        if(mpiInfo.rank() == 0)
+        
+        std::vector<::FileSystem::SubDir> subDirs =
         {
-            init_dirs(parameters);
-            dirNames = {parameters.m_output_dir, parameters.subDir, parameters.oriDir, parameters.histDir, parameters.resultsDir};
-        }
+            ::FileSystem::SubDir("ori",     parameters.oriDir),
+            ::FileSystem::SubDir("hist",    parameters.histDir),
+            ::FileSystem::SubDir("results", parameters.resultsDir),
+        };
         
-        // sync dir names
-        dirNames = Utilities::MPI::broadcast(*mpiInfo.mpiCommPtr(), dirNames, 0);
-        
-        // update local variables
-        parameters.m_output_dir = dirNames[0];
-        parameters.subDir       = dirNames[1];
-        parameters.oriDir       = dirNames[2];
-        parameters.histDir      = dirNames[3];
-        parameters.resultsDir   = dirNames[4];
-        
-    } else {
-        init_dirs(parameters);
+        ::FileSystem::outputDirSystem(mpiInfo,
+                                      parameters.m_output_dir,
+                                      parameters.subDir,
+                                      subDirs);
     }
-
     
     std::ofstream log_fstream;
-    if(mpiInfo.rank() == 0)
+    
+    // output the directory inforamtion
+    if(mpiInfo.isRankEqualsTo(0))
     {
         std::cout << "\nDir: \t" << parameters.m_output_dir << std::endl
         << "Type: \t" << parameters.m_mpi_type << std::endl
         << "Log: \t" << parameters.m_logfile_name << std::endl << std::endl;
         
-        // only rank 0 create logfile to avoid overriding
-        log_fstream.open(parameters.m_output_dir 
+        // only rank 0 creates logfile to avoid overriding
+        log_fstream.open(parameters.m_output_dir
                          + parameters.m_logfile_name
                          + "_" + parameters.m_mpi_type
                          + "_" + std::to_string(mpiInfo.nRanks())

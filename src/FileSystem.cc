@@ -8,6 +8,15 @@
 
 namespace fs = std::filesystem;
 
+
+
+FileSystem::SubDir::SubDir(const std::string& subDir,
+                           std::string&      prmDir)
+: subDir(subDir)
+, prmDir(prmDir)
+{}
+
+
 std::string
 FileSystem::pwd()
 {
@@ -71,6 +80,50 @@ bool FileSystem::dir(const std::string& rel_dir)
     catch (...) {
         return false;
     }
+}
+
+
+
+bool FileSystem
+::outputDirSystem(const MPIInfo& mpiInfo,
+                  std::string& rel_dir,
+                  std::string& case_dir_path,
+                  std::vector<SubDir>& sub_dirs)
+{
+    using namespace dealii;
+    bool status = false;
+    // verify if output dir is existed. if not, create
+    status = dir(rel_dir);
+    if(!status) return status;
+    
+    
+    // find out the potential subdir name for output
+    if (mpiInfo.isRankEqualsTo(0)) {
+        case_dir_path  = find_next_numeric_subdir(rel_dir);
+    }
+    
+    if (mpiInfo.isMPI()) {
+        case_dir_path = Utilities::MPI::broadcast(*mpiInfo.mpiCommPtr(),
+                                                  case_dir_path, 0);
+    }
+    
+    
+    // update output dir and sub-dirs
+    rel_dir = rel_dir + case_dir_path;
+    if (rel_dir.back() != '/') rel_dir.push_back('/');
+    
+    
+    // create sub-dirs
+    for (SubDir& subDir : sub_dirs) {
+        subDir.prmDir = rel_dir + subDir.subDir;
+        if (subDir.prmDir.back() != '/') subDir.prmDir.push_back('/');
+        
+        if (mpiInfo.isRankEqualsTo(0)) {
+            status = dir(subDir.prmDir);
+        }
+        if(!status) break;
+    }
+    return status;
 }
 
 
