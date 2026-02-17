@@ -10,8 +10,6 @@ using namespace PhaseField_monolithic;
 using namespace dealii;
 
 
-using PETScPrecSelector = PrecSelector<::la::Traits<::la::TagPETSc>>;
-using TrilinosPrecSelector = PrecSelector<::la::Traits<::la::TagTrilinos>>;
 
 Tol::Tol(const unsigned int nIters,
          const double tol)
@@ -19,50 +17,6 @@ Tol::Tol(const unsigned int nIters,
 , tol(tol)
 {}
 
-
-PETScPrecSelector::Type
-PETScPrecSelector
-::parse(const std::string &str)
-{
-    if      (str == "none")        return Type::none;
-    else if (str == "jacobi")      return Type::jacobi;
-    else if (str == "ilu")         return Type::ilu;
-    else if (str == "icc")         return Type::icc;
-    else if (str == "parasails")   return Type::parasails;
-    else if (str == "sor")         return Type::sor;
-    else if (str == "ssor")        return Type::ssor;
-    
-    throw std::runtime_error("Unknown preconditioner: " + str);
-}
-
-PETScPrecSelector
-::PrecSelector(const std::string& str)
-: type(PETScPrecSelector::parse(str))
-{}
-
-
-
-
-TrilinosPrecSelector::Type
-TrilinosPrecSelector
-::parse(const std::string &str)
-{
-    if      (str == "indentity")   return Type::indentity;
-    else if (str == "jacobi")      return Type::jacobi;
-    else if (str == "ilu")         return Type::ilu;
-    else if (str == "ic")          return Type::ic;
-    else if (str == "ilut")        return Type::ilut;
-    else if (str == "shebs")       return Type::shebs;
-    else if (str == "sor")         return Type::sor;
-    else if (str == "ssor")        return Type::ssor;
-    
-    throw std::runtime_error("Unknown preconditioner: " + str);
-}
-
-TrilinosPrecSelector
-::PrecSelector(const std::string& str)
-: type(TrilinosPrecSelector::parse(str))
-{}
 
 
 
@@ -119,36 +73,6 @@ LASolver<LATraits>::__directSolve(BVector & LBFGS_r_vector,
 {
     using namespace dealii;
     if constexpr (std::is_same_v<typename LATraits::TMTag, ::la::TagSerial>) {
-        /*
-         SparseDirectUMFPACK A_direct;
-         A_direct.initialize(m_tangent_matrix);
-         A_direct.vmult(LBFGS_r_vector,
-         LBFGS_q_vector);
-         */
-        
-        // Performing LU decomposition on each block is much faster than
-        // performing LU decomposition on the whole system
-        
-        //        {
-        //            SparseDirectUMFPACK A_direct_u;
-        //            A_direct_u.initialize(tangent_matrix.block(__u_group_ID, __u_group_ID));
-        //            A_direct_u.vmult(LBFGS_r_vector.block(__u_group_ID),
-        //                             LBFGS_q_vector.block(__u_group_ID));
-        //        }
-        //
-        //        {
-        //            SparseDirectUMFPACK A_direct_d;
-        //            A_direct_d.initialize(tangent_matrix.block(__d_group_ID, __d_group_ID));
-        //            A_direct_d.vmult(LBFGS_r_vector.block(__d_group_ID),
-        //                             LBFGS_q_vector.block(__d_group_ID));
-        //        }
-        //
-        //        {
-        //            SparseDirectUMFPACK A_direct_t;
-        //            A_direct_t.initialize(tangent_matrix.block(__T_group_ID, __T_group_ID));
-        //            A_direct_t.vmult(LBFGS_r_vector.block(__T_group_ID),
-        //                             LBFGS_q_vector.block(__T_group_ID));
-        //        }
         for (unsigned int ithGroup = 0; ithGroup < __blockDesc.nBlocks(); ++ithGroup)
         {
             SparseDirectUMFPACK A_direct;
