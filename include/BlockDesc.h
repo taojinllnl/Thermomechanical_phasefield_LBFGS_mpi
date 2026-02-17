@@ -20,16 +20,31 @@
 #include <deal.II/dofs/dof_tools.h>
 #include <deal.II/dofs/dof_renumbering.h>
 
-/// example:
-///     _dims               = {3, 2, 1}
-///     _nBlocks            = 3
-///     __dimRange          = { [0, 3], [3, 5], [5, 6] }
-///     __nComponents       = 6
-///     __groupIDs          = {0, 0, 0, 1, 1, 2 }
-///     __names             = { "a", "b", "c" }
-///
 
 
+/**
+ *
+ * The class, `BlockDesc`, stores a list of blocks (`BlockDesc::Block`) that define the number of components in a block, block name and group ID (block index) in the coupled system.
+ * During construction of `BlockDesc`, a list of (dimension, name) pairs is required to build up the basic information of the coupled system.
+ * A contiguous group ID (0, 1, 2, ...) is assigned to each block according to its order in the given list.
+ *
+ * After construction, basic information of the coupled system is available, including:
+ * - number of blocks,
+ * - a list of component-to-group-ID mapping (group IDs),
+ * - total number of components,
+ * - per-block component index ranges.
+ *
+ * Calling `updateDoFsInfo()` computes and caches DoF-related information from the provided `dealii::DoFHandler`, depending on the execution mode described by `MPIInfo`.
+ * In both serial and MPI modes, the DoFs per block will be counted.
+ * In MPI modes, the locally relevant dofs (`IndexSet`) will be updated and cached.
+ * Correspondingly, the owned and relevant partitionings `std::vector<IndexSet>` will be extracted from the locally owned and relevant DoFs.
+ *
+ * Note:
+ * 1. Calling `updateDoFsInfo()` before using DoF-related getters, otherwise
+ *       they may return `nullptr` or incorrrect results.
+ * 2. Before calling `updateDoFsInfo()`, the function `dealii::DoFRenumbering::component_wise(...)` should be applied to guarantee the correct distribution of the DoFs in `dealii::DoFHandler`.
+ * 3. Getters for DoFs-related data return raw pointers (may be `nullptr`). Call `updateDoFsInfo()` first to update the cached data and check the pointers for `nullptr`.
+ */
 
 class BlockDesc
 {
