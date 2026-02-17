@@ -5736,6 +5736,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
         line_search_parameter = line_search_stepsize_gradient_based(LBFGS_r_vector,
         							    solution_delta, iSmallSteps);
           
+          // Note: to avoid round-off errors during synchronization from different ranks
           if constexpr(is_mpi) {
               line_search_parameter = std::round(line_search_parameter * 1e6) / 1e6;
               line_search_parameter = Utilities::MPI::broadcast(*m_mpiInfo.mpiCommPtr(), line_search_parameter, /*root=*/0);
