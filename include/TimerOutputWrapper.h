@@ -17,6 +17,13 @@
 
 #include "MPIInfo.h"
 
+
+/**
+ * This class is a light-weight wrapper for `TimerOutput` to provide a unified interface in both serial and MPI-modes, starting with `enter_subsection()` and ending with `leave_subsection()`.
+ *
+ */
+
+
 template <typename LATraits>
 class TimerOutputWrapper
 {
