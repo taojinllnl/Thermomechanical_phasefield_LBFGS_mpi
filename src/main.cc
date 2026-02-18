@@ -7144,7 +7144,7 @@ int main(int argc, char* argv[])
     if(mpiInfo.rank() == 0)
         mpiInfo.summary(std::cout);
     
-    // create dirctories
+    // create dirctories with sub-directories in the case folder
     {
         
         std::vector<::FileSystem::SubDir> subDirs =
@@ -7169,19 +7169,23 @@ int main(int argc, char* argv[])
         << "Type: \t" << parameters.m_mpi_type << std::endl
         << "Log: \t" << parameters.m_logfile_name << std::endl << std::endl;
         
-        // only rank 0 creates logfile to avoid overriding
+        // only rank 0 creates logfile to avoid overriding in MPI mode
         log_fstream.open(parameters.m_output_dir
                          + parameters.m_logfile_name
                          + "_" + parameters.m_mpi_type
                          + "_" + std::to_string(mpiInfo.nRanks())
                          + "_" + parameters.m_type_linear_solver + ".log");
     }
-
+        
     ConditionalOStream logfile(log_fstream, mpiInfo.rank() == 0);
     
     
     // dimension by prm setting
     const unsigned int dim = parameters.m_dim;
+    AssertThrow(dim == 2 || dim == 3,
+                ExcMessage("Dimension has to be either 2 or 3"));
+    
+    
     if(parameters.m_mpi_type == "PETSc") {
 #ifdef HAVE_PETSC
         // PETSc type mpi
@@ -7207,11 +7211,8 @@ int main(int argc, char* argv[])
             PhaseFieldMonolithicSolve<la::Traits<la::TagPETSc>, DTria<3>> Phasefield3D(parameters, mpiInfo, logfile, tria);
             Phasefield3D.run();
         }
-        else
-        {
-            AssertThrow(false,
-                        ExcMessage("Dimension has to be either 2 or 3"));
-        }
+#else
+        std::cout << "[ ERROR ] The selected mpi mode (" << parameters.m_mpi_type << ") is not installed." << std::endl;
 #endif
     } else if(parameters.m_mpi_type == "Trilinos") {
 #ifdef HAVE_TRILINOS
@@ -7238,11 +7239,8 @@ int main(int argc, char* argv[])
             PhaseFieldMonolithicSolve<la::Traits<la::TagTrilinos>, DTria<3>> Phasefield3D(parameters, mpiInfo, logfile, tria);
             Phasefield3D.run();
         }
-        else
-        {
-            AssertThrow(false,
-                        ExcMessage("Dimension has to be either 2 or 3"));
-        }
+#else
+        std::cout << "[ ERROR ] The selected mpi mode (" << parameters.m_mpi_type << ") is not installed." << std::endl;
 #endif
     } else {
         // Serial type
@@ -7259,11 +7257,6 @@ int main(int argc, char* argv[])
             
             PhaseFieldMonolithicSolve<la::Traits<la::TagSerial>, RTria<3>> Phasefield3D(parameters, mpiInfo, logfile, tria);
             Phasefield3D.run();
-        }
-        else
-        {
-            AssertThrow(false,
-                        ExcMessage("Dimension has to be either 2 or 3"));
         }
     }
     
