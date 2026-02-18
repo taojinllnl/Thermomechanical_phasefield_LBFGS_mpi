@@ -143,7 +143,7 @@ Examples of correct outputs are shown below:
 ```
 Non-MPI mode
 
-Dir:    ./path/to/output/
+Dir:    ./path/to/output/dir
 Type:   Serial
 Log:    logfile_name
 ```
@@ -154,7 +154,7 @@ Log:    logfile_name
 MPI mode
         number of ranks: 32     current rank: 0
 
-Dir:    ./path/to/output/
+Dir:    ./path/to/output/dir
 Type:   Trilinos
 Log:    logfile_name
 ```
