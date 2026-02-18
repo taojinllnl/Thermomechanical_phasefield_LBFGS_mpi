@@ -83,6 +83,7 @@ LASolver<LATraits>::__directSolve(BVector & LBFGS_r_vector,
     } else if constexpr (std::is_same_v<typename LATraits::TMTag, ::la::TagPETSc>) {
         // https://dealii.org/current/doxygen/deal.II/classPETScWrappers_1_1SparseDirectMUMPS.html
         
+#ifdef HAVE_PETSC
         using PrecJacobi = dealii::PETScWrappers::PreconditionBlockJacobi;
         using PrecILU    = dealii::PETScWrappers::PreconditionILU;
         using PrecICC    = dealii::PETScWrappers::PreconditionICC;
@@ -113,9 +114,11 @@ LASolver<LATraits>::__directSolve(BVector & LBFGS_r_vector,
 
 
         }
+#endif
     } else if constexpr (std::is_same_v<typename LATraits::TMTag, ::la::TagTrilinos>) {
         // https://dealii.org/current/doxygen/deal.II/classTrilinosWrappers_1_1SolverDirect.html
         
+#ifdef HAVE_TRILINOS
         for (unsigned int ithGroup = 0; ithGroup < __blockDesc.nBlocks(); ++ithGroup)
         {
             SolverControl solver_control(__tolList[ithGroup].nIters,
@@ -128,6 +131,7 @@ LASolver<LATraits>::__directSolve(BVector & LBFGS_r_vector,
                              LBFGS_q_vector.block(ithGroup));
         }
     }
+#endif
 }
 
 template <typename LATraits>
@@ -138,48 +142,6 @@ LASolver<LATraits>::__cgSolve(BVector & LBFGS_r_vector,
 {
     using namespace dealii;
     if constexpr (std::is_same_v<typename LATraits::TMTag, ::la::TagSerial>) {
-        /*
-         SolverControl            solver_control(1e6, 1e-9);
-         SolverCG<BlockVector<double>> cg(solver_control);
-         
-         PreconditionJacobi<BlockSparseMatrix<double>> preconditioner;
-         preconditioner.initialize(m_tangent_matrix, 1.0);
-         
-         cg.solve(m_tangent_matrix,
-         LBFGS_r_vector,
-         LBFGS_q_vector,
-         preconditioner);
-         */
-        //        SolverControl            solver_control_uu(1e6, __cg_u_tol);
-        //        SolverCG<Vector<double>> cg_uu(solver_control_uu);
-        //
-        //        PreconditionJacobi<SparseMatrix<double>> preconditioner_uu;
-        //        preconditioner_uu.initialize(tangent_matrix.block(__u_group_ID, __u_group_ID), 1.0);
-        //        cg_uu.solve(tangent_matrix.block(__u_group_ID, __u_group_ID),
-        //                    LBFGS_r_vector.block(__u_group_ID),
-        //                    LBFGS_q_vector.block(__u_group_ID),
-        //                    preconditioner_uu);
-        //
-        //        SolverControl            solver_control_dd(1e6, __cg_d_tol);
-        //        SolverCG<Vector<double>> cg_dd(solver_control_dd);
-        //
-        //        PreconditionJacobi<SparseMatrix<double>> preconditioner_dd;
-        //        preconditioner_dd.initialize(tangent_matrix.block(__d_group_ID, __d_group_ID), 1.0);
-        //        cg_dd.solve(tangent_matrix.block(__d_group_ID, __d_group_ID),
-        //                    LBFGS_r_vector.block(__d_group_ID),
-        //                    LBFGS_q_vector.block(__d_group_ID),
-        //                    preconditioner_dd);
-        //
-        //        SolverControl            solver_control_tt(1e6, __cg_T_tol);
-        //        SolverCG<Vector<double>> cg_tt(solver_control_tt);
-        //
-        //        PreconditionJacobi<SparseMatrix<double>> preconditioner_tt;
-        //        preconditioner_tt.initialize(tangent_matrix.block(__T_group_ID, __T_group_ID), 1.0);
-        //        cg_tt.solve(tangent_matrix.block(__T_group_ID, __T_group_ID),
-        //                    LBFGS_r_vector.block(__T_group_ID),
-        //                    LBFGS_q_vector.block(__T_group_ID),
-        //                    preconditioner_tt);
-        
         for (unsigned int ithGroup = 0; ithGroup < __blockDesc.nBlocks(); ++ithGroup)
         {
             SolverControl            solver_control(__tolList[ithGroup].nIters,
@@ -197,6 +159,7 @@ LASolver<LATraits>::__cgSolve(BVector & LBFGS_r_vector,
         }
         
     } else if constexpr (std::is_same_v<typename LATraits::TMTag, ::la::TagPETSc>) {
+#ifdef HAVE_PETSC
         using PrecJacobi = dealii::PETScWrappers::PreconditionBlockJacobi;
         using PrecILU    = dealii::PETScWrappers::PreconditionILU;
         using PrecICC    = dealii::PETScWrappers::PreconditionICC;
@@ -226,8 +189,11 @@ LASolver<LATraits>::__cgSolve(BVector & LBFGS_r_vector,
                      LBFGS_q_vector.block(ithGroup),
                      prec);
         }
+#endif
         
     } else if constexpr (std::is_same_v<typename LATraits::TMTag, ::la::TagTrilinos>) {
+        
+#ifdef HAVE_TRILINOS
         using PrecJacobi = dealii::TrilinosWrappers::PreconditionBlockJacobi;
         using PrecILU    = dealii::TrilinosWrappers::PreconditionILU;
         using PrecIC     = dealii::TrilinosWrappers::PreconditionIC;
@@ -257,6 +223,7 @@ LASolver<LATraits>::__cgSolve(BVector & LBFGS_r_vector,
                      prec);
         }
     }
+#endif
 }
 
 
