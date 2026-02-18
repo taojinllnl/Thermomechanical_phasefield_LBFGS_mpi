@@ -11,27 +11,6 @@
 #include <deal.II/lac/generic_linear_algebra.h>
 #include <deal.II/grid/tria.h>
 
-//
-//namespace mpi
-//{
-//
-//#if defined(DEAL_II_WITH_PETSC) && !defined(DEAL_II_PETSC_WITH_COMPLEX) && \
-//!(defined(DEAL_II_WITH_TRILINOS) && defined(FORCE_USE_OF_TRILINOS))
-//using namespace dealii::LinearAlgebraPETSc;
-//#  define USE_PETSC_LA
-////#include <deal.II/lac/petsc_solver.h>
-//
-//#elif defined(DEAL_II_WITH_TRILINOS)
-//using namespace dealii::LinearAlgebraTrilinos;
-////#include <deal.II/lac/trilinos_solver.h>
-//
-//#else
-//#  error DEAL_II_WITH_PETSC or DEAL_II_WITH_TRILINOS required
-//#endif
-//
-//
-//}
-
 
 namespace la {
 
@@ -45,7 +24,7 @@ struct TagTrilinos  {};
 template <typename BackendTag>
 struct Traits;
 
-
+// serial mode
 template <>
 struct Traits<TagSerial>
 {
@@ -67,7 +46,7 @@ using RTria = ::dealii::Triangulation<dim, spacedim>;
 
 
 
-
+// MPI mode with PETSc
 #ifdef DEAL_II_WITH_PETSC
 #  define HAVE_PETSC 1
 #include <deal.II/lac/petsc_solver.h>
@@ -90,17 +69,11 @@ struct Traits<TagPETSc>
 }
 
 
-//#ifndef DISTRIBUTED_TRIA
-//#   define DISTRIBUTED_TRIA 1
-//template <int dim, int spacedim = dim>
-//using DTria = ::dealii::parallel::distributed::Triangulation<dim, spacedim>;
-//#endif
-
 #endif
 
 
 
-
+// MPI mode with Trilinos
 #ifdef DEAL_II_WITH_TRILINOS
 #  define HAVE_TRILINOS 1
 #include <deal.II/lac/trilinos_solver.h>
@@ -125,6 +98,9 @@ struct Traits<TagTrilinos>
 #endif
 
 
+
+
+// add alias to simplify the code
 # if defined(HAVE_TRILINOS) || defined(HAVE_PETSC)
 #ifndef DISTRIBUTED_TRIA
 #   define DISTRIBUTED_TRIA 1
