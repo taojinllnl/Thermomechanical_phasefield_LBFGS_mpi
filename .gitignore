@@ -42,6 +42,7 @@ CMakeFiles/*
 CMakeScripts/*
 Debug/*
 Release/*
+output/*
 
 # Mac
 .DS_Store
