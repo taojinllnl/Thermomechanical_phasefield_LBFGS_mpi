@@ -130,6 +130,37 @@ If the executable will run on 32 ranks with 32 GB memory in 10 hours, the script
 srun ./build/main path/to/parameter.prm          # mpirun or mpiexec also work
 ```
 
+#### Mode mismatch between `.prm` configuration and command line
+
+If the mode specified in the `.prm` file does not match the command line used to launch the executable, the program does not automatically detect or prevent this mismatch.
+Once the executable starts, information about the MPI mode and output directory will be summarized and printed to the terminal or output file when running on clusters. 
+The mismatch can be identified from this output. 
+
+Examples of correct outputs are shown below: 
+
+- Serial mode
+ 
+```
+Non-MPI mode
+
+Dir:    ./path/to/output/
+Type:   Serial
+Log:    logfile_name
+```
+
+- MPI mode 
+
+```
+MPI mode
+        number of ranks: 32     current rank: 0
+
+Dir:    ./path/to/output/
+Type:   Trilinos
+Log:    logfile_name
+```
+
+
+
 ---
 ### Configuration directory and data files
 
