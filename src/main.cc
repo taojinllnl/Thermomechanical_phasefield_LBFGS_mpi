@@ -131,12 +131,6 @@
 
 #include "../include/VersionAdapter.h"
 
-//template <int dim, int spacedim = dim>
-//using RTria = ::dealii::Triangulation<dim, spacedim>;
-//
-//template <int dim, int spacedim = dim>
-//using DTria = ::dealii::parallel::distributed::Triangulation<dim, spacedim>;
-
 
 
 namespace PhaseField_monolithic
