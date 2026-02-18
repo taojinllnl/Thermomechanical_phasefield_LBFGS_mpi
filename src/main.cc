@@ -3608,11 +3608,6 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
       }
       m_constraints.close();
       
-      
-      // TODO: move m_dofs_per_block = DoFTools::count_dofs_per_fe_block(m_dof_handler, block_component); to m_blocks_desc.updateDoFsInfo(m_dof_handler);
-//    m_dofs_per_block =
-//      DoFTools::count_dofs_per_fe_block(m_dof_handler, block_component);
-      
     
 
     m_logfile << "\t\tTriangulation:"
