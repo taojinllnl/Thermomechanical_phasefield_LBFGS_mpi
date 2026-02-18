@@ -10,7 +10,7 @@
 
 #include <deal.II/lac/generic_linear_algebra.h>
 #include <deal.II/grid/tria.h>
-
+#include <deal.II/numerics/solution_transfer.h>
 
 namespace la {
 
@@ -40,6 +40,7 @@ struct Traits<TagSerial>
 };
 }
 
+// alias for serial Triangulation
 template <int dim, int spacedim = dim>
 using RTria = ::dealii::Triangulation<dim, spacedim>;
 
@@ -110,14 +111,21 @@ using DTria = ::dealii::parallel::distributed::Triangulation<dim, spacedim>;
 # endif
 
 
-#include <deal.II/numerics/solution_transfer.h>
+// templated SolutionTransferSelector
 template <int dim, typename VectorType, bool is_mpi, int spacedim=dim>
-struct SolutionTransferSelector
+struct SolutionTransferSelector;
+
+
+// specification for SolutionTransferSelector in serial mode
+template <int dim, typename VectorType, int spacedim>
+struct SolutionTransferSelector<dim, VectorType, /*is_mpi=*/false, spacedim>
 {
     using type = dealii::SolutionTransfer<dim, VectorType, spacedim>;
 };
 
 
+
+// specification for SolutionTransferSelector in mpi mode
 # if defined(HAVE_TRILINOS) || defined(HAVE_PETSC)
 #include <deal.II/distributed/solution_transfer.h>
 #   if !DEAL_II_VERSION_GTE(9, 7, 0)
