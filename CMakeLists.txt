@@ -2,6 +2,8 @@
 #  CMake script for the linear thermoelastic monolithic approach:
 ##
 
+SET(CMAKE_CXX_STANDARD 17)
+
 # Set the name of the project and target:
 SET(TARGET "main")
 
@@ -15,11 +17,9 @@ SET(TARGET "main")
 # or switch altogether to the large project CMakeLists.txt file discussed
 # in the "CMake in user projects" page accessible from the "User info"
 # page of the documentation.
-SET(TARGET_SRC
-  ${TARGET}.cc
-  SpectrumDecomposition.h
-  SpectrumDecomposition.cc
-  )
+FILE(GLOB_RECURSE TARGET_SRC  "src/*.cc")
+FILE(GLOB_RECURSE TARGET_INC  "include/*.h")
+SET(TARGET_SRC ${TARGET_SRC}  ${TARGET_INC})
 
 # Usually, you will not need to modify anything beyond this point...
 

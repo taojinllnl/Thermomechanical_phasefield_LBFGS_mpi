@@ -11,12 +11,12 @@ namespace usr_utilities
 {
   using namespace dealii;
 
-  template <int dim>
+  template <int dim, int spacedim=dim>
   std::vector<types::global_dof_index> get_vertex_dofs(
-    const typename Triangulation<dim>::active_vertex_iterator &vertex,
-    const DoFHandler<dim> &dof_handler)
+    const typename Triangulation<dim, spacedim>::active_vertex_iterator &vertex,
+    const DoFHandler<dim, spacedim> &dof_handler)
   {
-    DoFAccessor<0, dim, dim, false> vertex_dofs(
+    DoFAccessor<0, dim, spacedim, false> vertex_dofs(
         &(dof_handler.get_triangulation()),
         vertex->level(),
         vertex->index(),

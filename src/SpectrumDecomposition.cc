@@ -1,4 +1,4 @@
-#include "SpectrumDecomposition.h" // use double quote
+#include "../include/SpectrumDecomposition.h" // use double quote
 #include <deal.II/base/tensor.h>
 #include <deal.II/base/symmetric_tensor.h>
 #include <deal.II/base/exceptions.h>
