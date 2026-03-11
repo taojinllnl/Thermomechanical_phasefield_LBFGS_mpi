@@ -298,10 +298,10 @@ namespace PhaseField_monolithic
                           Patterns::Selection("pre-refine|adaptive-refine"),
                           "Mesh refinement strategy: pre-refine or adaptive-refine");
           
-          prm.declare_entry("Repartitioning ratio",
-                "2.0",
-                Patterns::Double(0.0),
-                "The threshold for repartitioning");
+        prm.declare_entry("Repartitioning ratio",
+                          "2.0",
+                          Patterns::Double(0.0),
+                          "The threshold for repartitioning");
 
         prm.declare_entry("LBFGS m",
                           "40",
@@ -4676,8 +4676,12 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
         const double lame_mu                 = lqph[q_point]->get_lame_mu();
         const bool   coupling_on_heat_eq     = lqph[q_point]->get_heat_coupling_flag();
         
+        const double phasefield_value        = lqph[q_point]->get_phase_field_value();
+        const Tensor<1, dim> phasefield_grad = lqph[q_point]->get_phase_field_gradient();
+
         double coupling_tensor_coeff = thermal_expansion
-        * (trace(Physics::Elasticity::StandardTensors<dim>::I)*lame_lambda + 2.0*lame_mu);
+        * (trace(Physics::Elasticity::StandardTensors<dim>::I)*lame_lambda + 2.0*lame_mu)
+	* degradation_function(phasefield_value);
         
         if (!coupling_on_heat_eq)
             coupling_tensor_coeff = 0.0;
@@ -4688,9 +4692,6 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
         double history_value = history_strain_energy;
         if (current_positive_strain_energy > history_strain_energy)
             history_value = current_positive_strain_energy;
-        
-        const double phasefield_value        = lqph[q_point]->get_phase_field_value();
-        const Tensor<1, dim> phasefield_grad = lqph[q_point]->get_phase_field_gradient();
         
         const double temperature_value        = lqph[q_point]->get_temperature_value();
         
@@ -6610,6 +6611,10 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
             dof_handler_L2.distribute_dofs(fe_L2);
             AffineConstraints<double> constraints;
             constraints.clear();
+            //Since we use discontinuous Lagrange polynomials as shape functions
+            //we don't need to worry about enforcing continuity of the history variable
+            //at hanging nodes.
+            /*
             if constexpr (is_mpi)
             {
                 const IndexSet& owned_L2 = dof_handler_L2.locally_owned_dofs();
@@ -6628,6 +6633,7 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
             } else {
                 DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
             }
+            */
             constraints.close();
             
             
@@ -6725,6 +6731,10 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
             
             dof_handler_L2.distribute_dofs(fe_L2);
             constraints.clear();
+            //Since we use discontinuous Lagrange polynomials as shape functions
+            //we don't need to worry about enforcing continuity of the history variable
+            //at hanging nodes.
+            /*
             if constexpr (is_mpi)
             {
                 const IndexSet& owned_L2 = dof_handler_L2.locally_owned_dofs();
@@ -6743,6 +6753,7 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
             } else {
                 DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
             }
+            */
             constraints.close();
             
             
@@ -6811,7 +6822,10 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
             // distribute and update relevance
             solution_next_step.distributeCst(m_constraints); // ghost cells updated
             m_solution.distributeCst(m_constraints);        // ghost cells updated
-            constraints.distribute(new_history_variable_field_L2);
+            //Since we use discontinuous Lagrange polynomials as shape functions
+            //we don't need to worry about enforcing continuity of the history variable
+            //at hanging nodes.
+            //constraints.distribute(new_history_variable_field_L2);
 
             
             if constexpr (is_mpi) {
