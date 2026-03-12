@@ -3854,7 +3854,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
                   const unsigned int n_dofs = m_fe.dofs_per_vertex;
                   std::vector<bool> locally_owned_vertices =  GridTools::get_locally_owned_vertices(m_dof_handler.get_triangulation());
                   for (auto const & cell : m_dof_handler.active_cell_iterators()) {
-                      if (!cell->is_locally_owned() && !cell->at_boundary()) continue;
+                      if (!cell->is_locally_owned() || !cell->at_boundary()) continue;
                       
                       for (const auto vertex : cell->vertex_indices())
                       {
@@ -4033,7 +4033,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
                   std::vector<bool> locally_owned_vertices =  GridTools::get_locally_owned_vertices(m_triangulation);
                   for (auto const & cell : m_dof_handler.active_cell_iterators()) {
                       // skip ghost cells
-                      if (!cell->is_locally_owned() && !cell->at_boundary()) continue;
+                      if (!cell->is_locally_owned() || !cell->at_boundary()) continue;
                       
                       for (const auto vertex : cell->vertex_indices())
                       {
@@ -4047,11 +4047,12 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
                           {
                               for (unsigned int i = 0; i < n_dofs; ++i){
                                   node_xy[i] = cell->vertex_dof_index(vertex, i);
-                                  hasCst = true;
-                                  break;
                               }
+                              hasCst = true;
+                              break; // break, only single cst pnt
                           }
                       }
+                      if(hasCst) break;
                   }
                   
               } else {
@@ -4120,45 +4121,63 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
                                                        m_constraints,
                                                        m_fe.component_mask(y_displacement));
               
-              typename Triangulation<dim>::active_vertex_iterator vertex_itr;
-              vertex_itr = m_triangulation.begin_active_vertex();
-              std::vector<types::global_dof_index> node_xy(m_fe.dofs_per_vertex);
               
-              // TODO: add_line
-              bool hasCst = false;
               if constexpr (is_mpi) {
-                  const unsigned int n_dofs = m_fe.dofs_per_vertex;
+              
+                  // the constrainted points
+                  const std::vector<Point<dim>> cstPnts({
+                      Point<dim>(0,  0, 0.125),
+                      Point<dim>(25, 0, 0.125),
+                      Point<dim>(0,  5, 0.125)
+                  });
+                  // are the given points found?
+                  std::array<bool, 3> found({false, false, false});
+                  
+                  std::array<types::global_dof_index, 3> node_z({
+                      numbers::invalid_dof_index,
+                      numbers::invalid_dof_index,
+                      numbers::invalid_dof_index
+                  });
+                  
                   std::vector<bool> locally_owned_vertices =  GridTools::get_locally_owned_vertices(m_triangulation);
                   for (auto const & cell : m_dof_handler.active_cell_iterators()) {
                       // skip ghost cells
-                      if (!cell->is_locally_owned() && !cell->at_boundary()) continue;
+                      if (!cell->is_locally_owned() || !cell->at_boundary()) continue;
                       
                       for (const auto vertex : cell->vertex_indices())
                       {
                           // skip dofs that not owned by current rank
                           if (!locally_owned_vertices[cell->vertex_index(vertex)]) continue;
-                          
+        
                           const Point<dim> point = cell->vertex(vertex);
-                          
-                          if (   (std::fabs(point[0] - 25.0) < 1.0e-9)
-                              && (std::fabs(point[1] - 5.0) < 1.0e-9) )
-                          {
-                              for (unsigned int i = 0; i < n_dofs; ++i){
-                                  node_xy[i] = cell->vertex_dof_index(vertex, i);
-                                  hasCst = true;
-                                  break;
+        
+                          for (unsigned int j = 0; j < cstPnts.size(); ++j) {
+                              
+                              // skip further operation, if this point has been found.
+                              if(found[j]) continue;
+                              
+                              if (point.distance(cstPnts[j]) < 1.0e-9)
+                              {
+                                  node_z[j] = cell->vertex_dof_index(vertex, 2);
+                                  found[j] = true;
                               }
+                              
                           }
                       }
                   }
+                  for (unsigned int i = 0; i < cstPnts.size(); ++i) {
                   
-                  if (      hasCst
-                      &&    m_dof_handler.locally_owned_dofs().is_element(node_xy[1])) {
-                      m_constraints.add_line(node_xy[1]);
-                      m_constraints.set_inhomogeneity(node_xy[1], 0.0);
+                      if (found[i] &&    m_dof_handler.locally_owned_dofs().is_element(node_z[i])) {
+                          m_constraints.add_line(node_z[i]);
+                          m_constraints.set_inhomogeneity(node_z[i], 0.0);
+                      }
                   }
                   
               } else {
+                  typename Triangulation<dim>::active_vertex_iterator vertex_itr;
+                  vertex_itr = m_triangulation.begin_active_vertex();
+                  std::vector<types::global_dof_index> node_xy(m_fe.dofs_per_vertex);
+                  
                   for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
                   {
                       if (   (std::fabs(vertex_itr->vertex()[0] -  0.0) < 1.0e-9)
