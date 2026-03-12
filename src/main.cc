@@ -4125,44 +4125,76 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
               std::vector<types::global_dof_index> node_xy(m_fe.dofs_per_vertex);
               
               // TODO: add_line
-              for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
-              {
-                  if (   (std::fabs(vertex_itr->vertex()[0] -  0.0) < 1.0e-9)
-                      && (std::fabs(vertex_itr->vertex()[1] -  0.0) < 1.0e-9)
-                      && (std::fabs(vertex_itr->vertex()[2] -0.125) < 1.0e-9) )
-                  {
-                      node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
+              bool hasCst = false;
+              if constexpr (is_mpi) {
+                  const unsigned int n_dofs = m_fe.dofs_per_vertex;
+                  std::vector<bool> locally_owned_vertices =  GridTools::get_locally_owned_vertices(m_triangulation);
+                  for (auto const & cell : m_dof_handler.active_cell_iterators()) {
+                      // skip ghost cells
+                      if (!cell->is_locally_owned() && !cell->at_boundary()) continue;
+                      
+                      for (const auto vertex : cell->vertex_indices())
+                      {
+                          // skip dofs that not owned by current rank
+                          if (!locally_owned_vertices[cell->vertex_index(vertex)]) continue;
+                          
+                          const Point<dim> point = cell->vertex(vertex);
+                          
+                          if (   (std::fabs(point[0] - 25.0) < 1.0e-9)
+                              && (std::fabs(point[1] - 5.0) < 1.0e-9) )
+                          {
+                              for (unsigned int i = 0; i < n_dofs; ++i){
+                                  node_xy[i] = cell->vertex_dof_index(vertex, i);
+                                  hasCst = true;
+                                  break;
+                              }
+                          }
+                      }
                   }
-              }
-              m_constraints.add_line(node_xy[2]);
-              m_constraints.set_inhomogeneity(node_xy[2], 0.0);
-              
-              // TODO: add_line
-              for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
-              {
-                  if (   (std::fabs(vertex_itr->vertex()[0] - 25.0) < 1.0e-9)
-                      && (std::fabs(vertex_itr->vertex()[1] -  0.0) < 1.0e-9)
-                      && (std::fabs(vertex_itr->vertex()[2] -0.125) < 1.0e-9) )
-                  {
-                      node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
+                  
+                  if (      hasCst
+                      &&    m_dof_handler.locally_owned_dofs().is_element(node_xy[1])) {
+                      m_constraints.add_line(node_xy[1]);
+                      m_constraints.set_inhomogeneity(node_xy[1], 0.0);
                   }
-              }
-              m_constraints.add_line(node_xy[2]);
-              m_constraints.set_inhomogeneity(node_xy[2], 0.0);
-              
-              // TODO: add_line
-              for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
-              {
-                  if (   (std::fabs(vertex_itr->vertex()[0] -  0.0) < 1.0e-9)
-                      && (std::fabs(vertex_itr->vertex()[1] -  5.0) < 1.0e-9)
-                      && (std::fabs(vertex_itr->vertex()[2] -0.125) < 1.0e-9) )
+                  
+              } else {
+                  for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
                   {
-                      node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
+                      if (   (std::fabs(vertex_itr->vertex()[0] -  0.0) < 1.0e-9)
+                          && (std::fabs(vertex_itr->vertex()[1] -  0.0) < 1.0e-9)
+                          && (std::fabs(vertex_itr->vertex()[2] -0.125) < 1.0e-9) )
+                      {
+                          node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
+                      }
                   }
+                  m_constraints.add_line(node_xy[2]);
+                  m_constraints.set_inhomogeneity(node_xy[2], 0.0);
+                  
+                  for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
+                  {
+                      if (   (std::fabs(vertex_itr->vertex()[0] - 25.0) < 1.0e-9)
+                          && (std::fabs(vertex_itr->vertex()[1] -  0.0) < 1.0e-9)
+                          && (std::fabs(vertex_itr->vertex()[2] -0.125) < 1.0e-9) )
+                      {
+                          node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
+                      }
+                  }
+                  m_constraints.add_line(node_xy[2]);
+                  m_constraints.set_inhomogeneity(node_xy[2], 0.0);
+                  
+                  for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
+                  {
+                      if (   (std::fabs(vertex_itr->vertex()[0] -  0.0) < 1.0e-9)
+                          && (std::fabs(vertex_itr->vertex()[1] -  5.0) < 1.0e-9)
+                          && (std::fabs(vertex_itr->vertex()[2] -0.125) < 1.0e-9) )
+                      {
+                          node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
+                      }
+                  }
+                  m_constraints.add_line(node_xy[2]);
+                  m_constraints.set_inhomogeneity(node_xy[2], 0.0);
               }
-              m_constraints.add_line(node_xy[2]);
-              m_constraints.set_inhomogeneity(node_xy[2], 0.0);
-              
               // Remember, the essential B.C. is applied incrementally during each time step.
               // If a constant temperature is needed through time, the B.C should be set as zero.
               double delta_temperature = 0.0; // temperature change per load step
