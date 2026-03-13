@@ -3,7 +3,7 @@
 subsection Scenario
   
   # Dimension
-  set dimension = 2
+  set dimension = 3
   
   # Geometry, loading and boundary conditions scenario
   # 1 - square tension (2D unstructured mesh)
@@ -12,7 +12,8 @@ subsection Scenario
   # 4 - square shear   (2D structured mesh)
   # 5 - quenching test (2D structured mesh, quarter size)
   # 6 - quenching test (2D structured mesh, half size)
-  set Scenario number = 6
+  # 7 - quenching test (3D, one layer, quarter size)
+  set Scenario number = 7
   
   # Name of the log file
   set Log file name = quenching_structured
@@ -85,10 +86,10 @@ subsection Scenario
   set mpi type = PETSc
   
   # Configuration directory
-  set Config dir = ./Case_6/pre_refine/
+  set Config dir = ./Case_7/pre_refine/
   
   # Output directory
-  set Output dir = ./output/Case_6/pre_refine/
+  set Output dir = ./output/Case_7/pre_refine/
 end
 
 subsection Finite element system
