@@ -2393,8 +2393,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
     else if (m_parameters.m_scenario == 7)
     {
         double const length = 25.0; //mm
-        double const width  = 5.0;  //mm
-        double const thickness = 0.25;  //mm
+        double const width  = 10.0;  //mm
+        double const thickness = 1.0;  //mm
         
         for(const auto& face : m_triangulation.active_face_iterators())
         {
@@ -3137,7 +3137,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
     for (unsigned int i = 0; i < 80; ++i)
       m_logfile << "*";
     m_logfile << std::endl;
-    m_logfile << "\t\t\t\tQuenching test (3D, one layer)" << std::endl;
+    m_logfile << "\t\t\t\tQuenching test (3D, half size, 1mm thickness)" << std::endl;
     for (unsigned int i = 0; i < 80; ++i)
       m_logfile << "*";
     m_logfile << std::endl;
@@ -3145,19 +3145,18 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
     AssertThrow(dim==3, ExcMessage("The dimension has to be 3D!"));
 
     double const length = 25.0; //mm
-    double const width  = 5.0;  //mm
-    double const thickness = 0.25;  //mm
+    double const width  = 10.0;  //mm
+    double const thickness = 1.0;  //mm
 
     std::vector<unsigned int> repetitions(dim, 1);
     repetitions[0] = 100;
-    repetitions[1] = 20;
-    repetitions[2] = 1;
+    repetitions[1] = 40;
+    repetitions[2] = 4;
 
     GridGenerator::subdivided_hyper_rectangle(m_triangulation,
 					      repetitions,
 					      Point<dim>( 0.0,      0.0,    0.0),
 					      Point<dim>( length,   width,  thickness ) );
-
 
     if (m_parameters.m_refinement_strategy == "pre-refine")
       {
@@ -3179,6 +3178,9 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
               }
 		if (   (cell->center()[0] >  0.0 && cell->center()[0] <  0.13)
 		    || (cell->center()[1] >  0.0 && cell->center()[1] <  0.13)
+		    || (cell->center()[1] >  (width - 0.13) && cell->center()[1] <  width)
+		    || (cell->center()[2] >  0.0 && cell->center()[2] <  0.13)
+		    || (cell->center()[2] >  (thickness - 0.13) && cell->center()[2] <  thickness)
 		    )
 		  {
 		    // Because the mesh is not imported from gmsh, there is no
@@ -3730,7 +3732,10 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
           
           addSupportTemperature([](const Point<dim>& pnt) -> bool {
               return (std::fabs(pnt[0] -  0.0) < 1.0e-9)
-                  || (std::fabs(pnt[1] -  0.0) < 1.0e-9);
+                  || (std::fabs(pnt[1] -  0.0) < 1.0e-9)
+		  || (std::fabs(pnt[1] - 10.0) < 1.0e-9)
+		  || (std::fabs(pnt[2] -  0.0) < 1.0e-9)
+		  || (std::fabs(pnt[2] -  1.0) < 1.0e-9);
           });
       }
       else if (m_parameters.m_scenario == 8)
@@ -4113,13 +4118,6 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
                                                        m_constraints,
                                                        m_fe.component_mask(x_displacement));
               
-              const int boundary_id_mid_surface_y = 4;
-              VectorTools::interpolate_boundary_values(m_dof_handler,
-                                                       boundary_id_mid_surface_y,
-                                                       Functions::ZeroFunction<dim>(m_n_components),
-                                                       m_constraints,
-                                                       m_fe.component_mask(y_displacement));
-              
               typename Triangulation<dim>::active_vertex_iterator vertex_itr;
               vertex_itr = m_triangulation.begin_active_vertex();
               std::vector<types::global_dof_index> node_xy(m_fe.dofs_per_vertex);
@@ -4127,22 +4125,24 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
               // TODO: add_line
               for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
               {
-                  if (   (std::fabs(vertex_itr->vertex()[0] -  0.0) < 1.0e-9)
-                      && (std::fabs(vertex_itr->vertex()[1] -  0.0) < 1.0e-9)
-                      && (std::fabs(vertex_itr->vertex()[2] -0.125) < 1.0e-9) )
+                  if (   (std::fabs(vertex_itr->vertex()[0] - 25.0) < 1.0e-9)
+                      && (std::fabs(vertex_itr->vertex()[1] -  5.0) < 1.0e-9)
+                      && (std::fabs(vertex_itr->vertex()[2] -  0.5) < 1.0e-9) )
                   {
                       node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
                   }
               }
               m_constraints.add_line(node_xy[2]);
               m_constraints.set_inhomogeneity(node_xy[2], 0.0);
+              m_constraints.add_line(node_xy[1]);
+              m_constraints.set_inhomogeneity(node_xy[1], 0.0);
               
               // TODO: add_line
               for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
               {
                   if (   (std::fabs(vertex_itr->vertex()[0] - 25.0) < 1.0e-9)
                       && (std::fabs(vertex_itr->vertex()[1] -  0.0) < 1.0e-9)
-                      && (std::fabs(vertex_itr->vertex()[2] -0.125) < 1.0e-9) )
+                      && (std::fabs(vertex_itr->vertex()[2] -  0.5) < 1.0e-9) )
                   {
                       node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
                   }
@@ -4155,13 +4155,15 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
               {
                   if (   (std::fabs(vertex_itr->vertex()[0] -  0.0) < 1.0e-9)
                       && (std::fabs(vertex_itr->vertex()[1] -  5.0) < 1.0e-9)
-                      && (std::fabs(vertex_itr->vertex()[2] -0.125) < 1.0e-9) )
+                      && (std::fabs(vertex_itr->vertex()[2] -  0.5) < 1.0e-9) )
                   {
                       node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
                   }
               }
               m_constraints.add_line(node_xy[2]);
               m_constraints.set_inhomogeneity(node_xy[2], 0.0);
+              m_constraints.add_line(node_xy[1]);
+              m_constraints.set_inhomogeneity(node_xy[1], 0.0);
               
               // Remember, the essential B.C. is applied incrementally during each time step.
               // If a constant temperature is needed through time, the B.C should be set as zero.
@@ -4181,6 +4183,30 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
                                                                                         delta_temperature, m_n_components),
                                                        m_constraints,
                                                        m_fe.component_mask(temperature));
+
+              const int boundary_id_bottom_surface = 2;
+	      VectorTools::interpolate_boundary_values(m_dof_handler,
+						       boundary_id_bottom_surface,
+						       Functions::ConstantFunction<dim>(
+											delta_temperature, m_n_components),
+						       m_constraints,
+						       m_fe.component_mask(temperature));
+
+	      const int boundary_id_back_surface = 4;
+	      VectorTools::interpolate_boundary_values(m_dof_handler,
+						       boundary_id_back_surface,
+						       Functions::ConstantFunction<dim>(
+											delta_temperature, m_n_components),
+						       m_constraints,
+						       m_fe.component_mask(temperature));
+
+	      const int boundary_id_top_surface = 5;
+	      VectorTools::interpolate_boundary_values(m_dof_handler,
+						       boundary_id_top_surface,
+						       Functions::ConstantFunction<dim>(
+											delta_temperature, m_n_components),
+						       m_constraints,
+						       m_fe.component_mask(temperature));
           }
           else if (m_parameters.m_scenario == 8)
           {
