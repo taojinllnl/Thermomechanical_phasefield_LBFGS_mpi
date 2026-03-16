@@ -2648,7 +2648,6 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 		      }
 		  }
 	      }
-	    m_triangulation.execute_coarsening_and_refinement();
           
           if constexpr (is_mpi) {
               // accumulate local flag over all ranks
@@ -2657,6 +2656,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
                   Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
               initiation_point_refine_unfinished = (global_flag > 0u);
           }
+          if(initiation_point_refine_unfinished)
+                  m_triangulation.execute_coarsening_and_refinement();
 	  }
       }
     else
@@ -2738,7 +2739,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 		      }
 		  }
 	      }
-	    m_triangulation.execute_coarsening_and_refinement();
+          
           if constexpr (is_mpi) {
               // accumulate local flag over all ranks
               const unsigned int local_flag = initiation_point_refine_unfinished ? 1u : 0u;
@@ -2746,6 +2747,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
                   Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
               initiation_point_refine_unfinished = (global_flag > 0u);
           }
+          if(initiation_point_refine_unfinished)
+                  m_triangulation.execute_coarsening_and_refinement();
 	  }
       }
     else
@@ -2827,7 +2830,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 		      }
 		  }
 	      }
-	    m_triangulation.execute_coarsening_and_refinement();
+          
           if constexpr (is_mpi) {
               // accumulate local flag over all ranks
               const unsigned int local_flag = initiation_point_refine_unfinished ? 1u : 0u;
@@ -2835,6 +2838,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
                   Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
               initiation_point_refine_unfinished = (global_flag > 0u);
           }
+          if(initiation_point_refine_unfinished)
+                  m_triangulation.execute_coarsening_and_refinement();
 	  }
       }
     else
@@ -2918,7 +2923,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 		      }
 		  }
 	      }
-	    m_triangulation.execute_coarsening_and_refinement();
+          
           if constexpr (is_mpi) {
               // accumulate local flag over all ranks
               const unsigned int local_flag = initiation_point_refine_unfinished ? 1u : 0u;
@@ -2926,6 +2931,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
                   Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
               initiation_point_refine_unfinished = (global_flag > 0u);
           }
+          if(initiation_point_refine_unfinished)
+                  m_triangulation.execute_coarsening_and_refinement();
 	  }
       }
     else
@@ -2993,7 +3000,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 		      }
 		  }
 	      }
-	    m_triangulation.execute_coarsening_and_refinement();
+	    
+          
           if constexpr (is_mpi) {
               // accumulate local flag over all ranks
               const unsigned int local_flag = initiation_point_refine_unfinished ? 1u : 0u;
@@ -3001,6 +3009,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
                   Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
               initiation_point_refine_unfinished = (global_flag > 0u);
           }
+          if(initiation_point_refine_unfinished)
+                  m_triangulation.execute_coarsening_and_refinement();
 	  }
       }
     else if (m_parameters.m_refinement_strategy == "adaptive-refine")
@@ -3034,8 +3044,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
                       }
                   }
               }
-              
-              m_triangulation.execute_coarsening_and_refinement();
+            
               
               if constexpr (is_mpi) {
                   // accumulate local flag over all ranks
@@ -3045,6 +3054,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
                   initiation_point_refine_unfinished = (global_flag > 0u);
               }
           }
+          if(initiation_point_refine_unfinished)
+                  m_triangulation.execute_coarsening_and_refinement();
       }
     else
     {
@@ -3114,7 +3125,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 		      }
 		  }
 	      }
-	    m_triangulation.execute_coarsening_and_refinement();
+          
           if constexpr (is_mpi) {
               // accumulate local flag over all ranks
               const unsigned int local_flag = initiation_point_refine_unfinished ? 1u : 0u;
@@ -3122,6 +3133,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
                   Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
               initiation_point_refine_unfinished = (global_flag > 0u);
           }
+          if(initiation_point_refine_unfinished)
+              m_triangulation.execute_coarsening_and_refinement();
 	  }
       }
     else
@@ -3194,7 +3207,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 		      }
 		  }
 	      }
-	    m_triangulation.execute_coarsening_and_refinement();
+	    
           if constexpr (is_mpi) {
               // accumulate local flag over all ranks
               const unsigned int local_flag = initiation_point_refine_unfinished ? 1u : 0u;
@@ -3202,6 +3215,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
                   Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
               initiation_point_refine_unfinished = (global_flag > 0u);
           }
+          if(initiation_point_refine_unfinished)
+              m_triangulation.execute_coarsening_and_refinement();
 	  }
       }
     else
@@ -3209,6 +3224,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 	AssertThrow(false,
 	            ExcMessage("Selected mesh refinement strategy not implemented!"));
       }
+      m_logfile << "\t\t\t\tmake_grid completed." << std::endl;
   }
 
   template <typename LATraits, typename Tria>
@@ -3276,7 +3292,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 		      }
 		  }
 	      }
-	    m_triangulation.execute_coarsening_and_refinement();
+          
           if constexpr (is_mpi) {
               // accumulate local flag over all ranks
               const unsigned int local_flag = initiation_point_refine_unfinished ? 1u : 0u;
@@ -3284,6 +3300,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
                   Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
               initiation_point_refine_unfinished = (global_flag > 0u);
           }
+          if(initiation_point_refine_unfinished)
+                  m_triangulation.execute_coarsening_and_refinement();
 	  }
       }
     else
@@ -3358,7 +3376,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 		      }
 		  }
 	      }
-	    m_triangulation.execute_coarsening_and_refinement();
+          
           if constexpr (is_mpi) {
               // accumulate local flag over all ranks
               const unsigned int local_flag = initiation_point_refine_unfinished ? 1u : 0u;
@@ -3366,6 +3384,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
                   Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
               initiation_point_refine_unfinished = (global_flag > 0u);
           }
+          if(initiation_point_refine_unfinished)
+                  m_triangulation.execute_coarsening_and_refinement();
 	  }
       }
     else
@@ -3436,7 +3456,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 		      }
 		  }
 	      }
-	    m_triangulation.execute_coarsening_and_refinement();
+          
           if constexpr (is_mpi) {
               // accumulate local flag over all ranks
               const unsigned int local_flag = initiation_point_refine_unfinished ? 1u : 0u;
@@ -3444,6 +3464,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
                   Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
               initiation_point_refine_unfinished = (global_flag > 0u);
           }
+          if(initiation_point_refine_unfinished)
+                  m_triangulation.execute_coarsening_and_refinement();
 	  }
       }
     else
@@ -3508,7 +3530,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 		      }
 		  }
 	      }
-	    m_triangulation.execute_coarsening_and_refinement();
+	    
           if constexpr (is_mpi) {
               // accumulate local flag over all ranks
               const unsigned int local_flag = initiation_point_refine_unfinished ? 1u : 0u;
@@ -3516,6 +3538,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
                   Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
               initiation_point_refine_unfinished = (global_flag > 0u);
           }
+          if(initiation_point_refine_unfinished)
+                  m_triangulation.execute_coarsening_and_refinement();
 	  }
       }
     else if (m_parameters.m_refinement_strategy == "adaptive-refine")
@@ -3552,7 +3576,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 		      }
 		  }
 	      }
-	    m_triangulation.execute_coarsening_and_refinement();
+	    
           if constexpr (is_mpi) {
               // accumulate local flag over all ranks
               const unsigned int local_flag = initiation_point_refine_unfinished ? 1u : 0u;
@@ -3560,6 +3584,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
                   Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
               initiation_point_refine_unfinished = (global_flag > 0u);
           }
+          if(initiation_point_refine_unfinished)
+                  m_triangulation.execute_coarsening_and_refinement();
 	  }
       }
     else
