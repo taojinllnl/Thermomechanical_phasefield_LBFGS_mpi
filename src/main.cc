@@ -5122,10 +5122,13 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
         delta_alpha_old = delta_alpha_new;
       }
 
-      if (alpha < 1.0e-3){
+      const double smallStepThreshold   = 1.0e-3;
+      const unsigned int allowedAtempts = 3;
+      
+      if (alpha < smallStepThreshold){
           const double alpha_tmp = alpha;
-          if(iSmallSteps++ < 3){
-              alpha = 1.0e-3;
+          if(iSmallSteps++ < allowedAtempts){
+              alpha = smallStepThreshold;
           } else{
               alpha = 1.0;
               iSmallSteps = 0;
