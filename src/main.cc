@@ -2004,7 +2004,7 @@ struct PhaseFieldMonolithicSolve<LATraits, Tria>::CstPnt
     }
     
     template <typename CellIter>
-    void extractDoFs(const CellIter& cell,
+    void extractDoFs(const CellIter&    cell,
                      const unsigned int ithVertexInCell)
     {
         // loop over constrained dofs
@@ -2013,6 +2013,31 @@ struct PhaseFieldMonolithicSolve<LATraits, Tria>::CstPnt
             globalDoFs[k] = cell->vertex_dof_index(ithVertexInCell,
                                                    localDoFs[k]);
         }
+    }
+    
+    bool applyCsts(const IndexSet&            localDoFs,
+                   AffineConstraints<double>& constraints) const
+    {
+        // skip non-found points
+        if (!found) return false;
+        
+        // loop over constrained dofs
+        for (unsigned int j = 0; j < nCsts; ++j)
+        {
+            const types::global_dof_index dof = globalDoFs[j];
+            const double value                = cstValues[j];
+            
+            // verify the DoF is locally owned
+            if(localDoFs.is_element(dof))
+            {
+                // add constraint on unconstrained dofs to avoid repeaded csts
+                if (!constraints.is_constrained(dof)){
+                    constraints.add_line(dof);
+                    constraints.set_inhomogeneity(dof, value);
+                }
+            }
+        }
+        return true;
     }
 };
 
