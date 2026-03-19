@@ -12,7 +12,7 @@ subsection Scenario
   # 4 - square shear   (2D structured mesh)
   # 5 - quenching test (2D structured mesh, quarter size)
   # 6 - quenching test (2D structured mesh, half size)
-  # 7 - quenching test (3D, one layer, quarter size)
+  # 7 - quenching test (3D half size, 1mm thickness)
   set Scenario number = 7
   
   # Name of the log file
@@ -83,7 +83,7 @@ subsection Scenario
   set Reaction force face ID = 0
   
   # underlying mpi type: (PETSc|Trilinos|Serial)
-  set mpi type = PETSc
+  set mpi type = Trilinos
   
   # Configuration directory
   set Config dir = ./Case_7/pre_refine/

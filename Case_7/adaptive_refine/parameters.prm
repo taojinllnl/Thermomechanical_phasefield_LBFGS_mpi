@@ -12,7 +12,7 @@ subsection Scenario
   # 4 - square shear   (2D structured mesh)
   # 5 - quenching test (2D structured mesh, quarter size)
   # 6 - quenching test (2D structured mesh, half size)
-  # 7 - quenching test (3D structured mesh, half size)
+  # 7 - quenching test (3D half size, 1mm thickness)
   set Scenario number = 7
   
   # Name of the log file
@@ -31,7 +31,7 @@ subsection Scenario
   set Nonlinear solver type = LBFGS
 
   # Linear solver type for B0 (Direct or CG)
-  set Linear solver type = Direct
+  set Linear solver type = CG
 
   # If the linear solver is CG, set the CG converge tolerance of inverse K_uu
   set CG u tolerance = 1.0e-9
