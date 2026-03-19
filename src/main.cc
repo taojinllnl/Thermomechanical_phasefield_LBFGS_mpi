@@ -1413,7 +1413,8 @@ namespace PhaseField_monolithic
 
     void setup_temperature_initial_conditions();
       
-      void addSupportTemperature(const std::function<bool(const Point<dim>&)>& func);
+    void addSupportTemperature(const std::function<bool(const Point<dim>&)>& func,
+      const double cool_down_temperature = 293.15 /* Kelvin*/);
 
     void determine_component_extractors();
 
@@ -3662,11 +3663,9 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 
 
 template <typename LATraits, typename Tria>
-void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std::function<bool(const Point<dim>&)>& func)
+void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std::function<bool(const Point<dim>&)>& func,
+                                                                      const double cool_down_temperature)
 {
-    
-    const double cool_down_temperature = 293.15; // Kelvin
-    
     std::map<types::global_dof_index, Point<dim>> support_points_T;
     
     ComponentMask temperature_mask = m_fe.component_mask(m_t_fe);
