@@ -1254,6 +1254,7 @@ namespace PhaseField_monolithic
   template <typename LATraits, typename Tria>
   class PhaseFieldMonolithicSolve
   {
+  private:
       const static bool __debug = false;
   public:
       constexpr static int dim = Tria::dimension;
@@ -2458,8 +2459,8 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
     else if (m_parameters.m_scenario == 7)
     {
         double const length = 25.0; //mm
-        double const width  = 5.0;  //mm
-        double const thickness = 0.25;  //mm
+        double const width  = 10.0;  //mm
+        double const thickness = 1.0;  //mm
         
         for(const auto& face : m_triangulation.active_face_iterators())
         {
@@ -3223,7 +3224,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
     for (unsigned int i = 0; i < 80; ++i)
       m_logfile << "*";
     m_logfile << std::endl;
-    m_logfile << "\t\t\t\tQuenching test (3D, one layer)" << std::endl;
+    m_logfile << "\t\t\t\tQuenching test (3D, half size, 1mm thickness)" << std::endl;
     for (unsigned int i = 0; i < 80; ++i)
       m_logfile << "*";
     m_logfile << std::endl;
@@ -3231,13 +3232,13 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
     AssertThrow(dim==3, ExcMessage("The dimension has to be 3D!"));
 
     double const length = 25.0; //mm
-    double const width  = 5.0;  //mm
-    double const thickness = 0.25;  //mm
+    double const width  = 10.0;  //mm
+    double const thickness = 1.0;  //mm
 
     std::vector<unsigned int> repetitions(dim, 1);
     repetitions[0] = 100;
-    repetitions[1] = 20;
-    repetitions[2] = 1;
+    repetitions[1] = 40;
+    repetitions[2] = 4;
 
     GridGenerator::subdivided_hyper_rectangle(m_triangulation,
 					      repetitions,
@@ -3263,9 +3264,12 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
               if constexpr (is_mpi) {
                   if (!cell->is_locally_owned()) continue;
               }
-		if (   (cell->center()[0] >  0.0 && cell->center()[0] <  0.13)
-		    || (cell->center()[1] >  0.0 && cell->center()[1] <  0.13)
-		    )
+              if (   (cell->center()[0] >  0.0 && cell->center()[0] <  0.13)
+                          || (cell->center()[1] >  0.0 && cell->center()[1] <  0.13)
+                          || (cell->center()[1] >  (width - 0.13) && cell->center()[1] <  width)
+                          || (cell->center()[2] >  0.0 && cell->center()[2] <  0.13)
+                          || (cell->center()[2] >  (thickness - 0.13) && cell->center()[2] <  thickness)
+                          )
 		  {
 		    // Because the mesh is not imported from gmsh, there is no
 		    // material ID associated with each cell. We need to manually
@@ -3297,7 +3301,6 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
 	AssertThrow(false,
 	            ExcMessage("Selected mesh refinement strategy not implemented!"));
       }
-      m_logfile << "\t\t\t\tmake_grid completed." << std::endl;
   }
 
   template <typename LATraits, typename Tria>
@@ -3835,7 +3838,10 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
           
           addSupportTemperature([](const Point<dim>& pnt) -> bool {
               return (std::fabs(pnt[0] -  0.0) < 1.0e-9)
-                  || (std::fabs(pnt[1] -  0.0) < 1.0e-9);
+                    || (std::fabs(pnt[1] -  0.0) < 1.0e-9)
+                    || (std::fabs(pnt[1] - 10.0) < 1.0e-9)
+                    || (std::fabs(pnt[2] -  0.0) < 1.0e-9)
+                    || (std::fabs(pnt[2] -  1.0) < 1.0e-9);
           });
       }
       else if (m_parameters.m_scenario == 8)
@@ -4219,87 +4225,122 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
                                                        m_constraints,
                                                        m_fe.component_mask(x_displacement));
               
-              const int boundary_id_mid_surface_y = 4;
-              VectorTools::interpolate_boundary_values(m_dof_handler,
-                                                       boundary_id_mid_surface_y,
-                                                       Functions::ZeroFunction<dim>(m_n_components),
-                                                       m_constraints,
-                                                       m_fe.component_mask(y_displacement));
-              
-              
               if constexpr (is_mpi) {
               
                   // the constrainted points
-                  const std::vector<Point<dim>> cstPnts({
-                      Point<dim>(0,  0, 0.125),
-                      Point<dim>(25, 0, 0.125),
-                      Point<dim>(0,  5, 0.125)
+                  std::vector<CstPnt> cstPnts({
+                      // Points                             cstDoFs cstValues
+                      // center pnt
+                      CstPnt(Point<dim>( 0.0,   5.0,  0.5), {1, 2}, {0.0, 0.0}),
+                      
+                      // center pnt on the symmetric plane
+                      CstPnt(Point<dim>(25.0,   5.0,  0.5), {1, 2}, {0.0, 0.0}),
+                      
+                      // pnts on the sides of the symmetric plane
+                      CstPnt(Point<dim>(25.0,   0.0,  0.5), {2},    {0.0}),
+                      CstPnt(Point<dim>(25.0,  10.0,  0.5), {2},    {0.0}),
+                      CstPnt(Point<dim>(25.0,   5.0,  0.0), {1},    {0.0}),
+                      CstPnt(Point<dim>(25.0,   5.0,  1.0), {1},    {0.0}),
                   });
-                  // are the given points found?
-                  std::array<bool, 3> found({false, false, false});
                   
-                  std::array<types::global_dof_index, 3> node_z({
-                      numbers::invalid_dof_index,
-                      numbers::invalid_dof_index,
-                      numbers::invalid_dof_index
+                  /*
+                  // minimal csts:
+                  //    1. center at symmetric plane
+                  //    2. the point next to the constrained center along y-axis, whose deformation long z-axis is fixed.
+                  std::vector<CstPnt> cstPnts({
+                      // Points                            cstDoFs cstValues
+                      CstPnt(Point<dim>(25.0, 5.0,   0.5), {1, 2}, {0.0, 0.0}),
+                      CstPnt(Point<dim>(25.0, 5.125, 0.5), {2},    {0.0}),
                   });
+                   */
+                  
+                  // record if there is a constrained on current rank
+                  bool hasCst = false;
                   
                   std::vector<bool> locally_owned_vertices =  GridTools::get_locally_owned_vertices(m_triangulation);
                   for (auto const & cell : m_dof_handler.active_cell_iterators()) {
-                      // skip ghost cells
+                      // skip ghost cells or cells that are not at boundary
                       if (!cell->is_locally_owned() || !cell->at_boundary()) continue;
                       
+                      // loop over vertices on the locally owned cells at boundary
                       for (const auto vertex : cell->vertex_indices())
                       {
-                          // skip dofs that not owned by current rank
+                          // skip vertices that are not owned by current rank.
+                          // This operation is necessary because some vertices are shared by cells owned by other ranks. Or, it may cause unexpected results.
                           if (!locally_owned_vertices[cell->vertex_index(vertex)]) continue;
         
+                          // obtain vertex
                           const Point<dim> point = cell->vertex(vertex);
         
-                          for (unsigned int j = 0; j < cstPnts.size(); ++j) {
+                          // loop over prescribed constraints
+                          for (unsigned int j = 0; j < cstPnts.size(); ++j)
+                          {
+                              // j-th prescribed CstPnt
+                              CstPnt& cstPoint = cstPnts[j];
                               
-                              // skip further operation, if this point has been found.
-                              if(found[j]) continue;
+                              // skip further operations, if this point has been handled.
+                              if(cstPoint.found) continue;
                               
-                              if (point.distance(cstPnts[j]) < 1.0e-9)
+                              // the vertex is close enough to the constrained point
+                              if (point.distance(cstPoint.pnt) < 1.0e-9)
                               {
-                                  node_z[j] = cell->vertex_dof_index(vertex, 2);
-                                  found[j] = true;
+                                  cstPoint.found = true;
+                                  // The constrained point is owned by current rank.
+                                  hasCst = true;
+                                  // extract constrained DoFs
+                                  cstPoint.extractDoFs(cell, vertex);
+                                  
+                                  // no need to look at other constrained points
+                                  break;
                               }
-                              
+                          } // loop over constrainted pnts
+                      } // loop over vertices in cell
+                  } // loop over cells
+
+                  // only the rank with constrained points will apply BCs.
+                  if(hasCst)
+                  {
+                      const IndexSet& localDoFs = m_dof_handler.locally_owned_dofs();
+                      
+                      for (unsigned int i = 0; i < cstPnts.size(); ++i) {
+                          const CstPnt& cstPoint = cstPnts[i];
+                          if(cstPoint.applyCsts(localDoFs, m_constraints))
+                          {
+                              // TODO: remve after debugging
+                              std::string cstInfo = "\n\ncstPnt: \nrank: " + std::to_string(m_mpiInfo.rank()) + "\n";
+                              cstInfo += "Pnt: " + std::to_string(cstPoint.pnt[0]) + ", "
+                              + std::to_string(cstPoint.pnt[1]) + ", "
+                              + std::to_string(cstPoint.pnt[2]) + "\n\n\n\n";
+                              std::cout << cstInfo << std::endl;
                           }
-                      }
+                      } // loop over constrainted points
                   }
-                  for (unsigned int i = 0; i < cstPnts.size(); ++i) {
-                  
-                      if (found[i] &&    m_dof_handler.locally_owned_dofs().is_element(node_z[i])) {
-                          m_constraints.add_line(node_z[i]);
-                          m_constraints.set_inhomogeneity(node_z[i], 0.0);
-                      }
-                  }
-                  
               } else {
                   typename Triangulation<dim>::active_vertex_iterator vertex_itr;
                   vertex_itr = m_triangulation.begin_active_vertex();
                   std::vector<types::global_dof_index> node_xy(m_fe.dofs_per_vertex);
                   
+                  
                   for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
                   {
-                      if (   (std::fabs(vertex_itr->vertex()[0] -  0.0) < 1.0e-9)
-                          && (std::fabs(vertex_itr->vertex()[1] -  0.0) < 1.0e-9)
-                          && (std::fabs(vertex_itr->vertex()[2] -0.125) < 1.0e-9) )
+                      if (   (std::fabs(vertex_itr->vertex()[0] - 25.0) < 1.0e-9)
+                          && (std::fabs(vertex_itr->vertex()[1] -  5.0) < 1.0e-9)
+                          && (std::fabs(vertex_itr->vertex()[2] -  0.5) < 1.0e-9) )
                       {
                           node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
                       }
                   }
                   m_constraints.add_line(node_xy[2]);
                   m_constraints.set_inhomogeneity(node_xy[2], 0.0);
+                  m_constraints.add_line(node_xy[1]);
+                  m_constraints.set_inhomogeneity(node_xy[1], 0.0);
+                  
                   
                   for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
                   {
                       if (   (std::fabs(vertex_itr->vertex()[0] - 25.0) < 1.0e-9)
                           && (std::fabs(vertex_itr->vertex()[1] -  0.0) < 1.0e-9)
-                          && (std::fabs(vertex_itr->vertex()[2] -0.125) < 1.0e-9) )
+                          && (std::fabs(vertex_itr->vertex()[2] -  0.5) < 1.0e-9) )
                       {
                           node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
                       }
@@ -4307,17 +4348,59 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
                   m_constraints.add_line(node_xy[2]);
                   m_constraints.set_inhomogeneity(node_xy[2], 0.0);
                   
+                  
                   for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
                   {
-                      if (   (std::fabs(vertex_itr->vertex()[0] -  0.0) < 1.0e-9)
-                          && (std::fabs(vertex_itr->vertex()[1] -  5.0) < 1.0e-9)
-                          && (std::fabs(vertex_itr->vertex()[2] -0.125) < 1.0e-9) )
+                      if (   (std::fabs(vertex_itr->vertex()[0] - 25.0) < 1.0e-9)
+                          && (std::fabs(vertex_itr->vertex()[1] - 10.0) < 1.0e-9)
+                          && (std::fabs(vertex_itr->vertex()[2] -  0.5) < 1.0e-9) )
                       {
                           node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
                       }
                   }
                   m_constraints.add_line(node_xy[2]);
                   m_constraints.set_inhomogeneity(node_xy[2], 0.0);
+                  
+                  
+                  for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
+                  {
+                      if (   (std::fabs(vertex_itr->vertex()[0] -  0.0) < 1.0e-9)
+                          && (std::fabs(vertex_itr->vertex()[1] -  5.0) < 1.0e-9)
+                          && (std::fabs(vertex_itr->vertex()[2] -  0.5) < 1.0e-9) )
+                      {
+                          node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
+                      }
+                  }
+                  m_constraints.add_line(node_xy[2]);
+                  m_constraints.set_inhomogeneity(node_xy[2], 0.0);
+                  m_constraints.add_line(node_xy[1]);
+                  m_constraints.set_inhomogeneity(node_xy[1], 0.0);
+                  
+                  
+                  for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
+                  {
+                      if (   (std::fabs(vertex_itr->vertex()[0] - 25.0) < 1.0e-9)
+                          && (std::fabs(vertex_itr->vertex()[1] -  5.0) < 1.0e-9)
+                          && (std::fabs(vertex_itr->vertex()[2] -  0.0) < 1.0e-9) )
+                      {
+                          node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
+                      }
+                  }
+                  m_constraints.add_line(node_xy[1]);
+                  m_constraints.set_inhomogeneity(node_xy[1], 0.0);
+                  
+                  
+                  for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
+                  {
+                      if (   (std::fabs(vertex_itr->vertex()[0] - 25.0) < 1.0e-9)
+                          && (std::fabs(vertex_itr->vertex()[1] -  5.0) < 1.0e-9)
+                          && (std::fabs(vertex_itr->vertex()[2] -  1.0) < 1.0e-9) )
+                      {
+                          node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
+                      }
+                  }
+                  m_constraints.add_line(node_xy[1]);
+                  m_constraints.set_inhomogeneity(node_xy[1], 0.0);
               }
               // Remember, the essential B.C. is applied incrementally during each time step.
               // If a constant temperature is needed through time, the B.C should be set as zero.
@@ -4333,6 +4416,29 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
               const int boundary_id_front_surface = 1;
               VectorTools::interpolate_boundary_values(m_dof_handler,
                                                        boundary_id_front_surface,
+                                                       Functions::ConstantFunction<dim>(
+                                                                                        delta_temperature, m_n_components),
+                                                       m_constraints,
+                                                       m_fe.component_mask(temperature));
+              const int boundary_id_bottom_surface = 2;
+              VectorTools::interpolate_boundary_values(m_dof_handler,
+                                                       boundary_id_bottom_surface,
+                                                       Functions::ConstantFunction<dim>(
+                                                                                        delta_temperature, m_n_components),
+                                                       m_constraints,
+                                                       m_fe.component_mask(temperature));
+              
+              const int boundary_id_back_surface = 4;
+              VectorTools::interpolate_boundary_values(m_dof_handler,
+                                                       boundary_id_back_surface,
+                                                       Functions::ConstantFunction<dim>(
+                                                                                        delta_temperature, m_n_components),
+                                                       m_constraints,
+                                                       m_fe.component_mask(temperature));
+              
+              const int boundary_id_top_surface = 5;
+              VectorTools::interpolate_boundary_values(m_dof_handler,
+                                                       boundary_id_top_surface,
                                                        Functions::ConstantFunction<dim>(
                                                                                         delta_temperature, m_n_components),
                                                        m_constraints,
