@@ -4668,35 +4668,36 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
       }
       else  // inhomogeneous constraints
       {
-          if (m_constraints.has_inhomogeneities())
+          bool has_inhomo = m_constraints.has_inhomogeneities();
+          
+          if constexpr (is_mpi) {
+              // accumulate local flag over all ranks
+              const unsigned int local_flag = has_inhomo ? 1u : 0u;
+              const unsigned int global_flag =
+                  Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
+              has_inhomo = (global_flag > 0u);
+          }
+          
+          if (has_inhomo)
           {
-              AffineConstraints<double> homogeneous_constraints(m_constraints);
+              AffineConstraints<double> homoCst(m_constraints);
               if constexpr (is_mpi)
               {
                   std::vector<IndexSet::size_type> indices;
                   m_dof_handler.locally_owned_dofs().fill_index_vector(indices);
                   
-//                  const IndexSet relevant = DoFTools::extract_locally_relevant_dofs(m_dof_handler);
-//                    std::vector<types::global_dof_index> indices;
-//                    relevant.fill_index_vector(indices);
-                  
                   for (unsigned int dof : indices)
-                      if (homogeneous_constraints.is_inhomogeneously_constrained(dof))
-                          homogeneous_constraints.set_inhomogeneity(dof, 0.0);
-                  
-                  homogeneous_constraints.make_consistent_in_parallel(m_dof_handler.locally_owned_dofs(),
-                                                          *m_blocks_desc.localRelevantPartition(),
-                                                          *m_mpiInfo.mpiCommPtr());
-                  
+                      if (homoCst.is_inhomogeneously_constrained(dof))
+                          homoCst.set_inhomogeneity(dof, 0.0);
               } else {
                   for (unsigned int dof = 0; dof != m_dof_handler.n_dofs(); ++dof)
-                      if (homogeneous_constraints.is_inhomogeneously_constrained(dof))
-                          homogeneous_constraints.set_inhomogeneity(dof, 0.0);
+                      if (homoCst.is_inhomogeneously_constrained(dof))
+                          homoCst.set_inhomogeneity(dof, 0.0);
               }
-              
-              homogeneous_constraints.close();
+              homoCst.close();
               
               m_constraints.clear();
+              
               if constexpr (is_mpi)
               {
                   VersionAdapter::cstReinit(m_constraints,
@@ -4704,10 +4705,9 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
                                             DoFTools::extract_locally_relevant_dofs(m_dof_handler),
                                             *m_mpiInfo.mpiCommPtr());
               }
-              m_constraints.copy_from(homogeneous_constraints);
+              
+              m_constraints.copy_from(homoCst);
           }
-          
-          
       }
       m_constraints.close();
   }
