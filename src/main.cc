@@ -4255,16 +4255,6 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
                       CstPnt(Point<dim>(25.0,   5.0,  1.0), {1},    {0.0}),
                   });
                   
-                  /*
-                  // minimal csts:
-                  //    1. center at symmetric plane
-                  //    2. the point next to the constrained center along y-axis, whose deformation long z-axis is fixed.
-                  std::vector<CstPnt> cstPnts({
-                      // Points                            cstDoFs cstValues
-                      CstPnt(Point<dim>(25.0, 5.0,   0.5), {1, 2}, {0.0, 0.0}),
-                      CstPnt(Point<dim>(25.0, 5.125, 0.5), {2},    {0.0}),
-                  });
-                   */
                   
                   // record if there is a constrained on current rank
                   bool hasCst = false;
@@ -4416,6 +4406,17 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
               }
               // Remember, the essential B.C. is applied incrementally during each time step.
               // If a constant temperature is needed through time, the B.C should be set as zero.
+              const int boundary_id_mid_surface_x = 3;
+              VectorTools::interpolate_boundary_values(m_dof_handler,
+                                                       boundary_id_mid_surface_x,
+                                                       Functions::ZeroFunction<dim>(m_n_components),
+                                                       m_constraints,
+                                                       m_fe.component_mask(x_displacement));
+              
+              
+              
+              // Remember, the essential B.C. is applied incrementally during each time step.
+              // If a constant temperature is needed through time, the B.C should be set as zero.
               double delta_temperature = 0.0; // temperature change per load step
               const int boundary_id_left_surface = 0;
               VectorTools::interpolate_boundary_values(m_dof_handler,
@@ -4432,6 +4433,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
                                                                                         delta_temperature, m_n_components),
                                                        m_constraints,
                                                        m_fe.component_mask(temperature));
+              
               const int boundary_id_bottom_surface = 2;
               VectorTools::interpolate_boundary_values(m_dof_handler,
                                                        boundary_id_bottom_surface,
