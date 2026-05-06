@@ -242,3 +242,34 @@ The output folder of each test contains:
     ```
 
 
+
+---
+
+### Adaptive repartitioning
+
+Repartitioning is important in MPI computations because workload imbalance among ranks can reduce parallel efficiency. 
+If one rank has a significantly lighter workload than the others, it may complete its local task earlier and then remain idle to wait for data from the slower ranks.
+
+By default, deal.II automatically performs repartitioning after each call to `execute_coarsening_and_refinement()`. 
+In phase-field fracture simulations, adaptive mesh refinement often requires several local refinement cycles around the evolving crack tip, while only a small portion of the mesh is actually refined. 
+In such cases, frequent repartitioning for only a small number of newly refined elements may introduce unnecessary communication overhead.
+
+To avoid this, adaptive repartitioning can be controlled by a threshold based on the ratio of the maximum to the minimum number of locally owned active cells across all ranks.
+
+#### How to enable
+
+1. **Compile the executable with repartitioning enabled**
+   - **Before compilation**, make sure that the macro `ENABLE_REPARTITION=1` is set in `main.cc` to enable adaptive repartitioning functionality.
+        - **Note:** Repartitioning requires that no active cell still has a refine flag. 
+       In some versions of deal.II, these flags may not be fully cleared after `execute_coarsening_and_refinement()` or even after calling `cell->clear_refine_flag()` on each active cell, which may lead to a runtime exception. 
+       This issue does not cause compilation errors, and it only appears at runtime. 
+       If this happens, disable adaptive repartitioning by setting `ENABLE_REPARTITION=0` and recompile the executable.
+   - Compile the executable by following the [build instructions](#how-to-build).
+
+2. **Configure the runtime settings in the `.prm` file**
+   - Turn on [MPI mode](#mpi-mode).
+   - Enable adaptive refinement by setting `set Mesh refinement strategy = adaptive-refine`
+   - Set the repartitioning threshold by `set Repartitioning ratio = prescribed threshold`
+     - The default threshold is `2.0`.
+     - Repartitioning will be performed after every refinement step if the threshold is equal to or smaller than `1.0`.
+
