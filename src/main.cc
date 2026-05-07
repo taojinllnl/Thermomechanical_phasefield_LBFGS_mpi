@@ -6401,7 +6401,7 @@ namespace PhaseField_monolithic
   #if ENABLE_REPARTITION == 0
   template <typename LATraits, typename Tria>
   void PhaseFieldMonolithicSolve<LATraits, Tria>::repartition(
-      BVector &solution_next_step,
+      BVector &/*solution_next_step*/,
       const typename LATraits::VectorBlock & /*old_history_variable_field_L2*/,
       const typename LATraits::VectorBlock
           & /*old_history_variable_field_L2_rele*/)
