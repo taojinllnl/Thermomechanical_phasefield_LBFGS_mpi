@@ -4129,12 +4129,6 @@ namespace PhaseField_monolithic
       }
       else if (m_parameters.m_scenario == 7)
       {
-        const int boundary_id_mid_surface_x = 3;
-        VectorTools::interpolate_boundary_values(
-            m_dof_handler, boundary_id_mid_surface_x,
-            Functions::ZeroFunction<dim>(m_n_components), m_constraints,
-            m_fe.component_mask(x_displacement));
-
         if constexpr (is_mpi)
         {
 
@@ -4307,55 +4301,13 @@ namespace PhaseField_monolithic
           m_constraints.add_line(node_xy[1]);
           m_constraints.set_inhomogeneity(node_xy[1], 0.0);
         }
-        /*
-                      // Remember, the essential B.C. is applied incrementally
-           during each time step.
-                      // If a constant temperature is needed through time, the B.C
-           should be set as zero. const int boundary_id_mid_surface_x = 3;
-                      VectorTools::interpolate_boundary_values(m_dof_handler,
-                                                               boundary_id_mid_surface_x,
-                                                               Functions::ZeroFunction<dim>(m_n_components),
-                                                               m_constraints,
-                                                               m_fe.component_mask(x_displacement));
-         */
 
-        /*
-                      // TODO: add_line
-                      for (; vertex_itr != m_triangulation.end_vertex();
-           ++vertex_itr)
-                      {
-                          if (   (std::fabs(vertex_itr->vertex()[0] - 25.0)
-           < 1.0e-9)
-                              && (std::fabs(vertex_itr->vertex()[1] -  5.0)
-           < 1.0e-9)
-                              && (std::fabs(vertex_itr->vertex()[2] -  0.0)
-           < 1.0e-9) )
-                          {
-                              node_xy = usr_utilities::get_vertex_dofs(vertex_itr,
-           m_dof_handler);
-                          }
-                      }
-                      m_constraints.add_line(node_xy[1]);
-                      m_constraints.set_inhomogeneity(node_xy[1], 0.0);
+        const int boundary_id_mid_surface_x = 3;
+        VectorTools::interpolate_boundary_values(
+            m_dof_handler, boundary_id_mid_surface_x,
+            Functions::ZeroFunction<dim>(m_n_components), m_constraints,
+            m_fe.component_mask(x_displacement));
 
-                      // TODO: add_line
-                      for (; vertex_itr != m_triangulation.end_vertex();
-           ++vertex_itr)
-                      {
-                          if (   (std::fabs(vertex_itr->vertex()[0] - 25.0)
-           < 1.0e-9)
-                              && (std::fabs(vertex_itr->vertex()[1] -  5.0)
-           < 1.0e-9)
-                              && (std::fabs(vertex_itr->vertex()[2] -  1.0)
-           < 1.0e-9) )
-                          {
-                              node_xy = usr_utilities::get_vertex_dofs(vertex_itr,
-           m_dof_handler);
-                          }
-                      }
-                      m_constraints.add_line(node_xy[1]);
-                      m_constraints.set_inhomogeneity(node_xy[1], 0.0);
-        */
         // Remember, the essential B.C. is applied incrementally during each time
         // step. If a constant temperature is needed through time, the B.C should
         // be set as zero.
