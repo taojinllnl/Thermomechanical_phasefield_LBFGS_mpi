@@ -100,9 +100,14 @@ LASolver<LATraits>::__directSolve(BVector & LBFGS_r_vector,
             SolverControl solver_control(__tolList[ithGroup].nIters,
                                          __tolList[ithGroup].tol);
           
+            
+#if DEAL_II_VERSION_GTE(9, 5, 0)
+            PETScWrappers::SparseDirectMUMPS solver(solver_control);
+#else
             PETScWrappers::SparseDirectMUMPS solver(solver_control,
                                                     *__mpiInfo.mpiCommPtr());
-            solver.set_symmetric_mode(false);
+#endif
+            solver.set_symmetric_mode(true);
             
 //            PrecType preconditioner;
 //            preconditioner.initialize(tangent_matrix.block(ithGroup, ithGroup));
