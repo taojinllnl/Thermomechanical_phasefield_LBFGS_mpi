@@ -408,8 +408,8 @@ namespace PhaseField_monolithic
     {
       prm.enter_subsection("Scenario");
       {
-        m_dim = prm.get_integer("dimension");
-        m_scenario = prm.get_integer("Scenario number");
+        m_dim = static_cast<unsigned int>(prm.get_integer("dimension"));
+        m_scenario = static_cast<unsigned int>(prm.get_integer("Scenario number"));
         m_logfile_name = prm.get("Log file name");
         m_output_iteration_history = prm.get_bool("Output iteration history");
         m_phasefield_name = prm.get("Phase-field model type");
@@ -423,19 +423,19 @@ namespace PhaseField_monolithic
         m_cg_t_tol = prm.get_double("CG T tolerance");
         m_refinement_strategy = prm.get("Mesh refinement strategy");
         m_repartition_ratio = prm.get_double("Repartitioning ratio");
-        m_LBFGS_m = prm.get_integer("LBFGS m");
-        m_global_refine_times = prm.get_integer("Global refinement times");
-        m_local_prerefine_times = prm.get_integer("Local prerefinement times");
+        m_LBFGS_m = static_cast<unsigned int>(prm.get_integer("LBFGS m"));
+        m_global_refine_times = static_cast<unsigned int>(prm.get_integer("Global refinement times"));
+        m_local_prerefine_times = static_cast<unsigned int>(prm.get_integer("Local prerefinement times"));
         m_max_adaptive_refine_times =
-            prm.get_integer("Max adaptive refinement times");
+          static_cast<unsigned int>(prm.get_integer("Max adaptive refinement times"));
         m_max_allowed_refinement_level =
-            prm.get_integer("Max allowed refinement level");
+          static_cast<unsigned int>(prm.get_integer("Max allowed refinement level"));
         m_phasefield_refine_threshold =
             prm.get_double("Phasefield refine threshold");
         m_allowed_max_h_l_ratio = prm.get_double("Allowed max hl ratio");
-        m_total_material_regions = prm.get_integer("Material regions");
+        m_total_material_regions = static_cast<unsigned int>(prm.get_integer("Material regions"));
         m_material_file_name = prm.get("Material data file");
-        m_reaction_force_face_id = prm.get_integer("Reaction force face ID");
+        m_reaction_force_face_id = static_cast<unsigned int>(prm.get_integer("Reaction force face ID"));
 
         m_mpi_type = prm.get("mpi type");
 
@@ -472,8 +472,8 @@ namespace PhaseField_monolithic
     {
       prm.enter_subsection("Finite element system");
       {
-        m_poly_degree = prm.get_integer("Polynomial degree");
-        m_quad_order = prm.get_integer("Quadrature order");
+        m_poly_degree = static_cast<unsigned int>(prm.get_integer("Polynomial degree"));
+        m_quad_order = static_cast<unsigned int>(prm.get_integer("Quadrature order"));
       }
       prm.leave_subsection();
     }
@@ -605,7 +605,7 @@ namespace PhaseField_monolithic
     {
       prm.enter_subsection("Nonlinear solver");
       {
-        m_max_iterations_LBFGS = prm.get_integer("Max iterations LBFGS");
+        m_max_iterations_LBFGS = static_cast<unsigned int>(prm.get_integer("Max iterations LBFGS"));
         m_relative_residual = prm.get_bool("Relative residual");
 
         m_tol_u_residual = prm.get_double("Tolerance displacement residual");
@@ -1821,7 +1821,7 @@ namespace PhaseField_monolithic
 
     void reset()
     {
-      const unsigned int n_q_points = m_solution_symm_grads_u_cell.size();
+      const std::size_t n_q_points = m_solution_symm_grads_u_cell.size();
       for (unsigned int q = 0; q < n_q_points; ++q)
       {
         m_solution_symm_grads_u_cell[q] = 0.0;
@@ -2037,8 +2037,8 @@ namespace PhaseField_monolithic
 
     void reset()
     {
-      const unsigned int n_q_points = m_Nx_phasefield.size();
-      const unsigned int n_dofs_per_cell = m_Nx_phasefield[0].size();
+      const std::size_t n_q_points = m_Nx_phasefield.size();
+      const std::size_t  n_dofs_per_cell = m_Nx_phasefield[0].size();
       for (unsigned int q_point = 0; q_point < n_q_points; ++q_point)
       {
         Assert(m_Nx_phasefield[q_point].size() == n_dofs_per_cell,
@@ -2156,8 +2156,8 @@ namespace PhaseField_monolithic
 
     void reset()
     {
-      const unsigned int n_q_points = m_Nx_phasefield.size();
-      const unsigned int n_dofs_per_cell = m_Nx_phasefield[0].size();
+      const std::size_t n_q_points = m_Nx_phasefield.size();
+      const std::size_t n_dofs_per_cell = m_Nx_phasefield[0].size();
       for (unsigned int q_point = 0; q_point < n_q_points; ++q_point)
       {
         Assert(m_Nx_phasefield[q_point].size() == n_dofs_per_cell,
@@ -4866,7 +4866,7 @@ namespace PhaseField_monolithic
           phasefield_geometry_function_derivative(phasefield_value,
                                                   m_parameters.m_phasefield_name);
 
-      SymmetricTensor<2, dim> symm_grad_Nx_i_x_C;
+//      SymmetricTensor<2, dim> symm_grad_Nx_i_x_C;
 
       for (const unsigned int i : scratch.m_fe_values.dof_indices())
       {
