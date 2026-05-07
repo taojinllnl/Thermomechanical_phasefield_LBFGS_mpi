@@ -36,10 +36,10 @@ LASolver<LATraits>
 , __u_group_ID(blockDesc.ithGroupID("displacement"))
 , __d_group_ID(blockDesc.ithGroupID("phase-field"))
 , __T_group_ID(blockDesc.ithGroupID("temperature"))
-, __tolList({
+, __tolList({{
     Tol(1e6, cg_u_tol),
     Tol(1e6, cg_d_tol),
-    Tol(1e6, cg_T_tol)
+    Tol(1e6, cg_T_tol)}
 })
 , __blockDesc(blockDesc)
 , __mpiInfo(mpiInfo)
