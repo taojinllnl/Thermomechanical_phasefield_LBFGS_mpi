@@ -7405,6 +7405,7 @@ int main(int argc, char *argv[])
 
   if (dim == 2)
   {
+#if (defined(HAVE_PETSC) && HAVE_PETSC) || (defined(HAVE_TRILINOS) && HAVE_TRILINOS)
 #if ENABLE_REPARTITION == 1
     const auto setting = DTria<2>::no_automatic_repartitioning;
 #else
@@ -7449,29 +7450,34 @@ int main(int argc, char *argv[])
   else if (dim == 3)
   {
 
+#if (defined(HAVE_PETSC) && HAVE_PETSC) || (defined(HAVE_TRILINOS) && HAVE_TRILINOS)
 #if ENABLE_REPARTITION == 1
     const auto setting = DTria<3>::no_automatic_repartitioning;
 #else
     const auto setting = DTria<3>::default_setting;
 #endif
-    const auto smooth = RTria<3>::MeshSmoothing(
-        RTria<2>::smoothing_on_refinement | RTria<2>::smoothing_on_coarsening);
+      const auto smooth = RTria<3>::MeshSmoothing(
+          RTria<2>::smoothing_on_refinement | RTria<2>::smoothing_on_coarsening);
+#else
+#endif
+    
     if (parameters.m_mpi_type == "PETSc")
     {
-#ifdef HAVE_PETSC
+#if defined(HAVE_PETSC) && HAVE_PETSC
       DTria<3> tria(*mpiInfo.mpiCommPtr(), smooth, setting);
 
       PhaseFieldMonolithicSolve<Traits<TagPETSc>, DTria<3>> Phasefield3D(
           parameters, mpiInfo, logfile, tria);
       Phasefield3D.run();
 #else
-      std::cout << "[ ERROR ] The selected mpi mode (" << parameters.m_mpi_type
-                << ") is not installed." << std::endl;
+        std::cout << "[ ERROR ] The selected mpi mode (" << parameters.m_mpi_type
+                  << ") is not installed." << std::endl;
+        AssertThrow(false, ExcMessage("PETSc is not available on current machine."));
 #endif
     }
     else if (parameters.m_mpi_type == "Trilinos")
     {
-#ifdef HAVE_TRILINOS
+#if defined(HAVE_TRILINOS) && HAVE_TRILINOS
       DTria<3> tria(*mpiInfo.mpiCommPtr(), smooth, setting);
 
       PhaseFieldMonolithicSolve<Traits<TagTrilinos>, DTria<3>> Phasefield3D(
@@ -7480,6 +7486,7 @@ int main(int argc, char *argv[])
 #else
       std::cout << "[ ERROR ] The selected mpi mode (" << parameters.m_mpi_type
                 << ") is not installed." << std::endl;
+        AssertThrow(false, ExcMessage("Trilinos is not available on current machine."));
 #endif
     }
     else if (parameters.m_mpi_type == "Serial")

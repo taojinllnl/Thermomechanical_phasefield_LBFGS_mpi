@@ -272,7 +272,9 @@ std::string BlockVectorWrapper<TraitsType>
 }
 
 template class la::BlockVectorWrapper<la::Traits<TagSerial>>;
+#if defined(HAVE_PETSC) && HAVE_PETSC
 template class la::BlockVectorWrapper<la::Traits<TagPETSc>>;
-#if HAVE_TRILINOS == 1
+#endif
+#if defined(HAVE_TRILINOS) && HAVE_TRILINOS
   template class la::BlockVectorWrapper<la::Traits<TagTrilinos>>;
 #endif

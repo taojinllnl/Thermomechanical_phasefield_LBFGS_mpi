@@ -101,7 +101,11 @@ std::string BlockSparseMatrixWrapper<TraitsType>
 }
 
 template class la::BlockSparseMatrixWrapper<la::Traits<TagSerial>>;
-template class la::BlockSparseMatrixWrapper<la::Traits<TagPETSc>>;
-#if HAVE_TRILINOS == 1
+
+#if defined(HAVE_PETSC) && HAVE_PETSC
+  template class la::BlockSparseMatrixWrapper<la::Traits<TagPETSc>>;
+#endif
+
+#if defined(HAVE_TRILINOS) && HAVE_TRILINOS
   template class la::BlockSparseMatrixWrapper<la::Traits<TagTrilinos>>;
 #endif
