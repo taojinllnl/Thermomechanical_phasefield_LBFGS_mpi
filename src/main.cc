@@ -7411,23 +7411,28 @@ int main(int argc, char *argv[])
 #else
     const auto setting = DTria<2>::default_setting;
 #endif
-    const auto smooth = RTria<2>::MeshSmoothing(
-        RTria<2>::smoothing_on_refinement | RTria<2>::smoothing_on_coarsening);
+      const auto smooth = RTria<2>::MeshSmoothing(
+          RTria<2>::smoothing_on_refinement | RTria<2>::smoothing_on_coarsening);
+#endif
+    
 
     if (parameters.m_mpi_type == "PETSc")
     {
-#ifdef HAVE_PETSC
+#if defined(HAVE_PETSC) && HAVE_PETSC
       DTria<2> tria(*mpiInfo.mpiCommPtr(), smooth, setting);
 
       PhaseFieldMonolithicSolve<Traits<TagPETSc>, DTria<2>> Phasefield2D(
           parameters, mpiInfo, logfile, tria);
       Phasefield2D.run();
 #else
+        std::cout << "[ ERROR ] The selected mpi mode (" << parameters.m_mpi_type
+                  << ") is not installed." << std::endl;
+        AssertThrow(false, ExcMessage("PETSc is not available on current machine."));
 #endif
     }
     else if (parameters.m_mpi_type == "Trilinos")
     {
-#ifdef HAVE_TRILINOS
+#if defined(HAVE_TRILINOS) && HAVE_TRILINOS
       DTria<2> tria(*mpiInfo.mpiCommPtr(), smooth, setting);
 
       PhaseFieldMonolithicSolve<Traits<TagTrilinos>, DTria<2>> Phasefield2D(
@@ -7436,6 +7441,7 @@ int main(int argc, char *argv[])
 #else
       std::cout << "[ ERROR ] The selected mpi mode (" << parameters.m_mpi_type
                 << ") is not installed." << std::endl;
+        AssertThrow(false, ExcMessage("Trilinos is not available on current machine."));
 #endif
     }
     else if (parameters.m_mpi_type == "Serial")
