@@ -3621,8 +3621,7 @@ namespace PhaseField_monolithic
     if constexpr (is_mpi)
     {
       VersionAdapter::cstReinit(m_constraints, m_dof_handler.locally_owned_dofs(),
-                                *m_blocks_desc.localRelevantPartition(),
-                                *m_mpiInfo.mpiCommPtr());
+                                *m_blocks_desc.localRelevantPartition());
     }
     DoFTools::make_hanging_node_constraints(m_dof_handler, m_constraints);
     if constexpr (is_mpi)
@@ -3833,8 +3832,7 @@ namespace PhaseField_monolithic
       {
         VersionAdapter::cstReinit(
             m_constraints, m_dof_handler.locally_owned_dofs(),
-            DoFTools::extract_locally_relevant_dofs(m_dof_handler),
-            *m_mpiInfo.mpiCommPtr());
+            DoFTools::extract_locally_relevant_dofs(m_dof_handler));
       }
       DoFTools::make_hanging_node_constraints(m_dof_handler, m_constraints);
 
@@ -4619,8 +4617,7 @@ namespace PhaseField_monolithic
         {
           VersionAdapter::cstReinit(
               m_constraints, m_dof_handler.locally_owned_dofs(),
-              DoFTools::extract_locally_relevant_dofs(m_dof_handler),
-              *m_mpiInfo.mpiCommPtr());
+              DoFTools::extract_locally_relevant_dofs(m_dof_handler));
         }
 
         m_constraints.copy_from(homoCst);
@@ -6475,8 +6472,7 @@ namespace PhaseField_monolithic
         const IndexSet relevant_L2 =
             DoFTools::extract_locally_relevant_dofs(dof_handler_L2);
 
-        VersionAdapter::cstReinit(constraints, owned_L2, relevant_L2,
-                                  *m_mpiInfo.mpiCommPtr());
+        VersionAdapter::cstReinit(constraints, owned_L2, relevant_L2);
 
         DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
 
@@ -6563,8 +6559,7 @@ namespace PhaseField_monolithic
         const IndexSet relevant_L2 =
             DoFTools::extract_locally_relevant_dofs(dof_handler_L2);
 
-        VersionAdapter::cstReinit(constraints, owned_L2, relevant_L2,
-                                  *m_mpiInfo.mpiCommPtr());
+        VersionAdapter::cstReinit(constraints, owned_L2, relevant_L2);
 
         DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
 
@@ -6838,8 +6833,7 @@ namespace PhaseField_monolithic
 
             VersionAdapter::cstReinit(constraints,
                                       owned_L2,
-                                      relevant_L2,
-                                      *m_mpiInfo.mpiCommPtr());
+                                      relevant_L2);
 
             DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
 
@@ -6968,8 +6962,7 @@ namespace PhaseField_monolithic
 
             VersionAdapter::cstReinit(constraints,
                                       owned_L2,
-                                      relevant_L2,
-                                      *m_mpiInfo.mpiCommPtr());
+                                      relevant_L2);
 
             DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
 
