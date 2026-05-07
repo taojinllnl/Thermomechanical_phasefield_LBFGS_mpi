@@ -1443,13 +1443,11 @@ namespace PhaseField_monolithic
 
   namespace type
   {
+    template <typename LATraits, typename Tria>
+    using BSMatrix = typename PhaseFieldMonolithicSolve<LATraits, Tria>::BSMatrix;
 
-  template <typename LATraits, typename Tria>
-  using BSMatrix = typename PhaseFieldMonolithicSolve<LATraits, Tria>::BSMatrix;
-
-  template <typename LATraits, typename Tria>
-  using BVector = typename PhaseFieldMonolithicSolve<LATraits, Tria>::BVector;
-
+    template <typename LATraits, typename Tria>
+    using BVector = typename PhaseFieldMonolithicSolve<LATraits, Tria>::BVector;
   } // namespace type
 
   template <typename LATraits, typename Tria>
