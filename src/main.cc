@@ -24,70 +24,68 @@
 
 /* A fully monolithic scheme based on the L-BFGS method to solve the phase-field
  * thermomechanically coupled crack problem:
- * 1. The phase-field formulation itself is based on "A phase field model for rate-independent
- *    crack propagation - Robust algorithmic implementation based on operator splits"
- *    by Christian Miehe , Martina Hofacker, Fabian Welschinger.
- * 2. The thermal conductivity tensor is isotropic and degraded by the phase-field.
+ * 1. The phase-field formulation itself is based on "A phase field model for
+ *rate-independent crack propagation - Robust algorithmic implementation based
+ *on operator splits" by Christian Miehe , Martina Hofacker, Fabian Welschinger.
+ * 2. The thermal conductivity tensor is isotropic and degraded by the
+ *phase-field.
  * 3. The thermal equation is transient and considers the temperature
  *    changing with time (T_dot). The backward Euler time integrator is used.
- * 4. The mechanical problem is quasi-static and does not consider the inertial effort
- *    (no acceleration term).
- * 5. This code implements a monolithic approach. The phase-field irreversibility
- *    is enforced through the history field Phi_0^+.
+ * 4. The mechanical problem is quasi-static and does not consider the inertial
+ *effort (no acceleration term).
+ * 5. This code implements a monolithic approach. The phase-field
+ *irreversibility is enforced through the history field Phi_0^+.
  * 6. Using TBB for stiffness assembly and Gauss point calculation.
  * 7. Using adaptive mesh refinement.
  * 8. The gradient-based line search method is used.
  * 9. The displacement field, phase-field, and the temperature field are solved
  *    simultaneously during each iteration.
  *10. The limited-memory BFGS method is used. See the reference:
- *    Jin T, Li Z, Chen K. A novel phase-field monolithic scheme for brittle crack
- *    propagation based on the limited-memory BFGS method with adaptive mesh refinement.
- *    Int J Numer Methods Eng. 2024;e7572. doi: 10.1002/nme.7572.
+ *    Jin T, Li Z, Chen K. A novel phase-field monolithic scheme for brittle
+ *crack propagation based on the limited-memory BFGS method with adaptive mesh
+ *refinement. Int J Numer Methods Eng. 2024;e7572. doi: 10.1002/nme.7572.
  */
 
+#define ENABLE_REPARTITION 0
 
-# define ENABLE_REPARTITION 0
-
-#include <deal.II/grid/tria.h>
 #include <deal.II/grid/grid_generator.h>
-#include <deal.II/grid/grid_refinement.h>
-#include <deal.II/grid/grid_out.h>
 #include <deal.II/grid/grid_in.h>
+#include <deal.II/grid/grid_out.h>
+#include <deal.II/grid/grid_refinement.h>
 #include <deal.II/grid/manifold_lib.h>
+#include <deal.II/grid/tria.h>
 
 #include <deal.II/dofs/dof_handler.h>
-#include <deal.II/dofs/dof_tools.h>
 #include <deal.II/dofs/dof_renumbering.h>
+#include <deal.II/dofs/dof_tools.h>
 
-#include <deal.II/fe/fe_values.h>
-#include <deal.II/fe/fe_system.h>
-#include <deal.II/fe/fe_q.h>
 #include <deal.II/fe/fe_dgp_monomial.h>
+#include <deal.II/fe/fe_q.h>
+#include <deal.II/fe/fe_system.h>
+#include <deal.II/fe/fe_values.h>
 #include <deal.II/fe/mapping_q_eulerian.h>
 
-
-#include <deal.II/base/quadrature_point_data.h>
-#include <deal.II/base/parameter_handler.h>
 #include <deal.II/base/conditional_ostream.h>
+#include <deal.II/base/parameter_handler.h>
+#include <deal.II/base/quadrature_point_data.h>
 
 #include <deal.II/lac/affine_constraints.h>
-#include <deal.II/lac/vector.h>
-#include <deal.II/lac/full_matrix.h>
-#include <deal.II/lac/sparse_matrix.h>
-#include <deal.II/lac/dynamic_sparsity_pattern.h>
 #include <deal.II/lac/block_sparse_matrix.h>
 #include <deal.II/lac/block_vector.h>
+#include <deal.II/lac/dynamic_sparsity_pattern.h>
+#include <deal.II/lac/full_matrix.h>
+#include <deal.II/lac/sparse_matrix.h>
+#include <deal.II/lac/vector.h>
 
-
-#include <deal.II/numerics/vector_tools.h>
-#include <deal.II/numerics/matrix_tools.h>
 #include <deal.II/numerics/data_out.h>
+#include <deal.II/numerics/matrix_tools.h>
+#include <deal.II/numerics/vector_tools.h>
 
-#include <deal.II/lac/solver_cg.h>
-#include <deal.II/lac/precondition.h>
 #include <deal.II/lac/linear_operator.h>
 #include <deal.II/lac/packaged_operation.h>
+#include <deal.II/lac/precondition.h>
 #include <deal.II/lac/precondition_selector.h>
+#include <deal.II/lac/solver_cg.h>
 #include <deal.II/lac/solver_selector.h>
 #include <deal.II/lac/sparse_direct.h>
 
@@ -101,40 +99,30 @@
 
 #include <deal.II/base/work_stream.h>
 
-
 #include <deal.II/numerics/solution_transfer.h>
 
-
-
-#include <vector>
+#include <deal.II/base/logstream.h>
 #include <fstream>
 #include <iostream>
-#include <deal.II/base/logstream.h>
+#include <vector>
 
-
-
-
+#include "../include/FileSystem.h"
 #include "../include/SpectrumDecomposition.h"
 #include "../include/Utilities.h"
-#include "../include/FileSystem.h"
 
 #include "../include/MPIInfo.h"
 
 #include "../include/TimerOutputWrapper.h"
 
-
-#include "../include/BlockVectorWrapper.h"
-#include "../include/BlockSparseMatrixWrapper.h"
 #include "../include/BlockDesc.h"
+#include "../include/BlockSparseMatrixWrapper.h"
+#include "../include/BlockVectorWrapper.h"
 
 #include "../include/LASolver.h"
 
 #include "../include/OutputHelper.h"
 
-
 #include "../include/VersionAdapter.h"
-
-
 
 namespace PhaseField_monolithic
 {
@@ -143,45 +131,42 @@ namespace PhaseField_monolithic
   // body force
   template <int dim>
   void right_hand_side(const std::vector<Point<dim>> &points,
-		       std::vector<Tensor<1, dim>> &  values,
-		       const double fx,
-		       const double fy,
-		       const double fz)
+                       std::vector<Tensor<1, dim>> &values, const double fx,
+                       const double fy, const double fz)
   {
     Assert(values.size() == points.size(),
            ExcDimensionMismatch(values.size(), points.size()));
     Assert(dim >= 2, ExcNotImplemented());
 
     for (unsigned int point_n = 0; point_n < points.size(); ++point_n)
+    {
+      if (dim == 2)
       {
-	if (dim == 2)
-	  {
-	    values[point_n][0] = fx;
-	    values[point_n][1] = fy;
-	  }
-	else
-	  {
-	    values[point_n][0] = fx;
-	    values[point_n][1] = fy;
-	    values[point_n][2] = fz;
-	  }
+        values[point_n][0] = fx;
+        values[point_n][1] = fy;
       }
+      else
+      {
+        values[point_n][0] = fx;
+        values[point_n][1] = fy;
+        values[point_n][2] = fz;
+      }
+    }
   }
 
   // heat supply
   template <int dim>
   void heat_supply(const std::vector<Point<dim>> &points,
-		   std::vector<double> &  values,
-		   const double heat_supply)
+                   std::vector<double> &values, const double heat_supply)
   {
     Assert(values.size() == points.size(),
            ExcDimensionMismatch(values.size(), points.size()));
     Assert(dim >= 2, ExcNotImplemented());
 
     for (unsigned int point_n = 0; point_n < points.size(); ++point_n)
-      {
-	values[point_n] = heat_supply;
-      }
+    {
+      values[point_n] = heat_supply;
+    }
   }
 
   double degradation_function(const double d)
@@ -196,12 +181,12 @@ namespace PhaseField_monolithic
 
   double degradation_function_2nd_order_derivative(const double d)
   {
-    (void) d;
+    (void)d;
     return 2.0;
   }
 
   inline double phasefield_geometry_function(const double d,
-					     const std::string & model_name)
+                                             const std::string &model_name)
   {
     double value = 0.0;
     if (model_name == "AT2")
@@ -210,13 +195,15 @@ namespace PhaseField_monolithic
       value = d;
     else
       Assert(false,
-	     ExcMessage("The phase-field geometric function has not been implemented!"));
+             ExcMessage(
+                 "The phase-field geometric function has not been implemented!"));
 
     return value;
   }
 
-  inline double phasefield_geometry_function_derivative(const double d,
-  							const std::string & model_name)
+  inline double
+  phasefield_geometry_function_derivative(const double d,
+                                          const std::string &model_name)
   {
     double value = 0.0;
     if (model_name == "AT2")
@@ -225,15 +212,17 @@ namespace PhaseField_monolithic
       value = 1.0;
     else
       Assert(false,
-	     ExcMessage("The phase-field geometric function has not been implemented!"));
+             ExcMessage(
+                 "The phase-field geometric function has not been implemented!"));
 
     return value;
   }
 
-  inline double phasefield_geometry_function_2nd_order_derivative(const double d,
-				  				  const std::string & model_name)
+  inline double
+  phasefield_geometry_function_2nd_order_derivative(const double d,
+                                                    const std::string &model_name)
   {
-    (void) d;
+    (void)d;
     double value = 0.0;
     if (model_name == "AT2")
       value = 2.0;
@@ -241,21 +230,23 @@ namespace PhaseField_monolithic
       value = 0.0;
     else
       Assert(false,
-	   ExcMessage("The phase-field geometric function has not been implemented!"));
+             ExcMessage(
+                 "The phase-field geometric function has not been implemented!"));
 
     return value;
   }
 
-  inline double phasefield_coefficient_constant(const std::string & model_name)
+  inline double phasefield_coefficient_constant(const std::string &model_name)
   {
     double value = 0.0;
     if (model_name == "AT2")
       value = 2.0;
     else if (model_name == "AT1")
-      value = 8.0/3;
+      value = 8.0 / 3;
     else
       Assert(false,
-	     ExcMessage("The phase-field geometric function has not been implemented!"));
+             ExcMessage(
+                 "The phase-field geometric function has not been implemented!"));
 
     return value;
   }
@@ -289,12 +280,12 @@ namespace PhaseField_monolithic
       unsigned int m_total_material_regions;
       std::string m_material_file_name;
       int m_reaction_force_face_id;
-        
+
       std::string m_mpi_type;
-      
+
       std::string m_config_dir;
       std::string m_output_dir;
-        
+
       static void declare_parameters(ParameterHandler &prm);
       void parse_parameters(ParameterHandler &prm);
     };
@@ -303,150 +294,112 @@ namespace PhaseField_monolithic
     {
       prm.enter_subsection("Scenario");
       {
-        prm.declare_entry("dimension",
-                            "2",
-                            Patterns::Integer(2),
-                            "dimension of the problem");
-          
-        prm.declare_entry("Scenario number",
-                          "1",
-                          Patterns::Integer(0),
+        prm.declare_entry("dimension", "2", Patterns::Integer(2),
+                          "dimension of the problem");
+
+        prm.declare_entry("Scenario number", "1", Patterns::Integer(0),
                           "Geometry, loading and boundary conditions scenario");
 
-        prm.declare_entry("Log file name",
-			  "Output.log",
+        prm.declare_entry("Log file name", "Output.log",
                           Patterns::FileName(Patterns::FileName::input),
-			  "Name of the file for log");
+                          "Name of the file for log");
 
-        prm.declare_entry("Output iteration history",
-			  "yes",
+        prm.declare_entry("Output iteration history", "yes",
                           Patterns::Selection("yes|no"),
-			  "Shall we write iteration history to the log file?");
+                          "Shall we write iteration history to the log file?");
 
-        prm.declare_entry("Phase-field model type",
-                          "AT2",
+        prm.declare_entry("Phase-field model type", "AT2",
                           Patterns::Selection("AT1|AT2"),
                           "Type of phase-field model");
 
-        prm.declare_entry("Coupling on heat equation",
-			  "no",
+        prm.declare_entry("Coupling on heat equation", "no",
                           Patterns::Selection("yes|no"),
-			  "Does the heat equation contain the coupling term?");
+                          "Does the heat equation contain the coupling term?");
 
-        prm.declare_entry("Degrade thermal conductivity",
-			  "yes",
+        prm.declare_entry("Degrade thermal conductivity", "yes",
                           Patterns::Selection("yes|no"),
-			  "Degrade thermal conductivity or not?");
+                          "Degrade thermal conductivity or not?");
 
-        prm.declare_entry("Plane stress",
-			  "no",
-			  Patterns::Selection("yes|no"),
-			  "If it is 2D, is it plane-stress?");
+        prm.declare_entry("Plane stress", "no", Patterns::Selection("yes|no"),
+                          "If it is 2D, is it plane-stress?");
 
-        prm.declare_entry("Nonlinear solver type",
-                          "LBFGS",
+        prm.declare_entry("Nonlinear solver type", "LBFGS",
                           Patterns::Selection("LBFGS"),
                           "Type of solver used to solve the nonlinear system");
 
-        prm.declare_entry("Linear solver type",
-                          "Direct",
+        prm.declare_entry("Linear solver type", "Direct",
                           Patterns::Selection("Direct|CG"),
                           "Type of solver used to solve the linear system B0");
 
-        prm.declare_entry("CG u tolerance",
-			  "1.0e-9",
-			  Patterns::Double(0.0),
-			  "If CG is selected as linear solver, the tolerance of CG for inverse K_uu");
+        prm.declare_entry("CG u tolerance", "1.0e-9", Patterns::Double(0.0),
+                          "If CG is selected as linear solver, the tolerance of CG "
+                          "for inverse K_uu");
 
-        prm.declare_entry("CG d tolerance",
-			  "1.0e-9",
-			  Patterns::Double(0.0),
-			  "If CG is selected as linear solver, the tolerance of CG for inverse K_dd");
+        prm.declare_entry("CG d tolerance", "1.0e-9", Patterns::Double(0.0),
+                          "If CG is selected as linear solver, the tolerance of CG "
+                          "for inverse K_dd");
 
-        prm.declare_entry("CG T tolerance",
-			  "1.0e-9",
-			  Patterns::Double(0.0),
-			  "If CG is selected as linear solver, the tolerance of CG for inverse K_TT");
+        prm.declare_entry("CG T tolerance", "1.0e-9", Patterns::Double(0.0),
+                          "If CG is selected as linear solver, the tolerance of CG "
+                          "for inverse K_TT");
 
-        prm.declare_entry("Mesh refinement strategy",
-                          "adaptive-refine",
-                          Patterns::Selection("pre-refine|adaptive-refine"),
-                          "Mesh refinement strategy: pre-refine or adaptive-refine");
-          
-        prm.declare_entry("Repartitioning ratio",
-                          "2.0",
-                          Patterns::Double(0.0),
+        prm.declare_entry(
+            "Mesh refinement strategy", "adaptive-refine",
+            Patterns::Selection("pre-refine|adaptive-refine"),
+            "Mesh refinement strategy: pre-refine or adaptive-refine");
+
+        prm.declare_entry("Repartitioning ratio", "2.0", Patterns::Double(0.0),
                           "The threshold for repartitioning");
 
-        prm.declare_entry("LBFGS m",
-                          "40",
-                          Patterns::Integer(0),
+        prm.declare_entry("LBFGS m", "40", Patterns::Integer(0),
                           "Number of vectors used for LBFGS");
 
-        prm.declare_entry("Global refinement times",
-                          "0",
-                          Patterns::Integer(0),
+        prm.declare_entry("Global refinement times", "0", Patterns::Integer(0),
                           "Global refinement times (across the entire domain)");
 
-        prm.declare_entry("Local prerefinement times",
-                          "0",
-                          Patterns::Integer(0),
-                          "Local pre-refinement times (assume crack path is known a priori), "
-                          "only refine along the crack path.");
+        prm.declare_entry(
+            "Local prerefinement times", "0", Patterns::Integer(0),
+            "Local pre-refinement times (assume crack path is known a priori), "
+            "only refine along the crack path.");
 
-        prm.declare_entry("Max adaptive refinement times",
-                          "100",
-                          Patterns::Integer(0),
-                          "Maximum number of adaptive refinement times allowed in each step");
+        prm.declare_entry(
+            "Max adaptive refinement times", "100", Patterns::Integer(0),
+            "Maximum number of adaptive refinement times allowed in each step");
 
-        prm.declare_entry("Max allowed refinement level",
-                          "100",
+        prm.declare_entry("Max allowed refinement level", "100",
                           Patterns::Integer(0),
                           "Maximum allowed cell refinement level");
 
-        prm.declare_entry("Phasefield refine threshold",
-			  "0.8",
-			  Patterns::Double(),
-			  "Phasefield-based refinement threshold value");
+        prm.declare_entry("Phasefield refine threshold", "0.8", Patterns::Double(),
+                          "Phasefield-based refinement threshold value");
 
-        prm.declare_entry("Allowed max hl ratio",
-			  "0.25",
-			  Patterns::Double(),
-			  "Allowed maximum ratio between mesh size h and length scale l");
+        prm.declare_entry(
+            "Allowed max hl ratio", "0.25", Patterns::Double(),
+            "Allowed maximum ratio between mesh size h and length scale l");
 
-        prm.declare_entry("Material regions",
-                          "1",
-                          Patterns::Integer(0),
+        prm.declare_entry("Material regions", "1", Patterns::Integer(0),
                           "Number of material regions");
 
-        prm.declare_entry("Material data file",
-                          "1",
+        prm.declare_entry("Material data file", "1",
                           Patterns::FileName(Patterns::FileName::input),
                           "Material data file");
 
-        prm.declare_entry("Reaction force face ID",
-                          "1",
-                          Patterns::Integer(),
-                          "Face id where reaction forces should be calculated "
-                          "(negative integer means not to calculate reaction force)");
-        
-          
-        prm.declare_entry("mpi type",
-                          "PETSc",
-                            Patterns::Selection("PETSc|Trilinos|Serial"),
-                            "underlying mpi type");
-            
-          
-        prm.declare_entry("Config dir",
-                            "./",
-                            Patterns::FileName(Patterns::FileName::input),
-                            "Configuration directory");
-          
-        prm.declare_entry("Output dir",
-                           "./",
-                              Patterns::FileName(Patterns::FileName::input),
-                              "Output directory");
-          
+        prm.declare_entry(
+            "Reaction force face ID", "1", Patterns::Integer(),
+            "Face id where reaction forces should be calculated "
+            "(negative integer means not to calculate reaction force)");
+
+        prm.declare_entry("mpi type", "PETSc",
+                          Patterns::Selection("PETSc|Trilinos|Serial"),
+                          "underlying mpi type");
+
+        prm.declare_entry("Config dir", "./",
+                          Patterns::FileName(Patterns::FileName::input),
+                          "Configuration directory");
+
+        prm.declare_entry("Output dir", "./",
+                          Patterns::FileName(Patterns::FileName::input),
+                          "Output directory");
       }
       prm.leave_subsection();
     }
@@ -455,7 +408,7 @@ namespace PhaseField_monolithic
     {
       prm.enter_subsection("Scenario");
       {
-        m_dim  = prm.get_integer("dimension");
+        m_dim = prm.get_integer("dimension");
         m_scenario = prm.get_integer("Scenario number");
         m_logfile_name = prm.get("Log file name");
         m_output_iteration_history = prm.get_bool("Output iteration history");
@@ -469,20 +422,23 @@ namespace PhaseField_monolithic
         m_cg_d_tol = prm.get_double("CG d tolerance");
         m_cg_t_tol = prm.get_double("CG T tolerance");
         m_refinement_strategy = prm.get("Mesh refinement strategy");
-          m_repartition_ratio = prm.get_double("Repartitioning ratio");
+        m_repartition_ratio = prm.get_double("Repartitioning ratio");
         m_LBFGS_m = prm.get_integer("LBFGS m");
         m_global_refine_times = prm.get_integer("Global refinement times");
         m_local_prerefine_times = prm.get_integer("Local prerefinement times");
-        m_max_adaptive_refine_times = prm.get_integer("Max adaptive refinement times");
-        m_max_allowed_refinement_level = prm.get_integer("Max allowed refinement level");
-        m_phasefield_refine_threshold = prm.get_double("Phasefield refine threshold");
+        m_max_adaptive_refine_times =
+            prm.get_integer("Max adaptive refinement times");
+        m_max_allowed_refinement_level =
+            prm.get_integer("Max allowed refinement level");
+        m_phasefield_refine_threshold =
+            prm.get_double("Phasefield refine threshold");
         m_allowed_max_h_l_ratio = prm.get_double("Allowed max hl ratio");
         m_total_material_regions = prm.get_integer("Material regions");
         m_material_file_name = prm.get("Material data file");
         m_reaction_force_face_id = prm.get_integer("Reaction force face ID");
-          
+
         m_mpi_type = prm.get("mpi type");
-          
+
         m_config_dir = prm.get("Config dir");
         m_output_dir = prm.get("Output dir");
       }
@@ -499,19 +455,14 @@ namespace PhaseField_monolithic
       void parse_parameters(ParameterHandler &prm);
     };
 
-
     void FESystem::declare_parameters(ParameterHandler &prm)
     {
       prm.enter_subsection("Finite element system");
       {
-        prm.declare_entry("Polynomial degree",
-                          "1",
-                          Patterns::Integer(0),
+        prm.declare_entry("Polynomial degree", "1", Patterns::Integer(0),
                           "Phase field polynomial order");
 
-        prm.declare_entry("Quadrature order",
-                          "2",
-                          Patterns::Integer(0),
+        prm.declare_entry("Quadrature order", "2", Patterns::Integer(0),
                           "Gauss quadrature order");
       }
       prm.leave_subsection();
@@ -522,7 +473,7 @@ namespace PhaseField_monolithic
       prm.enter_subsection("Finite element system");
       {
         m_poly_degree = prm.get_integer("Polynomial degree");
-        m_quad_order  = prm.get_integer("Quadrature order");
+        m_quad_order = prm.get_integer("Quadrature order");
       }
       prm.leave_subsection();
     }
@@ -543,20 +494,14 @@ namespace PhaseField_monolithic
     {
       prm.enter_subsection("Body force");
       {
-        prm.declare_entry("Body force x component",
-			  "0.0",
-			  Patterns::Double(),
-			  "Body force x-component (N/m^3)");
+        prm.declare_entry("Body force x component", "0.0", Patterns::Double(),
+                          "Body force x-component (N/m^3)");
 
-        prm.declare_entry("Body force y component",
-			  "0.0",
-			  Patterns::Double(),
-			  "Body force y-component (N/m^3)");
+        prm.declare_entry("Body force y component", "0.0", Patterns::Double(),
+                          "Body force y-component (N/m^3)");
 
-        prm.declare_entry("Body force z component",
-			  "0.0",
-			  Patterns::Double(),
-			  "Body force z-component (N/m^3)");
+        prm.declare_entry("Body force z component", "0.0", Patterns::Double(),
+                          "Body force z-component (N/m^3)");
       }
       prm.leave_subsection();
     }
@@ -571,7 +516,6 @@ namespace PhaseField_monolithic
       }
       prm.leave_subsection();
     }
-
 
     // heat supply (Watt/m^3)
     struct HeatSupply
@@ -588,15 +532,11 @@ namespace PhaseField_monolithic
     {
       prm.enter_subsection("Heat supply");
       {
-        prm.declare_entry("Heat supply",
-			  "0.0",
-			  Patterns::Double(),
-			  "Heat supply (Watt/m^3)");
+        prm.declare_entry("Heat supply", "0.0", Patterns::Double(),
+                          "Heat supply (Watt/m^3)");
 
-        prm.declare_entry("Reference temperature",
-			  "300.0",
-			  Patterns::Double(),
-			  "Reference temperature (K)");
+        prm.declare_entry("Reference temperature", "300.0", Patterns::Double(),
+                          "Reference temperature (K)");
       }
       prm.leave_subsection();
     }
@@ -616,13 +556,13 @@ namespace PhaseField_monolithic
       unsigned int m_max_iterations_LBFGS;
       bool m_relative_residual;
 
-      double       m_tol_u_residual;
-      double       m_tol_d_residual;
-      double       m_tol_t_residual;
+      double m_tol_u_residual;
+      double m_tol_d_residual;
+      double m_tol_t_residual;
 
-      double       m_tol_u_incr;
-      double       m_tol_d_incr;
-      double       m_tol_t_incr;
+      double m_tol_u_incr;
+      double m_tol_d_incr;
+      double m_tol_t_incr;
 
       static void declare_parameters(ParameterHandler &prm);
 
@@ -633,45 +573,30 @@ namespace PhaseField_monolithic
     {
       prm.enter_subsection("Nonlinear solver");
       {
-        prm.declare_entry("Max iterations LBFGS",
-                          "20",
-                          Patterns::Integer(0),
+        prm.declare_entry("Max iterations LBFGS", "20", Patterns::Integer(0),
                           "Number of LBFGS iterations allowed");
 
-        prm.declare_entry("Relative residual",
-			  "yes",
-                          Patterns::Selection("yes|no"),
-			  "Shall we use relative residual for convergence?");
+        prm.declare_entry("Relative residual", "yes", Patterns::Selection("yes|no"),
+                          "Shall we use relative residual for convergence?");
 
-        prm.declare_entry("Tolerance displacement residual",
-                          "1.0e-9",
-                          Patterns::Double(0.0),
-                          "Displacement residual tolerance");
+        prm.declare_entry("Tolerance displacement residual", "1.0e-9",
+                          Patterns::Double(0.0), "Displacement residual tolerance");
 
-        prm.declare_entry("Tolerance phasefield residual",
-                          "1.0e-9",
-                          Patterns::Double(0.0),
-                          "Phasefield residual tolerance");
+        prm.declare_entry("Tolerance phasefield residual", "1.0e-9",
+                          Patterns::Double(0.0), "Phasefield residual tolerance");
 
-        prm.declare_entry("Tolerance temperature residual",
-                          "1.0e-9",
-                          Patterns::Double(0.0),
-                          "Temperature residual tolerance");
+        prm.declare_entry("Tolerance temperature residual", "1.0e-9",
+                          Patterns::Double(0.0), "Temperature residual tolerance");
 
-        prm.declare_entry("Tolerance displacement increment",
-                          "1.0e-9",
+        prm.declare_entry("Tolerance displacement increment", "1.0e-9",
                           Patterns::Double(0.0),
                           "Displacement increment tolerance");
 
-        prm.declare_entry("Tolerance phasefield increment",
-                          "1.0e-9",
-                          Patterns::Double(0.0),
-                          "Phasefield increment tolerance");
+        prm.declare_entry("Tolerance phasefield increment", "1.0e-9",
+                          Patterns::Double(0.0), "Phasefield increment tolerance");
 
-        prm.declare_entry("Tolerance temperature increment",
-                          "1.0e-9",
-                          Patterns::Double(0.0),
-                          "Temperature increment tolerance");
+        prm.declare_entry("Tolerance temperature increment", "1.0e-9",
+                          Patterns::Double(0.0), "Temperature increment tolerance");
       }
       prm.leave_subsection();
     }
@@ -683,13 +608,13 @@ namespace PhaseField_monolithic
         m_max_iterations_LBFGS = prm.get_integer("Max iterations LBFGS");
         m_relative_residual = prm.get_bool("Relative residual");
 
-        m_tol_u_residual           = prm.get_double("Tolerance displacement residual");
-        m_tol_d_residual           = prm.get_double("Tolerance phasefield residual");
-        m_tol_t_residual           = prm.get_double("Tolerance temperature residual");
+        m_tol_u_residual = prm.get_double("Tolerance displacement residual");
+        m_tol_d_residual = prm.get_double("Tolerance phasefield residual");
+        m_tol_t_residual = prm.get_double("Tolerance temperature residual");
 
-        m_tol_u_incr               = prm.get_double("Tolerance displacement increment");
-        m_tol_d_incr               = prm.get_double("Tolerance phasefield increment");
-        m_tol_t_incr               = prm.get_double("Tolerance temperature increment");
+        m_tol_u_incr = prm.get_double("Tolerance displacement increment");
+        m_tol_d_incr = prm.get_double("Tolerance phasefield increment");
+        m_tol_t_incr = prm.get_double("Tolerance temperature increment");
       }
       prm.leave_subsection();
     }
@@ -710,8 +635,7 @@ namespace PhaseField_monolithic
       {
         prm.declare_entry("End time", "1", Patterns::Double(), "End time");
 
-        prm.declare_entry("Time data file",
-                          "1",
+        prm.declare_entry("Time data file", "1",
                           Patterns::FileName(Patterns::FileName::input),
                           "Time data file");
       }
@@ -729,22 +653,22 @@ namespace PhaseField_monolithic
     }
 
     struct AllParameters : public Scenario,
-	                   public FESystem,
-	                   public BodyForce,
-			   public HeatSupply,
-			   public NonlinearSolver,
-			   public TimeInfo
+                           public FESystem,
+                           public BodyForce,
+                           public HeatSupply,
+                           public NonlinearSolver,
+                           public TimeInfo
     {
       AllParameters(const std::string &input_file);
 
       static void declare_parameters(ParameterHandler &prm);
 
       void parse_parameters(ParameterHandler &prm);
-        
-        std::string subDir;
-        std::string histDir;
-        std::string oriDir;
-        std::string resultsDir;
+
+      std::string subDir;
+      std::string histDir;
+      std::string oriDir;
+      std::string resultsDir;
     };
 
     AllParameters::AllParameters(const std::string &input_file)
@@ -780,51 +704,34 @@ namespace PhaseField_monolithic
   {
   public:
     Time(const double time_end)
-      : m_timestep(0)
-      , m_time_current(0.0)
-      , m_time_end(time_end)
-      , m_delta_t(0.0)
-      , m_magnitude(1.0)
-    {}
+        : m_timestep(0), m_time_current(0.0), m_time_end(time_end),
+          m_delta_t(0.0), m_magnitude(1.0)
+    {
+    }
 
     virtual ~Time() = default;
 
-    double current() const
-    {
-      return m_time_current;
-    }
-    double end() const
-    {
-      return m_time_end;
-    }
-    double get_delta_t() const
-    {
-      return m_delta_t;
-    }
-    double get_magnitude() const
-    {
-      return m_magnitude;
-    }
-    unsigned int get_timestep() const
-    {
-      return m_timestep;
-    }
+    double current() const { return m_time_current; }
+    double end() const { return m_time_end; }
+    double get_delta_t() const { return m_delta_t; }
+    double get_magnitude() const { return m_magnitude; }
+    unsigned int get_timestep() const { return m_timestep; }
     void increment(std::vector<std::array<double, 4>> time_table)
     {
       double t_1, t_delta, t_magnitude;
-      for (auto & time_group : time_table)
-        {
-	  t_1 = time_group[1];
-	  t_delta = time_group[2];
-	  t_magnitude = time_group[3];
+      for (auto &time_group : time_table)
+      {
+        t_1 = time_group[1];
+        t_delta = time_group[2];
+        t_magnitude = time_group[3];
 
-	  if (m_time_current < t_1 - 1.0e-6*t_delta)
-	    {
-	      m_delta_t = t_delta;
-	      m_magnitude = t_magnitude;
-	      break;
-	    }
+        if (m_time_current < t_1 - 1.0e-6 * t_delta)
+        {
+          m_delta_t = t_delta;
+          m_magnitude = t_magnitude;
+          break;
         }
+      }
 
       m_time_current += m_delta_t;
       ++m_timestep;
@@ -832,171 +739,105 @@ namespace PhaseField_monolithic
 
   private:
     unsigned int m_timestep;
-    double       m_time_current;
+    double m_time_current;
     const double m_time_end;
     double m_delta_t;
     double m_magnitude;
   };
 
-  template <int dim>
-  class LinearIsotropicElasticityAdditiveSplit
+  template <int dim> class LinearIsotropicElasticityAdditiveSplit
   {
   public:
-    LinearIsotropicElasticityAdditiveSplit(const double lame_lambda,
-			                   const double lame_mu,
-				           const double residual_k,
-					   const double length_scale,
-					   const double viscosity,
-					   const double gc_0,
-					   const double heat_capacity,
-					   const double thermal_conductivity_0,
-					   const double thermal_expansion_coeff,
-					   const double reference_temperature,
-					   const double max_temperature,
-					   const double b_1,
-					   const double b_2,
-					   const std::string & phasefield_name,
-					   const bool   plane_stress_flag)
-      : m_lame_lambda(lame_lambda)
-      , m_lame_mu(lame_mu)
-      , m_residual_k(residual_k)
-      , m_length_scale(length_scale)
-      , m_eta(viscosity)
-      , m_gc_0(gc_0)
-      , m_heat_capacity(heat_capacity)
-      , m_kappa_0(thermal_conductivity_0)
-      , m_alpha(thermal_expansion_coeff)
-      , m_ref_t(reference_temperature)
-      , m_max_t(max_temperature)
-      , m_b_1(b_1)
-      , m_b_2(b_2)
-      , m_phasefield_name(phasefield_name)
-      , m_plane_stress(plane_stress_flag)
-      , m_phase_field_value(0.0)
-      , m_grad_phasefield(Tensor<1, dim>())
-      , m_strain(SymmetricTensor<2, dim>())
-      , m_stress(SymmetricTensor<2, dim>())
-      , m_stress_positive(SymmetricTensor<2, dim>())
-      , m_mechanical_C(SymmetricTensor<4, dim>())
-      , m_strain_energy_positive(0.0)
-      , m_strain_energy_negative(0.0)
-      , m_strain_energy_total(0.0)
-      , m_crack_energy_dissipation(0.0)
-      , m_gc_t(0.0)
-      , m_kappa_d(0.0)
-      , m_temperature(0.0)
-      , m_grad_temperature(Tensor<1, dim>())
-      , m_heat_flux(Tensor<1, dim>())
+    LinearIsotropicElasticityAdditiveSplit(
+        const double lame_lambda, const double lame_mu, const double residual_k,
+        const double length_scale, const double viscosity, const double gc_0,
+        const double heat_capacity, const double thermal_conductivity_0,
+        const double thermal_expansion_coeff, const double reference_temperature,
+        const double max_temperature, const double b_1, const double b_2,
+        const std::string &phasefield_name, const bool plane_stress_flag)
+        : m_lame_lambda(lame_lambda), m_lame_mu(lame_mu),
+          m_residual_k(residual_k), m_length_scale(length_scale),
+          m_eta(viscosity), m_gc_0(gc_0), m_heat_capacity(heat_capacity),
+          m_kappa_0(thermal_conductivity_0), m_alpha(thermal_expansion_coeff),
+          m_ref_t(reference_temperature), m_max_t(max_temperature), m_b_1(b_1),
+          m_b_2(b_2), m_phasefield_name(phasefield_name),
+          m_plane_stress(plane_stress_flag), m_phase_field_value(0.0),
+          m_grad_phasefield(Tensor<1, dim>()),
+          m_strain(SymmetricTensor<2, dim>()),
+          m_stress(SymmetricTensor<2, dim>()),
+          m_stress_positive(SymmetricTensor<2, dim>()),
+          m_mechanical_C(SymmetricTensor<4, dim>()),
+          m_strain_energy_positive(0.0), m_strain_energy_negative(0.0),
+          m_strain_energy_total(0.0), m_crack_energy_dissipation(0.0),
+          m_gc_t(0.0), m_kappa_d(0.0), m_temperature(0.0),
+          m_grad_temperature(Tensor<1, dim>()), m_heat_flux(Tensor<1, dim>())
     {
-      Assert(  ( lame_lambda / (2*(lame_lambda + lame_mu)) <= 0.5)
-	     & ( lame_lambda / (2*(lame_lambda + lame_mu)) >=-1.0),
-	     ExcInternalError() );
+      Assert((lame_lambda / (2 * (lame_lambda + lame_mu)) <= 0.5) &
+                 (lame_lambda / (2 * (lame_lambda + lame_mu)) >= -1.0),
+             ExcInternalError());
     }
 
-    const SymmetricTensor<4, dim> & get_mechanical_C() const
+    const SymmetricTensor<4, dim> &get_mechanical_C() const
     {
       return m_mechanical_C;
     }
 
-    const SymmetricTensor<2, dim> & get_cauchy_stress() const
-    {
-      return m_stress;
-    }
+    const SymmetricTensor<2, dim> &get_cauchy_stress() const { return m_stress; }
 
-    const SymmetricTensor<2, dim> & get_strain() const
-    {
-      return m_strain;
-    }
+    const SymmetricTensor<2, dim> &get_strain() const { return m_strain; }
 
-    const SymmetricTensor<2, dim> & get_cauchy_stress_positive() const
+    const SymmetricTensor<2, dim> &get_cauchy_stress_positive() const
     {
       return m_stress_positive;
     }
 
-    double get_positive_strain_energy() const
-    {
-      return m_strain_energy_positive;
-    }
+    double get_positive_strain_energy() const { return m_strain_energy_positive; }
 
-    double get_negative_strain_energy() const
-    {
-      return m_strain_energy_negative;
-    }
+    double get_negative_strain_energy() const { return m_strain_energy_negative; }
 
-    double get_total_strain_energy() const
-    {
-      return m_strain_energy_total;
-    }
+    double get_total_strain_energy() const { return m_strain_energy_total; }
 
     double get_crack_energy_dissipation() const
     {
       return m_crack_energy_dissipation;
     }
 
-    double get_phase_field_value() const
-    {
-      return m_phase_field_value;
-    }
+    double get_phase_field_value() const { return m_phase_field_value; }
 
-    double get_thermal_expansion_coeff() const
-    {
-      return m_alpha;
-    }
+    double get_thermal_expansion_coeff() const { return m_alpha; }
 
-    double get_lame_lambda() const
-    {
-      return m_lame_lambda;
-    }
+    double get_lame_lambda() const { return m_lame_lambda; }
 
-    double get_lame_mu() const
-    {
-      return m_lame_mu;
-    }
+    double get_lame_mu() const { return m_lame_mu; }
 
     const Tensor<1, dim> get_phase_field_gradient() const
     {
       return m_grad_phasefield;
     }
 
-    double get_temperature_value() const
-    {
-      return m_temperature;
-    }
+    double get_temperature_value() const { return m_temperature; }
 
-    double get_ref_temperature() const
-    {
-      return m_ref_t;
-    }
+    double get_ref_temperature() const { return m_ref_t; }
 
     const Tensor<1, dim> get_temperature_gradient() const
     {
       return m_grad_temperature;
     }
 
-    const Tensor<1, dim> get_heat_flux() const
-    {
-      return m_heat_flux;
-    }
+    const Tensor<1, dim> get_heat_flux() const { return m_heat_flux; }
 
     // temperature-dependent critical energy release rate
-    double get_critical_energy_release_rate_temperature() const
-    {
-      return m_gc_t;
-    }
+    double get_critical_energy_release_rate_temperature() const { return m_gc_t; }
 
-    double get_thermal_conductivity_degraded() const
-    {
-      return m_kappa_d;
-    }
+    double get_thermal_conductivity_degraded() const { return m_kappa_d; }
 
-    void update_material_data(const SymmetricTensor<2, dim> & strain,
-			      const double phase_field_value,
-			      const Tensor<1, dim> & grad_phasefield,
-			      const double phase_field_value_previous_step,
-			      const double delta_time,
-			      const double temperature,
-			      const Tensor<1, dim> & grad_temperature,
-			      const bool degrade_conductivity_or_not)
+    void update_material_data(const SymmetricTensor<2, dim> &strain,
+                              const double phase_field_value,
+                              const Tensor<1, dim> &grad_phasefield,
+                              const double phase_field_value_previous_step,
+                              const double delta_time, const double temperature,
+                              const Tensor<1, dim> &grad_temperature,
+                              const bool degrade_conductivity_or_not)
     {
       // Total strain grad^{(s)}u
       m_strain = strain;
@@ -1007,8 +848,8 @@ namespace PhaseField_monolithic
 
       // Thermal strain
       SymmetricTensor<2, dim> strain_t;
-      strain_t = m_alpha * (temperature - m_ref_t)
-	                 * Physics::Elasticity::StandardTensors<dim>::I;
+      strain_t = m_alpha * (temperature - m_ref_t) *
+                 Physics::Elasticity::StandardTensors<dim>::I;
 
       // Effective strain
       SymmetricTensor<2, dim> strain_e;
@@ -1016,25 +857,23 @@ namespace PhaseField_monolithic
 
       // temperature-dependent gc
       double term_1 = (temperature - m_ref_t) / m_max_t;
-      double coeff = 1.0 - m_b_1 * term_1
-	                 + m_b_2 * term_1 * term_1;
+      double coeff = 1.0 - m_b_1 * term_1 + m_b_2 * term_1 * term_1;
       m_gc_t = coeff * m_gc_0;
 
-      Vector<double>              eigenvalues(dim);
+      Vector<double> eigenvalues(dim);
       std::vector<Tensor<1, dim>> eigenvectors(dim);
-      usr_spectrum_decomposition::spectrum_decomposition<dim>(strain_e,
-    							      eigenvalues,
-    							      eigenvectors);
+      usr_spectrum_decomposition::spectrum_decomposition<dim>(
+          strain_e, eigenvalues, eigenvectors);
 
       SymmetricTensor<2, dim> strain_positive, strain_negative;
-      strain_positive = usr_spectrum_decomposition::positive_tensor(eigenvalues, eigenvectors);
-      strain_negative = usr_spectrum_decomposition::negative_tensor(eigenvalues, eigenvectors);
+      strain_positive =
+          usr_spectrum_decomposition::positive_tensor(eigenvalues, eigenvectors);
+      strain_negative =
+          usr_spectrum_decomposition::negative_tensor(eigenvalues, eigenvectors);
 
       SymmetricTensor<4, dim> projector_positive, projector_negative;
-      usr_spectrum_decomposition::positive_negative_projectors(eigenvalues,
-    							       eigenvectors,
-							       projector_positive,
-							       projector_negative);
+      usr_spectrum_decomposition::positive_negative_projectors(
+          eigenvalues, eigenvectors, projector_positive, projector_negative);
 
       SymmetricTensor<2, dim> stress_positive, stress_negative;
       const double degradation = degradation_function(m_phase_field_value);
@@ -1044,61 +883,72 @@ namespace PhaseField_monolithic
       double my_lambda = m_lame_lambda;
 
       // 2D plane stress case
-      if (   dim == 2
-  	  && m_plane_stress)
-        my_lambda = 2 * m_lame_mu * m_lame_lambda / (m_lame_lambda + 2 * m_lame_mu);
+      if (dim == 2 && m_plane_stress)
+        my_lambda =
+            2 * m_lame_mu * m_lame_lambda / (m_lame_lambda + 2 * m_lame_mu);
 
-      stress_positive = my_lambda * usr_spectrum_decomposition::positive_ramp_function(I_1)
-                                      * Physics::Elasticity::StandardTensors<dim>::I
-                      + 2 * m_lame_mu * strain_positive;
-      stress_negative = my_lambda * usr_spectrum_decomposition::negative_ramp_function(I_1)
-                                      * Physics::Elasticity::StandardTensors<dim>::I
-      		      + 2 * m_lame_mu * strain_negative;
+      stress_positive =
+          my_lambda * usr_spectrum_decomposition::positive_ramp_function(I_1) *
+              Physics::Elasticity::StandardTensors<dim>::I +
+          2 * m_lame_mu * strain_positive;
+      stress_negative =
+          my_lambda * usr_spectrum_decomposition::negative_ramp_function(I_1) *
+              Physics::Elasticity::StandardTensors<dim>::I +
+          2 * m_lame_mu * strain_negative;
 
       m_stress = degradation * stress_positive + stress_negative;
       m_stress_positive = stress_positive;
 
       SymmetricTensor<4, dim> C_positive, C_negative;
-      C_positive = my_lambda * usr_spectrum_decomposition::heaviside_function(I_1)
-                                 * Physics::Elasticity::StandardTensors<dim>::IxI
-		 + 2 * m_lame_mu * projector_positive;
-      C_negative = my_lambda * usr_spectrum_decomposition::heaviside_function(-I_1)
-                                 * Physics::Elasticity::StandardTensors<dim>::IxI
-      		 + 2 * m_lame_mu * projector_negative;
+      C_positive = my_lambda *
+                       usr_spectrum_decomposition::heaviside_function(I_1) *
+                       Physics::Elasticity::StandardTensors<dim>::IxI +
+                   2 * m_lame_mu * projector_positive;
+      C_negative = my_lambda *
+                       usr_spectrum_decomposition::heaviside_function(-I_1) *
+                       Physics::Elasticity::StandardTensors<dim>::IxI +
+                   2 * m_lame_mu * projector_negative;
       m_mechanical_C = degradation * C_positive + C_negative;
 
-      m_strain_energy_positive = 0.5 * my_lambda * usr_spectrum_decomposition::positive_ramp_function(I_1)
-                                                     * usr_spectrum_decomposition::positive_ramp_function(I_1)
-                               + m_lame_mu * strain_positive * strain_positive;
+      m_strain_energy_positive =
+          0.5 * my_lambda *
+              usr_spectrum_decomposition::positive_ramp_function(I_1) *
+              usr_spectrum_decomposition::positive_ramp_function(I_1) +
+          m_lame_mu * strain_positive * strain_positive;
 
-      m_strain_energy_negative = 0.5 * my_lambda * usr_spectrum_decomposition::negative_ramp_function(I_1)
-                                                     * usr_spectrum_decomposition::negative_ramp_function(I_1)
-                               + m_lame_mu * strain_negative * strain_negative;
+      m_strain_energy_negative =
+          0.5 * my_lambda *
+              usr_spectrum_decomposition::negative_ramp_function(I_1) *
+              usr_spectrum_decomposition::negative_ramp_function(I_1) +
+          m_lame_mu * strain_negative * strain_negative;
 
-      m_strain_energy_total = degradation * m_strain_energy_positive + m_strain_energy_negative;
+      m_strain_energy_total =
+          degradation * m_strain_energy_positive + m_strain_energy_negative;
 
-      const double phase_field_geo_value = phasefield_geometry_function(m_phase_field_value,
-              							        m_phasefield_name);
-      const double phase_field_coeff_constant = phasefield_coefficient_constant(m_phasefield_name);
+      const double phase_field_geo_value =
+          phasefield_geometry_function(m_phase_field_value, m_phasefield_name);
+      const double phase_field_coeff_constant =
+          phasefield_coefficient_constant(m_phasefield_name);
 
       // The critical energy release rate m_gc should be temperature-dependent.
-      m_crack_energy_dissipation = m_gc_t * (  1.0 / phase_field_coeff_constant / m_length_scale
-                                             * phase_field_geo_value
-                                             + m_length_scale / phase_field_coeff_constant
-                                             * m_grad_phasefield * m_grad_phasefield)
-      	                                   // the term due to viscosity regularization
-      	                                   + (m_phase_field_value - phase_field_value_previous_step)
-      					   * (m_phase_field_value - phase_field_value_previous_step)
-      				           * 0.5 * m_eta / delta_time;
+      m_crack_energy_dissipation =
+          m_gc_t * (1.0 / phase_field_coeff_constant / m_length_scale *
+                        phase_field_geo_value +
+                    m_length_scale / phase_field_coeff_constant *
+                        m_grad_phasefield * m_grad_phasefield)
+          // the term due to viscosity regularization
+          + (m_phase_field_value - phase_field_value_previous_step) *
+                (m_phase_field_value - phase_field_value_previous_step) * 0.5 *
+                m_eta / delta_time;
 
       // degraded thermal conductivity
       if (degrade_conductivity_or_not)
-	m_kappa_d = (degradation + m_residual_k) * m_kappa_0;
+        m_kappa_d = (degradation + m_residual_k) * m_kappa_0;
       else
-	m_kappa_d = 1.0 * m_kappa_0;
+        m_kappa_d = 1.0 * m_kappa_0;
 
       // heat flux
-      m_heat_flux = - m_kappa_d * grad_temperature;
+      m_heat_flux = -m_kappa_d * grad_temperature;
 
       //(void)delta_time;
       //(void)phase_field_value_previous_step;
@@ -1139,94 +989,78 @@ namespace PhaseField_monolithic
     Tensor<1, dim> m_heat_flux;
   };
 
-
-  template <int dim>
-  class PointHistory
+  template <int dim> class PointHistory
   {
   public:
     PointHistory()
-      : m_length_scale(0.0)
-      , m_viscosity(0.0)
-      , m_history_max_positive_strain_energy(0.0)
-      , m_heat_capacity(0.0)
-      , m_coupling_on_heat_eq(false)
-    {}
+        : m_length_scale(0.0), m_viscosity(0.0),
+          m_history_max_positive_strain_energy(0.0), m_heat_capacity(0.0),
+          m_coupling_on_heat_eq(false)
+    {
+    }
 
     virtual ~PointHistory() = default;
 
-    void setup_lqp(const double lame_lambda,
-		   const double lame_mu,
-		   const double length_scale,
-		   const double gc_0,
-		   const double viscosity,
-		   const double residual_k,
-		   const double heat_capacity,
-		   const double thermal_conductivity_0,
-		   const double thermal_expansion_coeff,
-		   const double reference_temperature,
-		   const double max_temperature,
-		   const double b_1,
-		   const double b_2,
-		   const std::string & phasefield_name,
-		   const bool   coupling_on_heat_eq,
-		   const bool   plane_stress_flag)
+    void setup_lqp(const double lame_lambda, const double lame_mu,
+                   const double length_scale, const double gc_0,
+                   const double viscosity, const double residual_k,
+                   const double heat_capacity,
+                   const double thermal_conductivity_0,
+                   const double thermal_expansion_coeff,
+                   const double reference_temperature,
+                   const double max_temperature, const double b_1,
+                   const double b_2, const std::string &phasefield_name,
+                   const bool coupling_on_heat_eq, const bool plane_stress_flag)
     {
-      const double phasefield_geo_constant = phasefield_coefficient_constant(phasefield_name);
+      const double phasefield_geo_constant =
+          phasefield_coefficient_constant(phasefield_name);
 
-      m_material =
-              std::make_shared<LinearIsotropicElasticityAdditiveSplit<dim>>(lame_lambda,
-        	                                                            lame_mu,
-								            residual_k,
-									    length_scale,
-									    viscosity,
-									    gc_0,
-									    heat_capacity,
-									    thermal_conductivity_0,
-									    thermal_expansion_coeff,
-									    reference_temperature,
-									    max_temperature,
-									    b_1,
-									    b_2,
-									    phasefield_name,
-									    plane_stress_flag);
+      m_material = std::make_shared<LinearIsotropicElasticityAdditiveSplit<dim>>(
+          lame_lambda, lame_mu, residual_k, length_scale, viscosity, gc_0,
+          heat_capacity, thermal_conductivity_0, thermal_expansion_coeff,
+          reference_temperature, max_temperature, b_1, b_2, phasefield_name,
+          plane_stress_flag);
 
       if (phasefield_name == "AT2")
-      	m_history_max_positive_strain_energy = 0.0;
+        m_history_max_positive_strain_energy = 0.0;
       else if (phasefield_name == "AT1")
-	m_history_max_positive_strain_energy = gc_0/(2*length_scale*phasefield_geo_constant);
+        m_history_max_positive_strain_energy =
+            gc_0 / (2 * length_scale * phasefield_geo_constant);
       else
-	AssertThrow(false,
-	      ExcMessage("The phase-field geometric function has not been implemented!"));
+        AssertThrow(
+            false,
+            ExcMessage(
+                "The phase-field geometric function has not been implemented!"));
 
       m_length_scale = length_scale;
       m_viscosity = viscosity;
       m_heat_capacity = heat_capacity;
       m_coupling_on_heat_eq = coupling_on_heat_eq;
 
-      update_field_values(SymmetricTensor<2, dim>(), 0.0, Tensor<1, dim>(),
-			  0.0, 1.0, reference_temperature, Tensor<1, dim>(), true);
+      update_field_values(SymmetricTensor<2, dim>(), 0.0, Tensor<1, dim>(), 0.0,
+                          1.0, reference_temperature, Tensor<1, dim>(), true);
     }
 
-    void update_field_values(const SymmetricTensor<2, dim> & strain,
-		             const double phase_field_value,
-			     const Tensor<1, dim> & grad_phasefield,
-			     const double phase_field_value_previous_step,
-			     const double delta_time,
-			     const double temperature,
-			     const Tensor<1, dim> & grad_temperature,
-			     const bool degrade_conductivity_or_not)
+    void update_field_values(const SymmetricTensor<2, dim> &strain,
+                             const double phase_field_value,
+                             const Tensor<1, dim> &grad_phasefield,
+                             const double phase_field_value_previous_step,
+                             const double delta_time, const double temperature,
+                             const Tensor<1, dim> &grad_temperature,
+                             const bool degrade_conductivity_or_not)
     {
       m_material->update_material_data(strain, phase_field_value, grad_phasefield,
-				       phase_field_value_previous_step, delta_time,
-				       temperature, grad_temperature,
-				       degrade_conductivity_or_not);
+                                       phase_field_value_previous_step,
+                                       delta_time, temperature, grad_temperature,
+                                       degrade_conductivity_or_not);
     }
 
     void update_history_variable()
     {
-      double current_positive_strain_energy = m_material->get_positive_strain_energy();
-      m_history_max_positive_strain_energy = std::fmax(m_history_max_positive_strain_energy,
-					               current_positive_strain_energy);
+      double current_positive_strain_energy =
+          m_material->get_positive_strain_energy();
+      m_history_max_positive_strain_energy = std::fmax(
+          m_history_max_positive_strain_energy, current_positive_strain_energy);
     }
 
     // This is the function used to assign the history variable after remeshing
@@ -1240,22 +1074,22 @@ namespace PhaseField_monolithic
       return m_material->get_positive_strain_energy();
     }
 
-    const SymmetricTensor<4, dim> & get_mechanical_C() const
+    const SymmetricTensor<4, dim> &get_mechanical_C() const
     {
       return m_material->get_mechanical_C();
     }
 
-    const SymmetricTensor<2, dim> & get_cauchy_stress() const
+    const SymmetricTensor<2, dim> &get_cauchy_stress() const
     {
       return m_material->get_cauchy_stress();
     }
 
-    const SymmetricTensor<2, dim> & get_strain() const
+    const SymmetricTensor<2, dim> &get_strain() const
     {
       return m_material->get_strain();
     }
 
-    const SymmetricTensor<2, dim> & get_cauchy_stress_positive() const
+    const SymmetricTensor<2, dim> &get_cauchy_stress_positive() const
     {
       return m_material->get_cauchy_stress_positive();
     }
@@ -1316,40 +1150,22 @@ namespace PhaseField_monolithic
       return m_history_max_positive_strain_energy;
     }
 
-    double get_length_scale() const
-    {
-      return m_length_scale;
-    }
+    double get_length_scale() const { return m_length_scale; }
 
-    double get_viscosity() const
-    {
-      return m_viscosity;
-    }
+    double get_viscosity() const { return m_viscosity; }
 
-    double get_heat_capacity() const
-    {
-      return m_heat_capacity;
-    }
+    double get_heat_capacity() const { return m_heat_capacity; }
 
-    bool get_heat_coupling_flag() const
-    {
-      return m_coupling_on_heat_eq;
-    }
+    bool get_heat_coupling_flag() const { return m_coupling_on_heat_eq; }
 
     double get_thermal_expansion_coeff() const
     {
       return m_material->get_thermal_expansion_coeff();
     }
 
-    double get_lame_lambda() const
-    {
-      return m_material->get_lame_lambda();
-    }
+    double get_lame_lambda() const { return m_material->get_lame_lambda(); }
 
-    double get_lame_mu() const
-    {
-      return m_material->get_lame_mu();
-    }
+    double get_lame_mu() const { return m_material->get_lame_mu(); }
 
   private:
     std::shared_ptr<LinearIsotropicElasticityAdditiveSplit<dim>> m_material;
@@ -1357,49 +1173,43 @@ namespace PhaseField_monolithic
     double m_viscosity;
     double m_history_max_positive_strain_energy;
     double m_heat_capacity;
-    bool   m_coupling_on_heat_eq;
+    bool m_coupling_on_heat_eq;
   };
 
-
- 
-
-  template <typename LATraits, typename Tria>
-  class PhaseFieldMonolithicSolve
+  template <typename LATraits, typename Tria> class PhaseFieldMonolithicSolve
   {
   private:
-      const static bool __debug = false;
-  public:
-      constexpr static int dim = Tria::dimension;
-      
-#if ENABLE_REPARTITION==1
-    constexpr static bool supportRepartioning = true;
-#else
-    constexpr static bool supportRepartioning = false;
-#endif
+    const static bool __debug = false;
 
-      
-      
-      using BSMatrix = ::la::BlockSparseMatrixWrapper<LATraits>;
-      using BVector  = ::la::BlockVectorWrapper<LATraits>;
-      
-      using CellDataStorageT = CellDataStorage<typename Tria::cell_iterator,
-      PointHistory<dim>>;
-      
-      // variable to tell if this is class is for mpi mode
-      static constexpr bool is_mpi =
-          !std::is_same_v<typename LATraits::TMTag, ::la::TagSerial>;
-      
-      PhaseFieldMonolithicSolve(const Parameters::AllParameters& parameters,
-                                const MPIInfo& mpiInfo,
-                                ConditionalOStream& logfile,
-                                Tria& triangulation);
+  public:
+    constexpr static int dim = Tria::dimension;
+
+  #if ENABLE_REPARTITION == 1
+    constexpr static bool supportRepartioning = true;
+  #else
+    constexpr static bool supportRepartioning = false;
+  #endif
+
+    using BSMatrix = ::la::BlockSparseMatrixWrapper<LATraits>;
+    using BVector = ::la::BlockVectorWrapper<LATraits>;
+
+    using CellDataStorageT =
+        CellDataStorage<typename Tria::cell_iterator, PointHistory<dim>>;
+
+    // variable to tell if this is class is for mpi mode
+    static constexpr bool is_mpi =
+        !std::is_same_v<typename LATraits::TMTag, ::la::TagSerial>;
+
+    PhaseFieldMonolithicSolve(const Parameters::AllParameters &parameters,
+                              const MPIInfo &mpiInfo, ConditionalOStream &logfile,
+                              Tria &triangulation);
 
     virtual ~PhaseFieldMonolithicSolve() = default;
     void run();
 
   private:
-      struct CstPnt;
-      
+    struct CstPnt;
+
     struct PerTaskData_ASM;
     struct ScratchData_ASM;
 
@@ -1409,37 +1219,35 @@ namespace PhaseField_monolithic
     struct PerTaskData_UQPH;
     struct ScratchData_UQPH;
 
-    const Parameters::AllParameters& m_parameters;
-    Tria& m_triangulation;
+    const Parameters::AllParameters &m_parameters;
+    Tria &m_triangulation;
 
     CellDataStorageT m_quadrature_point_history;
 
-    Time                m_time;
-      
-      
-    const MPIInfo& m_mpiInfo;
-      
-      
-      // use ConditionalOStream as logfile stream to allow only on rank to do so
-    ConditionalOStream&                  m_logfile;
-      
-      //    use TimerOutputWrapper to support both MPI and serial modes
-      mutable TimerOutputWrapper<LATraits> m_timer;
-      
-      BlockDesc                     m_blocks_desc;
+    Time m_time;
 
-    DoFHandler<dim>                  m_dof_handler;
-    FESystem<dim>                    m_fe;
-    const unsigned int               m_dofs_per_cell;
+    const MPIInfo &m_mpiInfo;
+
+    // use ConditionalOStream as logfile stream to allow only on rank to do so
+    ConditionalOStream &m_logfile;
+
+    //    use TimerOutputWrapper to support both MPI and serial modes
+    mutable TimerOutputWrapper<LATraits> m_timer;
+
+    BlockDesc m_blocks_desc;
+
+    DoFHandler<dim> m_dof_handler;
+    FESystem<dim> m_fe;
+    const unsigned int m_dofs_per_cell;
     const FEValuesExtractors::Vector m_u_fe;
     const FEValuesExtractors::Scalar m_d_fe;
     const FEValuesExtractors::Scalar m_t_fe;
 
-    static const unsigned int m_n_blocks          = 3;
-    static const unsigned int m_n_components      = dim + 1 + 1;
+    static const unsigned int m_n_blocks = 3;
+    static const unsigned int m_n_components = dim + 1 + 1;
     static const unsigned int m_first_u_component = 0;
-    static const unsigned int m_d_component       = dim;
-    static const unsigned int m_t_component       = dim + 1;
+    static const unsigned int m_d_component = dim;
+    static const unsigned int m_t_component = dim + 1;
 
     enum
     {
@@ -1450,48 +1258,40 @@ namespace PhaseField_monolithic
 
     std::vector<types::global_dof_index> m_dofs_per_block;
 
-    const QGauss<dim>     m_qf_cell;
+    const QGauss<dim> m_qf_cell;
     const QGauss<dim - 1> m_qf_face;
-    const unsigned int    m_n_q_points;
+    const unsigned int m_n_q_points;
 
     double m_vol_reference;
 
     AffineConstraints<double> m_constraints;
-    BlockSparsityPattern      m_sparsity_pattern;
+    BlockSparsityPattern m_sparsity_pattern;
 
+    BSMatrix m_tangent_matrix;
+    BVector m_system_rhs;
+    BVector m_solution;
 
-    BSMatrix                  m_tangent_matrix;
-    BVector                   m_system_rhs;
-    BVector                   m_solution;
-      
-    SparseDirectUMFPACK       m_A_direct;
-
+    SparseDirectUMFPACK m_A_direct;
 
     std::map<unsigned int, std::vector<double>> m_material_data;
 
     std::vector<std::pair<double, std::vector<double>>> m_history_reaction_force;
     std::vector<std::pair<double, std::array<double, 3>>> m_history_energy;
 
-    LASolver<LATraits>     m_solver;
-      
-      
-    OutputHelper<LATraits, Tria, PointHistory<dim>>   m_output;
+    LASolver<LATraits> m_solver;
+
+    OutputHelper<LATraits, Tria, PointHistory<dim>> m_output;
 
     struct Errors
     {
-      Errors()
-        : m_norm(1.0)
-        , m_u(1.0)
-        , m_d(1.0)
-        , m_t(1.0)
-      {}
+      Errors() : m_norm(1.0), m_u(1.0), m_d(1.0), m_t(1.0) {}
 
       void reset()
       {
         m_norm = 1.0;
-        m_u    = 1.0;
-        m_d    = 1.0;
-        m_t    = 1.0;
+        m_u = 1.0;
+        m_d = 1.0;
+        m_t = 1.0;
       }
 
       void normalize(const Errors &rhs)
@@ -1509,18 +1309,14 @@ namespace PhaseField_monolithic
       double m_norm, m_u, m_d, m_t;
     };
 
-    Errors m_error_residual, m_error_residual_0, m_error_residual_norm, m_error_update,
-      m_error_update_0, m_error_update_norm;
-      
-      
-      
+    Errors m_error_residual, m_error_residual_0, m_error_residual_norm,
+        m_error_update, m_error_update_0, m_error_update_norm;
 
     void get_error_residual(Errors &error_residual);
-    void get_error_update(const BVector &soln_update,
-                          Errors & error_update);
+    void get_error_update(const BVector &soln_update, Errors &error_update);
 
     void make_grid();
-      void set_bcs_id();
+    void set_bcs_id();
     void make_grid_case_1();
     void make_grid_case_2();
     void make_grid_case_3();
@@ -1536,9 +1332,10 @@ namespace PhaseField_monolithic
     void setup_system();
 
     void setup_temperature_initial_conditions();
-      
-    void addSupportTemperature(const std::function<bool(const Point<dim>&)>& func,
-      const double cool_down_temperature = 293.15 /* Kelvin*/);
+
+    void addSupportTemperature(
+        const std::function<bool(const Point<dim> &)> &func,
+        const double cool_down_temperature = 293.15 /* Kelvin*/);
 
     void determine_component_extractors();
 
@@ -1547,59 +1344,57 @@ namespace PhaseField_monolithic
     void assemble_system_B0();
 
     void assemble_system_B0_one_cell(
-      const typename DoFHandler<dim>::active_cell_iterator &cell,
-      ScratchData_ASM &                                     scratch,
-      PerTaskData_ASM &                                     data) const;
+        const typename DoFHandler<dim>::active_cell_iterator &cell,
+        ScratchData_ASM &scratch, PerTaskData_ASM &data) const;
 
     void assemble_system_rhs_LBFGS_one_cell(
-      const typename DoFHandler<dim>::active_cell_iterator &cell,
-      ScratchData_ASM_RHS_BFGS &                           scratch,
-      PerTaskData_ASM_RHS_BFGS &                           data) const;
+        const typename DoFHandler<dim>::active_cell_iterator &cell,
+        ScratchData_ASM_RHS_BFGS &scratch, PerTaskData_ASM_RHS_BFGS &data) const;
 
-    void assemble_system_rhs_LBFGS_parallel(const BVector & solution_old,
-    				           BVector & system_rhs);
+    void assemble_system_rhs_LBFGS_parallel(const BVector &solution_old,
+                                            BVector &system_rhs);
 
     void solve_nonlinear_timestep_LBFGS(BVector &solution_delta,
-					BVector & LBFGS_update_refine);
+                                        BVector &LBFGS_update_refine);
 
     double line_search_stepsize_strong_wolfe(const double phi_0,
-				             const double phi_0_prime,
-				             const BVector & BFGS_p_vector,
-				             const BVector & solution_delta);
+                                             const double phi_0_prime,
+                                             const BVector &BFGS_p_vector,
+                                             const BVector &solution_delta);
 
-    double line_search_stepsize_gradient_based(const BVector & BFGS_p_vector,
-					       const BVector & solution_delta,
-                                               unsigned int& iSmallSteps);
+    double line_search_stepsize_gradient_based(const BVector &BFGS_p_vector,
+                                               const BVector &solution_delta,
+                                               unsigned int &iSmallSteps);
 
-    double line_search_zoom_strong_wolfe(double phi_low, double phi_low_prime, double alpha_low,
-					 double phi_high, double phi_high_prime, double alpha_high,
-					 double phi_0, double phi_0_prime, const BVector & BFGS_p_vector,
-					 double c1, double c2, unsigned int max_iter,
-					 const BVector & solution_delta);
+    double line_search_zoom_strong_wolfe(double phi_low, double phi_low_prime,
+                                         double alpha_low, double phi_high,
+                                         double phi_high_prime, double alpha_high,
+                                         double phi_0, double phi_0_prime,
+                                         const BVector &BFGS_p_vector, double c1,
+                                         double c2, unsigned int max_iter,
+                                         const BVector &solution_delta);
 
-    double line_search_stepsize_residual_projection(const double f0,
-				                    const BVector & BFGS_p_vector,
-				                    const BVector & solution_delta);
+    double
+    line_search_stepsize_residual_projection(const double f0,
+                                             const BVector &BFGS_p_vector,
+                                             const BVector &solution_delta);
 
-    double binary_search(double a, double b,
-			 double fa, double fb,
-			 const double threshold,
-			 const BVector & BFGS_p_vector,
-			 const BVector & solution_delta);
+    double binary_search(double a, double b, double fa, double fb,
+                         const double threshold, const BVector &BFGS_p_vector,
+                         const BVector &solution_delta);
 
-    double line_search_interpolation_cubic(const double alpha_0, const double phi_0, const double phi_0_prime,
-					   const double alpha_1, const double phi_1, const double phi_1_prime);
+    double line_search_interpolation_cubic(
+        const double alpha_0, const double phi_0, const double phi_0_prime,
+        const double alpha_1, const double phi_1, const double phi_1_prime);
 
-    std::pair<double, double> calculate_phi_and_phi_prime(const double alpha,
-							  const BVector & BFGS_p_vector,
-							  const BVector & solution_delta);
+    std::pair<double, double>
+    calculate_phi_and_phi_prime(const double alpha, const BVector &BFGS_p_vector,
+                                const BVector &solution_delta);
 
-    double calculate_phi_prime(const double alpha,
-  	    		       const BVector & BFGS_p_vector,
-  			       const BVector & solution_delta);
+    double calculate_phi_prime(const double alpha, const BVector &BFGS_p_vector,
+                               const BVector &solution_delta);
 
-    void LBFGS_B0(BVector & LBFGS_r_vector,
-		  const BVector & LBFGS_q_vector);
+    void LBFGS_B0(BVector &LBFGS_r_vector, const BVector &LBFGS_q_vector);
 
     void update_history_field_step();
 
@@ -1608,26 +1403,22 @@ namespace PhaseField_monolithic
     void setup_qph();
 
     void update_qph_incremental(const BVector &solution_delta,
-				const BVector &solution_old,
-				const bool is_print);
+                                const BVector &solution_old, const bool is_print);
 
     void update_qph_incremental_one_cell(
-      const typename DoFHandler<dim>::active_cell_iterator &cell,
-      ScratchData_UQPH &                                    scratch,
-      PerTaskData_UQPH &                                    data);
+        const typename DoFHandler<dim>::active_cell_iterator &cell,
+        ScratchData_UQPH &scratch, PerTaskData_UQPH &data);
 
-    void copy_local_to_global_UQPH(const PerTaskData_UQPH & /*data*/)
-    {}
+    void copy_local_to_global_UQPH(const PerTaskData_UQPH & /*data*/) {}
 
-    BVector
-    get_total_solution(const BVector &solution_delta) const;
+    BVector get_total_solution(const BVector &solution_delta) const;
 
     // Should not make this function const
     void read_material_data(const std::string &data_file,
-			    const unsigned int total_material_regions);
+                            const unsigned int total_material_regions);
 
     void read_time_data(const std::string &data_file,
-    		        std::vector<std::array<double, 4>> & time_table);
+                        std::vector<std::array<double, 4>> &time_table);
 
     void print_conv_header_LBFGS();
 
@@ -1639,66 +1430,70 @@ namespace PhaseField_monolithic
 
     double calculate_energy_functional() const;
 
-    std::pair<double, double> calculate_total_strain_energy_and_crack_energy_dissipation() const;
+    std::pair<double, double>
+    calculate_total_strain_energy_and_crack_energy_dissipation() const;
 
-    bool local_refine_and_solution_transfer(BVector & solution_delta,
-					    BVector & LBFGS_update_refine);
-      
-      void repartition(BVector & solution_next_step,
-                       const typename LATraits::VectorBlock& H_vector,
-                       const typename LATraits::VectorBlock& H_vector_rele);
+    bool local_refine_and_solution_transfer(BVector &solution_delta,
+                                            BVector &LBFGS_update_refine);
+
+    void repartition(BVector &solution_next_step,
+                     const typename LATraits::VectorBlock &H_vector,
+                     const typename LATraits::VectorBlock &H_vector_rele);
   }; // class PhaseFieldMonolithicSolve
 
-namespace type{
-
-template <typename LATraits, typename Tria>
-using BSMatrix = typename PhaseFieldMonolithicSolve<LATraits, Tria>::BSMatrix;
-
-template <typename LATraits, typename Tria>
-using BVector  = typename PhaseFieldMonolithicSolve<LATraits, Tria>::BVector;
-
-}
+  namespace type
+  {
 
   template <typename LATraits, typename Tria>
-  void PhaseFieldMonolithicSolve<LATraits, Tria>::get_error_residual(Errors &error_residual)
+  using BSMatrix = typename PhaseFieldMonolithicSolve<LATraits, Tria>::BSMatrix;
+
+  template <typename LATraits, typename Tria>
+  using BVector = typename PhaseFieldMonolithicSolve<LATraits, Tria>::BVector;
+
+  } // namespace type
+
+  template <typename LATraits, typename Tria>
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::get_error_residual(
+      Errors &error_residual)
   {
     BVector error_res(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
-      error_res.initialize();
-      
-//      error_res.copyAndRemoveCst(m_system_rhs, m_constraints, m_dof_handler);
-      // the following operation is the same to the former one
-      error_res.base() = m_system_rhs.base();
-      m_constraints.set_zero(error_res.base());
-      
+    error_res.initialize();
+
+    //      error_res.copyAndRemoveCst(m_system_rhs, m_constraints,
+    //      m_dof_handler);
+    // the following operation is the same to the former one
+    error_res.base() = m_system_rhs.base();
+    m_constraints.set_zero(error_res.base());
+
     error_residual.m_norm = error_res.l2_norm();
-    error_residual.m_u    = error_res.block(m_u_dof).l2_norm();
-    error_residual.m_d    = error_res.block(m_d_dof).l2_norm();
-    error_residual.m_t    = error_res.block(m_t_dof).l2_norm();
+    error_residual.m_u = error_res.block(m_u_dof).l2_norm();
+    error_residual.m_d = error_res.block(m_d_dof).l2_norm();
+    error_residual.m_t = error_res.block(m_t_dof).l2_norm();
   }
 
   template <typename LATraits, typename Tria>
-  void PhaseFieldMonolithicSolve<LATraits, Tria>::get_error_update(const BVector &soln_update,
-                                                        Errors & error_update)
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::get_error_update(
+      const BVector &soln_update, Errors &error_update)
   {
     BVector error_ud(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
-      error_ud.initialize();
-      
-//      error_ud.copyAndRemoveCst(soln_update, m_constraints, m_dof_handler);
-      // the following operation is the same to the former one
-      error_ud.base() = soln_update.base();
-      m_constraints.set_zero(error_ud.base());
+    error_ud.initialize();
+
+    //      error_ud.copyAndRemoveCst(soln_update, m_constraints, m_dof_handler);
+    // the following operation is the same to the former one
+    error_ud.base() = soln_update.base();
+    m_constraints.set_zero(error_ud.base());
 
     error_update.m_norm = error_ud.l2_norm();
-    error_update.m_u    = error_ud.block(m_u_dof).l2_norm();
-    error_update.m_d    = error_ud.block(m_d_dof).l2_norm();
-    error_update.m_t    = error_ud.block(m_t_dof).l2_norm();
+    error_update.m_u = error_ud.block(m_u_dof).l2_norm();
+    error_update.m_d = error_ud.block(m_d_dof).l2_norm();
+    error_update.m_t = error_ud.block(m_t_dof).l2_norm();
   }
 
   template <typename LATraits, typename Tria>
-  void PhaseFieldMonolithicSolve<LATraits, Tria>::read_material_data(const std::string &data_file,
-				                     const unsigned int total_material_regions)
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::read_material_data(
+      const std::string &data_file, const unsigned int total_material_regions)
   {
-    std::ifstream myfile (data_file);
+    std::ifstream myfile(data_file);
 
     double lame_lambda, lame_mu, length_scale, gc_0, viscosity, residual_k;
     double heat_capacity, thermal_conductivity_0, thermal_expansion_coeff;
@@ -1706,141 +1501,139 @@ using BVector  = typename PhaseFieldMonolithicSolve<LATraits, Tria>::BVector;
     int material_region;
     double poisson_ratio;
     if (myfile.is_open())
+    {
+      m_logfile << "Reading material data file ..." << std::endl;
+
+      while (myfile >> material_region >> lame_lambda >> lame_mu >>
+             length_scale >> gc_0 >> viscosity >> residual_k >> heat_capacity >>
+             thermal_conductivity_0 >> thermal_expansion_coeff >>
+             reference_temperature >> max_temperature >> b_1 >> b_2)
       {
-        m_logfile << "Reading material data file ..." << std::endl;
+        m_material_data[material_region] = {lame_lambda,
+                                            lame_mu,
+                                            length_scale,
+                                            gc_0,
+                                            viscosity,
+                                            residual_k,
+                                            heat_capacity,
+                                            thermal_conductivity_0,
+                                            thermal_expansion_coeff,
+                                            reference_temperature,
+                                            max_temperature,
+                                            b_1,
+                                            b_2};
+        poisson_ratio = lame_lambda / (2 * (lame_lambda + lame_mu));
+        Assert((poisson_ratio <= 0.5) & (poisson_ratio >= -1.0),
+               ExcInternalError());
 
-        while ( myfile >> material_region
-                       >> lame_lambda
-		       >> lame_mu
-		       >> length_scale
-		       >> gc_0
-		       >> viscosity
-		       >> residual_k
-		       >> heat_capacity
-		       >> thermal_conductivity_0
-		       >> thermal_expansion_coeff
-		       >> reference_temperature
-		       >> max_temperature
-		       >> b_1
-		       >> b_2)
-          {
-            m_material_data[material_region] = {lame_lambda,
-        	                                lame_mu,
-						length_scale,
-						gc_0,
-						viscosity,
-                                                residual_k,
-                                                heat_capacity,
-                                                thermal_conductivity_0,
-                                                thermal_expansion_coeff,
-                                                reference_temperature,
-                                                max_temperature,
-                                                b_1,
-                                                b_2};
-            poisson_ratio = lame_lambda / (2*(lame_lambda + lame_mu));
-            Assert( (poisson_ratio <= 0.5)&(poisson_ratio >=-1.0) , ExcInternalError());
+        if (reference_temperature != m_parameters.m_ref_temperature)
+          Assert(false,
+                 ExcMessage("Reference temperature inconsistent "
+                            "in the parameters.prm file and materialDataFile"));
 
-            if (reference_temperature != m_parameters.m_ref_temperature)
-              Assert(false, ExcMessage("Reference temperature inconsistent "
-        	  "in the parameters.prm file and materialDataFile"));
-
-            m_logfile << "\tRegion " << material_region << " : " << std::endl;
-            m_logfile << "\t\tLame lambda = " << lame_lambda << std::endl;
-            m_logfile << "\t\tLame mu = "  << lame_mu << std::endl;
-            m_logfile << "\t\tPoisson ratio = "  << poisson_ratio << std::endl;
-            m_logfile << "\t\tPhase field length scale (l) = " << length_scale << std::endl;
-            m_logfile << "\t\tCritical energy release rate (gc_0) = "  << gc_0 << std::endl;
-            m_logfile << "\t\tViscosity for regularization (eta) = "  << viscosity << std::endl;
-            m_logfile << "\t\tResidual_k (k) = "  << residual_k << std::endl;
-            m_logfile << "\t\tHeat capacity (c, density * specific capacity) = "  << heat_capacity << std::endl;
-            m_logfile << "\t\tThermal conductivity (kappa_0) = "  << thermal_conductivity_0 << std::endl;
-            m_logfile << "\t\tThermal expansion coeff (alpha) = "  << thermal_expansion_coeff << std::endl;
-            m_logfile << "\t\tReference temperature (T_0) = "  << reference_temperature << std::endl;
-            m_logfile << "\t\tMax temperature (T_max) = "  << max_temperature << std::endl;
-            m_logfile << "\t\tb1 (temperature dependent coeff) = "  << b_1 << std::endl;
-            m_logfile << "\t\tb2 (temperature dependent coeff) = "  << b_2 << std::endl;
-          }
-
-        if (m_material_data.size() != total_material_regions)
-          {
-            m_logfile << "Material data file has " << m_material_data.size() << " rows. However, "
-        	      << "the mesh has " << total_material_regions << " material regions."
-		      << std::endl;
-            Assert(m_material_data.size() == total_material_regions,
-                       ExcDimensionMismatch(m_material_data.size(), total_material_regions));
-          }
-        myfile.close();
+        m_logfile << "\tRegion " << material_region << " : " << std::endl;
+        m_logfile << "\t\tLame lambda = " << lame_lambda << std::endl;
+        m_logfile << "\t\tLame mu = " << lame_mu << std::endl;
+        m_logfile << "\t\tPoisson ratio = " << poisson_ratio << std::endl;
+        m_logfile << "\t\tPhase field length scale (l) = " << length_scale
+                  << std::endl;
+        m_logfile << "\t\tCritical energy release rate (gc_0) = " << gc_0
+                  << std::endl;
+        m_logfile << "\t\tViscosity for regularization (eta) = " << viscosity
+                  << std::endl;
+        m_logfile << "\t\tResidual_k (k) = " << residual_k << std::endl;
+        m_logfile << "\t\tHeat capacity (c, density * specific capacity) = "
+                  << heat_capacity << std::endl;
+        m_logfile << "\t\tThermal conductivity (kappa_0) = "
+                  << thermal_conductivity_0 << std::endl;
+        m_logfile << "\t\tThermal expansion coeff (alpha) = "
+                  << thermal_expansion_coeff << std::endl;
+        m_logfile << "\t\tReference temperature (T_0) = " << reference_temperature
+                  << std::endl;
+        m_logfile << "\t\tMax temperature (T_max) = " << max_temperature
+                  << std::endl;
+        m_logfile << "\t\tb1 (temperature dependent coeff) = " << b_1
+                  << std::endl;
+        m_logfile << "\t\tb2 (temperature dependent coeff) = " << b_2
+                  << std::endl;
       }
+
+      if (m_material_data.size() != total_material_regions)
+      {
+        m_logfile << "Material data file has " << m_material_data.size()
+                  << " rows. However, " << "the mesh has "
+                  << total_material_regions << " material regions." << std::endl;
+        Assert(
+            m_material_data.size() == total_material_regions,
+            ExcDimensionMismatch(m_material_data.size(), total_material_regions));
+      }
+      myfile.close();
+    }
     else
-      {
-	m_logfile << "Material data file : " << data_file << " not exist!" << std::endl;
-	Assert(false, ExcMessage("Failed to read material data file"));
-      }
+    {
+      m_logfile << "Material data file : " << data_file << " not exist!"
+                << std::endl;
+      Assert(false, ExcMessage("Failed to read material data file"));
+    }
   }
 
   template <typename LATraits, typename Tria>
-  void PhaseFieldMonolithicSolve<LATraits, Tria>::read_time_data(const std::string &data_file,
-				                      std::vector<std::array<double, 4>> & time_table)
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::read_time_data(
+      const std::string &data_file,
+      std::vector<std::array<double, 4>> &time_table)
   {
-    std::ifstream myfile (data_file);
+    std::ifstream myfile(data_file);
 
     double t_0, t_1, delta_t, t_magnitude;
 
     if (myfile.is_open())
+    {
+      m_logfile << "Reading time data file ..." << std::endl;
+
+      while (myfile >> t_0 >> t_1 >> delta_t >> t_magnitude)
       {
-	m_logfile << "Reading time data file ..." << std::endl;
-
-	while ( myfile >> t_0
-		       >> t_1
-		       >> delta_t
-		       >> t_magnitude)
-	  {
-	    Assert( t_0 < t_1,
-		    ExcMessage("For each time pair, "
-			       "the start time should be smaller than the end time"));
-	    time_table.push_back({{t_0, t_1, delta_t, t_magnitude}});
-	  }
-
-	Assert(std::fabs(t_1 - m_parameters.m_end_time) < 1.0e-9,
-	       ExcMessage("End time in time table is inconsistent with input data in parameters.prm"));
-
-	Assert(time_table.size() > 0,
-	       ExcMessage("Time data file is empty."));
-	myfile.close();
+        Assert(t_0 < t_1,
+               ExcMessage("For each time pair, "
+                          "the start time should be smaller than the end time"));
+        time_table.push_back({{t_0, t_1, delta_t, t_magnitude}});
       }
+
+      Assert(std::fabs(t_1 - m_parameters.m_end_time) < 1.0e-9,
+             ExcMessage("End time in time table is inconsistent with input data "
+                        "in parameters.prm"));
+
+      Assert(time_table.size() > 0, ExcMessage("Time data file is empty."));
+      myfile.close();
+    }
     else
-      {
-        m_logfile << "Time data file : " << data_file << " not exist!" << std::endl;
-        Assert(false, ExcMessage("Failed to read time data file"));
-      }
+    {
+      m_logfile << "Time data file : " << data_file << " not exist!" << std::endl;
+      Assert(false, ExcMessage("Failed to read time data file"));
+    }
 
-    for (auto & time_group : time_table)
-      {
-	m_logfile << "\t\t"
-	          << time_group[0] << ",\t"
-	          << time_group[1] << ",\t"
-		  << time_group[2] << ",\t"
-		  << time_group[3] << std::endl;
-      }
+    for (auto &time_group : time_table)
+    {
+      m_logfile << "\t\t" << time_group[0] << ",\t" << time_group[1] << ",\t"
+                << time_group[2] << ",\t" << time_group[3] << std::endl;
+    }
   }
 
-template <typename LATraits, typename Tria>
-void PhaseFieldMonolithicSolve<LATraits, Tria>::setup_qph()
-{
-    m_logfile << "\t\tSetting up quadrature point data ("
-    << m_n_q_points
-    << " points per cell)" << std::endl;
-    
+  template <typename LATraits, typename Tria>
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::setup_qph()
+  {
+    m_logfile << "\t\tSetting up quadrature point data (" << m_n_q_points
+              << " points per cell)" << std::endl;
+
     m_quadrature_point_history.clear();
-    for (auto const & cell : m_triangulation.active_cell_iterators())
+    for (auto const &cell : m_triangulation.active_cell_iterators())
     {
-        // skip cells owned by other ranks in mpi mode
-        if constexpr (is_mpi)
-            if (!cell->is_locally_owned())
-                continue;
-        m_quadrature_point_history.initialize(cell, m_n_q_points);
+      // skip cells owned by other ranks in mpi mode
+      if constexpr (is_mpi)
+        if (!cell->is_locally_owned())
+          continue;
+      m_quadrature_point_history.initialize(cell, m_n_q_points);
     }
-    
+
     unsigned int material_id;
     double lame_lambda = 0.0;
     double lame_mu = 0.0;
@@ -1855,69 +1648,68 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::setup_qph()
     double max_temperature = 0.0;
     double b_1 = 0.0;
     double b_2 = 0.0;
-    
+
     for (const auto &cell : m_triangulation.active_cell_iterators())
     {
-        // skip cells owned by other ranks in mpi mode
-        if constexpr (is_mpi)
-            if (!cell->is_locally_owned())
-                continue;
-        
-        material_id = cell->material_id();
-        if (m_material_data.find(material_id) != m_material_data.end())
-        {
-            lame_lambda                = m_material_data[material_id][0];
-            lame_mu                    = m_material_data[material_id][1];
-            length_scale               = m_material_data[material_id][2];
-            gc_0                       = m_material_data[material_id][3];
-            viscosity                  = m_material_data[material_id][4];
-            residual_k                 = m_material_data[material_id][5];
-            heat_capacity              = m_material_data[material_id][6];
-            thermal_conductivity_0     = m_material_data[material_id][7];
-            thermal_expansion_coeff    = m_material_data[material_id][8];
-            reference_temperature      = m_material_data[material_id][9];
-            max_temperature            = m_material_data[material_id][10];
-            b_1                        = m_material_data[material_id][11];
-            b_2                        = m_material_data[material_id][12];
-        }
-        else
-        {
-            m_logfile << "Could not find material data for material id: " << material_id << std::endl;
-            AssertThrow(false, ExcMessage("Could not find material data for material id."));
-        }
-        
-        const std::vector<std::shared_ptr<PointHistory<dim>>> lqph =
-        m_quadrature_point_history.get_data(cell);
-        Assert(lqph.size() == m_n_q_points, ExcInternalError());
-        
-        for (unsigned int q_point = 0; q_point < m_n_q_points; ++q_point)
-            lqph[q_point]->setup_lqp(lame_lambda, lame_mu, length_scale,
-                                     gc_0, viscosity, residual_k,
-                                     heat_capacity, thermal_conductivity_0,
-                                     thermal_expansion_coeff, reference_temperature,
-                                     max_temperature, b_1, b_2,
-				     m_parameters.m_phasefield_name,
-                                     m_parameters.m_coupling_on_heat_eq,
-				     m_parameters.m_plane_stress);
+      // skip cells owned by other ranks in mpi mode
+      if constexpr (is_mpi)
+        if (!cell->is_locally_owned())
+          continue;
+
+      material_id = cell->material_id();
+      if (m_material_data.find(material_id) != m_material_data.end())
+      {
+        lame_lambda = m_material_data[material_id][0];
+        lame_mu = m_material_data[material_id][1];
+        length_scale = m_material_data[material_id][2];
+        gc_0 = m_material_data[material_id][3];
+        viscosity = m_material_data[material_id][4];
+        residual_k = m_material_data[material_id][5];
+        heat_capacity = m_material_data[material_id][6];
+        thermal_conductivity_0 = m_material_data[material_id][7];
+        thermal_expansion_coeff = m_material_data[material_id][8];
+        reference_temperature = m_material_data[material_id][9];
+        max_temperature = m_material_data[material_id][10];
+        b_1 = m_material_data[material_id][11];
+        b_2 = m_material_data[material_id][12];
+      }
+      else
+      {
+        m_logfile << "Could not find material data for material id: "
+                  << material_id << std::endl;
+        AssertThrow(false,
+                    ExcMessage("Could not find material data for material id."));
+      }
+
+      const std::vector<std::shared_ptr<PointHistory<dim>>> lqph =
+          m_quadrature_point_history.get_data(cell);
+      Assert(lqph.size() == m_n_q_points, ExcInternalError());
+
+      for (unsigned int q_point = 0; q_point < m_n_q_points; ++q_point)
+        lqph[q_point]->setup_lqp(
+            lame_lambda, lame_mu, length_scale, gc_0, viscosity, residual_k,
+            heat_capacity, thermal_conductivity_0, thermal_expansion_coeff,
+            reference_temperature, max_temperature, b_1, b_2,
+            m_parameters.m_phasefield_name, m_parameters.m_coupling_on_heat_eq,
+            m_parameters.m_plane_stress);
     }
-}
+  }
 
   template <typename LATraits, typename Tria>
-typename PhaseFieldMonolithicSolve<LATraits, Tria>::BVector
-PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
-    const BVector &solution_delta) const
+  typename PhaseFieldMonolithicSolve<LATraits, Tria>::BVector
+  PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
+      const BVector &solution_delta) const
   {
     BVector solution_total(m_solution);
     solution_total += solution_delta;
-      solution_total.updateRelevance();
+    solution_total.updateRelevance();
     return solution_total;
   }
 
   template <typename LATraits, typename Tria>
-  void
-  PhaseFieldMonolithicSolve<LATraits, Tria>::update_qph_incremental(const BVector &solution_delta,
-							 const BVector &solution_old,
-							 const bool is_print)
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::update_qph_incremental(
+      const BVector &solution_delta, const BVector &solution_old,
+      const bool is_print)
   {
     const std::string sectionName = "Update QPH data";
     m_timer.enter_subsection(sectionName);
@@ -1927,50 +1719,40 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
 
     BVector solution_total(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
     solution_total.initialize();
-    solution_total.base() =  m_solution.base() + solution_delta.base();
+    solution_total.base() = m_solution.base() + solution_delta.base();
     solution_total.updateRelevance();
-      
-    const UpdateFlags uf_UQPH(update_values | update_gradients);
-    PerTaskData_UQPH  per_task_data_UQPH;
-    ScratchData_UQPH  scratch_data_UQPH(m_fe,
-					m_qf_cell,
-					uf_UQPH,
-					solution_total,
-					solution_old,
-					m_time.get_delta_t(),
-					m_parameters.m_degrade_conductivity);
 
-      if constexpr (!is_mpi){
-          // non-mpi mode
-          auto worker = [this](const typename DoFHandler<dim>::active_cell_iterator &cell,
-                               ScratchData_UQPH & scratch,
-                               PerTaskData_UQPH & data)
-          {
-              this->update_qph_incremental_one_cell(cell, scratch, data);
-          };
-          
-          auto copier = [this](const PerTaskData_UQPH &data)
-          {
-              this->copy_local_to_global_UQPH(data);
-          };
-          
-          WorkStream::run(
-                          m_dof_handler.begin_active(),
-                          m_dof_handler.end(),
-                          worker,
-                          copier,
-                          scratch_data_UQPH,
-                          per_task_data_UQPH);
-      } else {
-          // mpi mode
-          for (const auto &cell : m_dof_handler.active_cell_iterators())
-              if (cell->is_locally_owned()) {
-                  update_qph_incremental_one_cell(cell,
-                                                  scratch_data_UQPH,
-                                                  per_task_data_UQPH);
-                  copy_local_to_global_UQPH(per_task_data_UQPH);
-              }
-      }
+    const UpdateFlags uf_UQPH(update_values | update_gradients);
+    PerTaskData_UQPH per_task_data_UQPH;
+    ScratchData_UQPH scratch_data_UQPH(m_fe, m_qf_cell, uf_UQPH, solution_total,
+                                       solution_old, m_time.get_delta_t(),
+                                       m_parameters.m_degrade_conductivity);
+
+    if constexpr (!is_mpi)
+    {
+      // non-mpi mode
+      auto worker =
+          [this](const typename DoFHandler<dim>::active_cell_iterator &cell,
+                 ScratchData_UQPH &scratch, PerTaskData_UQPH &data)
+      { this->update_qph_incremental_one_cell(cell, scratch, data); };
+
+      auto copier = [this](const PerTaskData_UQPH &data)
+      { this->copy_local_to_global_UQPH(data); };
+
+      WorkStream::run(m_dof_handler.begin_active(), m_dof_handler.end(), worker,
+                      copier, scratch_data_UQPH, per_task_data_UQPH);
+    }
+    else
+    {
+      // mpi mode
+      for (const auto &cell : m_dof_handler.active_cell_iterators())
+        if (cell->is_locally_owned())
+        {
+          update_qph_incremental_one_cell(cell, scratch_data_UQPH,
+                                          per_task_data_UQPH);
+          copy_local_to_global_UQPH(per_task_data_UQPH);
+        }
+    }
 
     m_timer.leave_subsection(sectionName);
   }
@@ -1978,736 +1760,724 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
   template <typename LATraits, typename Tria>
   struct PhaseFieldMonolithicSolve<LATraits, Tria>::PerTaskData_UQPH
   {
-    void reset()
-    {}
+    void reset() {}
   };
 
   template <typename LATraits, typename Tria>
   struct PhaseFieldMonolithicSolve<LATraits, Tria>::ScratchData_UQPH
   {
-    const BVector & m_solution_UQPH;
+    const BVector &m_solution_UQPH;
 
     std::vector<SymmetricTensor<2, dim>> m_solution_symm_grads_u_cell;
-    std::vector<double>         m_solution_values_phasefield_cell;
+    std::vector<double> m_solution_values_phasefield_cell;
     std::vector<Tensor<1, dim>> m_solution_grad_phasefield_cell;
 
-    std::vector<double>         m_solution_values_temperature_cell;
+    std::vector<double> m_solution_values_temperature_cell;
     std::vector<Tensor<1, dim>> m_solution_grad_temperature_cell;
 
     FEValues<dim> m_fe_values;
 
-    const BVector&       m_solution_previous_step;
-    std::vector<double>              m_phasefield_previous_step_cell;
+    const BVector &m_solution_previous_step;
+    std::vector<double> m_phasefield_previous_step_cell;
 
-    const double                     m_delta_time;
+    const double m_delta_time;
 
     const bool m_degrade_conductivity_or_not;
 
-    ScratchData_UQPH(const FiniteElement<dim> & fe_cell,
-                     const QGauss<dim> &        qf_cell,
-                     const UpdateFlags          uf_cell,
-                     const BVector &solution_total,
-		     const BVector &solution_old,
-		     const double delta_time,
-		     const bool degrade_conductivity_or_not)
-      : m_solution_UQPH(solution_total)
-      , m_solution_symm_grads_u_cell(qf_cell.size())
-      , m_solution_values_phasefield_cell(qf_cell.size())
-      , m_solution_grad_phasefield_cell(qf_cell.size())
-      , m_solution_values_temperature_cell(qf_cell.size())
-      , m_solution_grad_temperature_cell(qf_cell.size())
-      , m_fe_values(fe_cell, qf_cell, uf_cell)
-      , m_solution_previous_step(solution_old)
-      , m_phasefield_previous_step_cell(qf_cell.size())
-      , m_delta_time(delta_time)
-      , m_degrade_conductivity_or_not(degrade_conductivity_or_not)
-    {}
+    ScratchData_UQPH(const FiniteElement<dim> &fe_cell,
+                     const QGauss<dim> &qf_cell, const UpdateFlags uf_cell,
+                     const BVector &solution_total, const BVector &solution_old,
+                     const double delta_time,
+                     const bool degrade_conductivity_or_not)
+        : m_solution_UQPH(solution_total),
+          m_solution_symm_grads_u_cell(qf_cell.size()),
+          m_solution_values_phasefield_cell(qf_cell.size()),
+          m_solution_grad_phasefield_cell(qf_cell.size()),
+          m_solution_values_temperature_cell(qf_cell.size()),
+          m_solution_grad_temperature_cell(qf_cell.size()),
+          m_fe_values(fe_cell, qf_cell, uf_cell),
+          m_solution_previous_step(solution_old),
+          m_phasefield_previous_step_cell(qf_cell.size()),
+          m_delta_time(delta_time),
+          m_degrade_conductivity_or_not(degrade_conductivity_or_not)
+    {
+    }
 
     ScratchData_UQPH(const ScratchData_UQPH &rhs)
-      : m_solution_UQPH(rhs.m_solution_UQPH)
-      , m_solution_symm_grads_u_cell(rhs.m_solution_symm_grads_u_cell)
-      , m_solution_values_phasefield_cell(rhs.m_solution_values_phasefield_cell)
-      , m_solution_grad_phasefield_cell(rhs.m_solution_grad_phasefield_cell)
-      , m_solution_values_temperature_cell(rhs.m_solution_values_temperature_cell)
-      , m_solution_grad_temperature_cell(rhs.m_solution_grad_temperature_cell)
-      , m_fe_values(rhs.m_fe_values.get_fe(),
-                    rhs.m_fe_values.get_quadrature(),
-                    rhs.m_fe_values.get_update_flags())
-      , m_solution_previous_step(rhs.m_solution_previous_step)
-      , m_phasefield_previous_step_cell(rhs.m_phasefield_previous_step_cell)
-      , m_delta_time(rhs.m_delta_time)
-      , m_degrade_conductivity_or_not(rhs.m_degrade_conductivity_or_not)
-    {}
+        : m_solution_UQPH(rhs.m_solution_UQPH),
+          m_solution_symm_grads_u_cell(rhs.m_solution_symm_grads_u_cell),
+          m_solution_values_phasefield_cell(
+              rhs.m_solution_values_phasefield_cell),
+          m_solution_grad_phasefield_cell(rhs.m_solution_grad_phasefield_cell),
+          m_solution_values_temperature_cell(
+              rhs.m_solution_values_temperature_cell),
+          m_solution_grad_temperature_cell(rhs.m_solution_grad_temperature_cell),
+          m_fe_values(rhs.m_fe_values.get_fe(), rhs.m_fe_values.get_quadrature(),
+                      rhs.m_fe_values.get_update_flags()),
+          m_solution_previous_step(rhs.m_solution_previous_step),
+          m_phasefield_previous_step_cell(rhs.m_phasefield_previous_step_cell),
+          m_delta_time(rhs.m_delta_time),
+          m_degrade_conductivity_or_not(rhs.m_degrade_conductivity_or_not)
+    {
+    }
 
     void reset()
     {
       const unsigned int n_q_points = m_solution_symm_grads_u_cell.size();
       for (unsigned int q = 0; q < n_q_points; ++q)
-        {
-          m_solution_symm_grads_u_cell[q]  = 0.0;
-          m_solution_values_phasefield_cell[q] = 0.0;
-          m_solution_grad_phasefield_cell[q] = 0.0;
-          m_solution_values_temperature_cell[q] = 0.0;
-          m_solution_grad_temperature_cell[q] = 0.0;
-          m_phasefield_previous_step_cell[q] = 0.0;
-        }
+      {
+        m_solution_symm_grads_u_cell[q] = 0.0;
+        m_solution_values_phasefield_cell[q] = 0.0;
+        m_solution_grad_phasefield_cell[q] = 0.0;
+        m_solution_values_temperature_cell[q] = 0.0;
+        m_solution_grad_temperature_cell[q] = 0.0;
+        m_phasefield_previous_step_cell[q] = 0.0;
+      }
     }
   };
 
   template <typename LATraits, typename Tria>
   void PhaseFieldMonolithicSolve<LATraits, Tria>::update_qph_incremental_one_cell(
-    const typename DoFHandler<dim>::active_cell_iterator &cell,
-    ScratchData_UQPH & scratch,
-    PerTaskData_UQPH & /*data*/)
+      const typename DoFHandler<dim>::active_cell_iterator &cell,
+      ScratchData_UQPH &scratch, PerTaskData_UQPH & /*data*/)
   {
     scratch.reset();
 
     scratch.m_fe_values.reinit(cell);
 
     const std::vector<std::shared_ptr<PointHistory<dim>>> lqph =
-      m_quadrature_point_history.get_data(cell);
+        m_quadrature_point_history.get_data(cell);
     Assert(lqph.size() == m_n_q_points, ExcInternalError());
 
-      const auto& solution_relevance = scratch.m_solution_UQPH.relevance();
-      const auto& solution_previous_step_relevance = scratch.m_solution_previous_step.relevance();
-      
-      scratch.m_fe_values[m_u_fe]
-          .get_function_symmetric_gradients(solution_relevance,
-                                            scratch.m_solution_symm_grads_u_cell);
-      scratch.m_fe_values[m_d_fe]
-          .get_function_values(solution_relevance,
-                               scratch.m_solution_values_phasefield_cell);
-      scratch.m_fe_values[m_d_fe]
-          .get_function_gradients(solution_relevance,
-                                  scratch.m_solution_grad_phasefield_cell);
-      scratch.m_fe_values[m_t_fe]
-          .get_function_values(solution_relevance,
-                               scratch.m_solution_values_temperature_cell);
-      scratch.m_fe_values[m_t_fe]
-          .get_function_gradients(solution_relevance,
-                                  scratch.m_solution_grad_temperature_cell);
+    const auto &solution_relevance = scratch.m_solution_UQPH.relevance();
+    const auto &solution_previous_step_relevance =
+        scratch.m_solution_previous_step.relevance();
 
-    scratch.m_fe_values[m_d_fe]
-          .get_function_values(solution_previous_step_relevance,
-                               scratch.m_phasefield_previous_step_cell);
+    scratch.m_fe_values[m_u_fe].get_function_symmetric_gradients(
+        solution_relevance, scratch.m_solution_symm_grads_u_cell);
+    scratch.m_fe_values[m_d_fe].get_function_values(
+        solution_relevance, scratch.m_solution_values_phasefield_cell);
+    scratch.m_fe_values[m_d_fe].get_function_gradients(
+        solution_relevance, scratch.m_solution_grad_phasefield_cell);
+    scratch.m_fe_values[m_t_fe].get_function_values(
+        solution_relevance, scratch.m_solution_values_temperature_cell);
+    scratch.m_fe_values[m_t_fe].get_function_gradients(
+        solution_relevance, scratch.m_solution_grad_temperature_cell);
+
+    scratch.m_fe_values[m_d_fe].get_function_values(
+        solution_previous_step_relevance,
+        scratch.m_phasefield_previous_step_cell);
 
     for (const unsigned int q_point :
          scratch.m_fe_values.quadrature_point_indices())
-      lqph[q_point]->update_field_values(scratch.m_solution_symm_grads_u_cell[q_point],
-                                         scratch.m_solution_values_phasefield_cell[q_point],
-					 scratch.m_solution_grad_phasefield_cell[q_point],
-					 scratch.m_phasefield_previous_step_cell[q_point],
-					 scratch.m_delta_time,
-                                         scratch.m_solution_values_temperature_cell[q_point],
-					 scratch.m_solution_grad_temperature_cell[q_point],
-					 scratch.m_degrade_conductivity_or_not);
+      lqph[q_point]->update_field_values(
+          scratch.m_solution_symm_grads_u_cell[q_point],
+          scratch.m_solution_values_phasefield_cell[q_point],
+          scratch.m_solution_grad_phasefield_cell[q_point],
+          scratch.m_phasefield_previous_step_cell[q_point], scratch.m_delta_time,
+          scratch.m_solution_values_temperature_cell[q_point],
+          scratch.m_solution_grad_temperature_cell[q_point],
+          scratch.m_degrade_conductivity_or_not);
   }
 
-template <typename LATraits, typename Tria>
-struct PhaseFieldMonolithicSolve<LATraits, Tria>::CstPnt
-{
-    const Point<dim>                        pnt;
-    const std::vector<unsigned int>         localDoFs;
-    const std::size_t                       nCsts;
-    bool                                    found;
-    std::vector<types::global_dof_index>    globalDoFs;
-    std::vector<double>                     cstValues;
-    
-    CstPnt(const Point<dim>&                pnt,
-           const std::vector<unsigned int>& localDoFs,
-           const std::vector<double>&       cstValues)
-    : pnt(std::move(pnt))
-    , localDoFs(std::move(localDoFs))
-    , nCsts(localDoFs.size())
-    , found(false)
-    , globalDoFs(nCsts, numbers::invalid_dof_index)
-    , cstValues(std::move(cstValues))
+  template <typename LATraits, typename Tria>
+  struct PhaseFieldMonolithicSolve<LATraits, Tria>::CstPnt
+  {
+    const Point<dim> pnt;
+    const std::vector<unsigned int> localDoFs;
+    const std::size_t nCsts;
+    bool found;
+    std::vector<types::global_dof_index> globalDoFs;
+    std::vector<double> cstValues;
+
+    CstPnt(const Point<dim> &pnt, const std::vector<unsigned int> &localDoFs,
+           const std::vector<double> &cstValues)
+        : pnt(std::move(pnt)), localDoFs(std::move(localDoFs)),
+          nCsts(localDoFs.size()), found(false),
+          globalDoFs(nCsts, numbers::invalid_dof_index),
+          cstValues(std::move(cstValues))
     {
-       Assert(localDoFs.size() == cstValues.size(),
-              ExcMessage("The number of the constrained dofs should equal to the one in constrained values."));
+      Assert(localDoFs.size() == cstValues.size(),
+             ExcMessage("The number of the constrained dofs should equal to the "
+                        "one in constrained values."));
     }
-    
+
     template <typename CellIter>
-    void extractDoFs(const CellIter&    cell,
-                     const unsigned int ithVertexInCell)
+    void extractDoFs(const CellIter &cell, const unsigned int ithVertexInCell)
     {
-        // loop over constrained dofs
-        for (unsigned int k = 0; k < nCsts; ++k)
-        {
-            globalDoFs[k] = cell->vertex_dof_index(ithVertexInCell,
-                                                   localDoFs[k]);
-        }
+      // loop over constrained dofs
+      for (unsigned int k = 0; k < nCsts; ++k)
+      {
+        globalDoFs[k] = cell->vertex_dof_index(ithVertexInCell, localDoFs[k]);
+      }
     }
-    
-    bool applyCsts(const IndexSet&            localDoFs,
-                   AffineConstraints<double>& constraints) const
+
+    bool applyCsts(const IndexSet &localDoFs,
+                   AffineConstraints<double> &constraints) const
     {
-        // skip non-found points
-        if (!found) return false;
-        
-        // loop over constrained dofs
-        for (unsigned int j = 0; j < nCsts; ++j)
+      // skip non-found points
+      if (!found)
+        return false;
+
+      // loop over constrained dofs
+      for (unsigned int j = 0; j < nCsts; ++j)
+      {
+        const types::global_dof_index dof = globalDoFs[j];
+        const double value = cstValues[j];
+
+        // verify the DoF is locally owned
+        if (localDoFs.is_element(dof))
         {
-            const types::global_dof_index dof = globalDoFs[j];
-            const double value                = cstValues[j];
-            
-            // verify the DoF is locally owned
-            if(localDoFs.is_element(dof))
-            {
-                // add constraint on unconstrained dofs to avoid repeaded csts
-                if (!constraints.is_constrained(dof)){
-                    constraints.add_line(dof);
-                    constraints.set_inhomogeneity(dof, value);
-                }
-            }
+          // add constraint on unconstrained dofs to avoid repeaded csts
+          if (!constraints.is_constrained(dof))
+          {
+            constraints.add_line(dof);
+            constraints.set_inhomogeneity(dof, value);
+          }
         }
-        return true;
+      }
+      return true;
     }
-};
+  };
 
   template <typename LATraits, typename Tria>
   struct PhaseFieldMonolithicSolve<LATraits, Tria>::PerTaskData_ASM
   {
-    FullMatrix<double>                   m_cell_matrix;
-    Vector<double>                       m_cell_rhs;
+    FullMatrix<double> m_cell_matrix;
+    Vector<double> m_cell_rhs;
     std::vector<types::global_dof_index> m_local_dof_indices;
 
     PerTaskData_ASM(const unsigned int dofs_per_cell)
-      : m_cell_matrix(dofs_per_cell, dofs_per_cell)
-      , m_cell_rhs(dofs_per_cell)
-      , m_local_dof_indices(dofs_per_cell)
-    {}
+        : m_cell_matrix(dofs_per_cell, dofs_per_cell), m_cell_rhs(dofs_per_cell),
+          m_local_dof_indices(dofs_per_cell)
+    {
+    }
 
     void reset()
     {
       m_cell_matrix = 0.0;
-      m_cell_rhs    = 0.0;
+      m_cell_rhs = 0.0;
     }
   };
 
   template <typename LATraits, typename Tria>
   struct PhaseFieldMonolithicSolve<LATraits, Tria>::PerTaskData_ASM_RHS_BFGS
   {
-    Vector<double>                       m_cell_rhs;
+    Vector<double> m_cell_rhs;
     std::vector<types::global_dof_index> m_local_dof_indices;
 
     PerTaskData_ASM_RHS_BFGS(const unsigned int dofs_per_cell)
-      : m_cell_rhs(dofs_per_cell)
-      , m_local_dof_indices(dofs_per_cell)
-    {}
-
-    void reset()
+        : m_cell_rhs(dofs_per_cell), m_local_dof_indices(dofs_per_cell)
     {
-      m_cell_rhs    = 0.0;
     }
+
+    void reset() { m_cell_rhs = 0.0; }
   };
 
   template <typename LATraits, typename Tria>
   struct PhaseFieldMonolithicSolve<LATraits, Tria>::ScratchData_ASM
   {
-    FEValues<dim>     m_fe_values;
+    FEValues<dim> m_fe_values;
     FEFaceValues<dim> m_fe_face_values;
 
-    std::vector<std::vector<double>>                  m_Nx_phasefield;      // shape function values for phase-field
-    std::vector<std::vector<Tensor<1, dim>>>          m_grad_Nx_phasefield; // gradient of shape function values for phase field
+    std::vector<std::vector<double>>
+        m_Nx_phasefield; // shape function values for phase-field
+    std::vector<std::vector<Tensor<1, dim>>>
+        m_grad_Nx_phasefield; // gradient of shape function values for phase field
 
-    std::vector<std::vector<double>>                  m_Nx_temperature;      // shape function values for temperature
-    std::vector<std::vector<Tensor<1, dim>>>          m_grad_Nx_temperature; // gradient of shape function values for temperature
+    std::vector<std::vector<double>>
+        m_Nx_temperature; // shape function values for temperature
+    std::vector<std::vector<Tensor<1, dim>>>
+        m_grad_Nx_temperature; // gradient of shape function values for
+                               // temperature
 
-    std::vector<std::vector<Tensor<1, dim>>>          m_Nx_disp;       // shape function values for displacement
-    std::vector<std::vector<Tensor<2, dim>>>          m_grad_Nx_disp;  // gradient of shape function values for displacement
-    std::vector<std::vector<SymmetricTensor<2, dim>>> m_symm_grad_Nx_disp;  // symmetric gradient of shape function values for displacement
+    std::vector<std::vector<Tensor<1, dim>>>
+        m_Nx_disp; // shape function values for displacement
+    std::vector<std::vector<Tensor<2, dim>>>
+        m_grad_Nx_disp; // gradient of shape function values for displacement
+    std::vector<std::vector<SymmetricTensor<2, dim>>>
+        m_symm_grad_Nx_disp; // symmetric gradient of shape function values for
+                             // displacement
 
-    ScratchData_ASM(const FiniteElement<dim> & fe_cell,
-                    const QGauss<dim> &        qf_cell,
-                    const UpdateFlags          uf_cell,
-		    const QGauss<dim - 1> &    qf_face,
-		    const UpdateFlags          uf_face)
-      : m_fe_values(fe_cell, qf_cell, uf_cell)
-      , m_fe_face_values(fe_cell, qf_face, uf_face)
-      , m_Nx_phasefield(qf_cell.size(),
-	                std::vector<double>(fe_cell.n_dofs_per_cell()))
-      , m_grad_Nx_phasefield(qf_cell.size(),
-		             std::vector<Tensor<1, dim>>(fe_cell.n_dofs_per_cell()))
-      , m_Nx_temperature(qf_cell.size(),
-	                 std::vector<double>(fe_cell.n_dofs_per_cell()))
-      , m_grad_Nx_temperature(qf_cell.size(),
-		              std::vector<Tensor<1, dim>>(fe_cell.n_dofs_per_cell()))
-      , m_Nx_disp(qf_cell.size(),
-		  std::vector<Tensor<1, dim>>(fe_cell.n_dofs_per_cell()))
-      , m_grad_Nx_disp(qf_cell.size(),
-                       std::vector<Tensor<2, dim>>(fe_cell.n_dofs_per_cell()))
-      , m_symm_grad_Nx_disp(qf_cell.size(),
-                            std::vector<SymmetricTensor<2, dim>>(fe_cell.n_dofs_per_cell()))
-    {}
+    ScratchData_ASM(const FiniteElement<dim> &fe_cell, const QGauss<dim> &qf_cell,
+                    const UpdateFlags uf_cell, const QGauss<dim - 1> &qf_face,
+                    const UpdateFlags uf_face)
+        : m_fe_values(fe_cell, qf_cell, uf_cell),
+          m_fe_face_values(fe_cell, qf_face, uf_face),
+          m_Nx_phasefield(qf_cell.size(),
+                          std::vector<double>(fe_cell.n_dofs_per_cell())),
+          m_grad_Nx_phasefield(qf_cell.size(), std::vector<Tensor<1, dim>>(
+                                                   fe_cell.n_dofs_per_cell())),
+          m_Nx_temperature(qf_cell.size(),
+                           std::vector<double>(fe_cell.n_dofs_per_cell())),
+          m_grad_Nx_temperature(qf_cell.size(), std::vector<Tensor<1, dim>>(
+                                                    fe_cell.n_dofs_per_cell())),
+          m_Nx_disp(qf_cell.size(),
+                    std::vector<Tensor<1, dim>>(fe_cell.n_dofs_per_cell())),
+          m_grad_Nx_disp(qf_cell.size(),
+                         std::vector<Tensor<2, dim>>(fe_cell.n_dofs_per_cell())),
+          m_symm_grad_Nx_disp(
+              qf_cell.size(),
+              std::vector<SymmetricTensor<2, dim>>(fe_cell.n_dofs_per_cell()))
+    {
+    }
 
     ScratchData_ASM(const ScratchData_ASM &rhs)
-      : m_fe_values(rhs.m_fe_values.get_fe(),
-                    rhs.m_fe_values.get_quadrature(),
-                    rhs.m_fe_values.get_update_flags())
-      , m_fe_face_values(rhs.m_fe_face_values.get_fe(),
-	                 rhs.m_fe_face_values.get_quadrature(),
-	                 rhs.m_fe_face_values.get_update_flags())
-      , m_Nx_phasefield(rhs.m_Nx_phasefield)
-      , m_grad_Nx_phasefield(rhs.m_grad_Nx_phasefield)
-      , m_Nx_temperature(rhs.m_Nx_temperature)
-      , m_grad_Nx_temperature(rhs.m_grad_Nx_temperature)
-      , m_Nx_disp(rhs.m_Nx_disp)
-      , m_grad_Nx_disp(rhs.m_grad_Nx_disp)
-      , m_symm_grad_Nx_disp(rhs.m_symm_grad_Nx_disp)
-    {}
+        : m_fe_values(rhs.m_fe_values.get_fe(), rhs.m_fe_values.get_quadrature(),
+                      rhs.m_fe_values.get_update_flags()),
+          m_fe_face_values(rhs.m_fe_face_values.get_fe(),
+                           rhs.m_fe_face_values.get_quadrature(),
+                           rhs.m_fe_face_values.get_update_flags()),
+          m_Nx_phasefield(rhs.m_Nx_phasefield),
+          m_grad_Nx_phasefield(rhs.m_grad_Nx_phasefield),
+          m_Nx_temperature(rhs.m_Nx_temperature),
+          m_grad_Nx_temperature(rhs.m_grad_Nx_temperature),
+          m_Nx_disp(rhs.m_Nx_disp), m_grad_Nx_disp(rhs.m_grad_Nx_disp),
+          m_symm_grad_Nx_disp(rhs.m_symm_grad_Nx_disp)
+    {
+    }
 
     void reset()
     {
-      const unsigned int n_q_points      = m_Nx_phasefield.size();
+      const unsigned int n_q_points = m_Nx_phasefield.size();
       const unsigned int n_dofs_per_cell = m_Nx_phasefield[0].size();
       for (unsigned int q_point = 0; q_point < n_q_points; ++q_point)
+      {
+        Assert(m_Nx_phasefield[q_point].size() == n_dofs_per_cell,
+               ExcInternalError());
+
+        Assert(m_grad_Nx_phasefield[q_point].size() == n_dofs_per_cell,
+               ExcInternalError());
+
+        Assert(m_Nx_temperature[q_point].size() == n_dofs_per_cell,
+               ExcInternalError());
+
+        Assert(m_grad_Nx_temperature[q_point].size() == n_dofs_per_cell,
+               ExcInternalError());
+
+        Assert(m_Nx_disp[q_point].size() == n_dofs_per_cell, ExcInternalError());
+
+        Assert(m_grad_Nx_disp[q_point].size() == n_dofs_per_cell,
+               ExcInternalError());
+
+        Assert(m_symm_grad_Nx_disp[q_point].size() == n_dofs_per_cell,
+               ExcInternalError());
+
+        for (unsigned int k = 0; k < n_dofs_per_cell; ++k)
         {
-          Assert(m_Nx_phasefield[q_point].size() == n_dofs_per_cell,
-		 ExcInternalError());
-
-          Assert(m_grad_Nx_phasefield[q_point].size() == n_dofs_per_cell,
-                 ExcInternalError());
-
-          Assert(m_Nx_temperature[q_point].size() == n_dofs_per_cell,
-		 ExcInternalError());
-
-          Assert(m_grad_Nx_temperature[q_point].size() == n_dofs_per_cell,
-                 ExcInternalError());
-
-          Assert(m_Nx_disp[q_point].size() == n_dofs_per_cell,
-		 ExcInternalError());
-
-          Assert(m_grad_Nx_disp[q_point].size() == n_dofs_per_cell,
-                 ExcInternalError());
-
-          Assert(m_symm_grad_Nx_disp[q_point].size() == n_dofs_per_cell,
-                 ExcInternalError());
-
-          for (unsigned int k = 0; k < n_dofs_per_cell; ++k)
-            {
-              m_Nx_phasefield[q_point][k]           = 0.0;
-              m_grad_Nx_phasefield[q_point][k]      = 0.0;
-              m_Nx_temperature[q_point][k]          = 0.0;
-              m_grad_Nx_temperature[q_point][k]     = 0.0;
-              m_Nx_disp[q_point][k]                 = 0.0;
-              m_grad_Nx_disp[q_point][k]            = 0.0;
-              m_symm_grad_Nx_disp[q_point][k]       = 0.0;
-            }
+          m_Nx_phasefield[q_point][k] = 0.0;
+          m_grad_Nx_phasefield[q_point][k] = 0.0;
+          m_Nx_temperature[q_point][k] = 0.0;
+          m_grad_Nx_temperature[q_point][k] = 0.0;
+          m_Nx_disp[q_point][k] = 0.0;
+          m_grad_Nx_disp[q_point][k] = 0.0;
+          m_symm_grad_Nx_disp[q_point][k] = 0.0;
         }
+      }
     }
   };
 
   template <typename LATraits, typename Tria>
   struct PhaseFieldMonolithicSolve<LATraits, Tria>::ScratchData_ASM_RHS_BFGS
   {
-    FEValues<dim>     m_fe_values;
+    FEValues<dim> m_fe_values;
     FEFaceValues<dim> m_fe_face_values;
 
-    std::vector<std::vector<double>>                  m_Nx_phasefield;      // shape function values for phase-field
-    std::vector<std::vector<Tensor<1, dim>>>          m_grad_Nx_phasefield; // gradient of shape function values for phase field
+    std::vector<std::vector<double>>
+        m_Nx_phasefield; // shape function values for phase-field
+    std::vector<std::vector<Tensor<1, dim>>>
+        m_grad_Nx_phasefield; // gradient of shape function values for phase field
 
-    std::vector<std::vector<double>>                  m_Nx_temperature;      // shape function values for temperature
-    std::vector<std::vector<Tensor<1, dim>>>          m_grad_Nx_temperature; // gradient of shape function values for temperature
+    std::vector<std::vector<double>>
+        m_Nx_temperature; // shape function values for temperature
+    std::vector<std::vector<Tensor<1, dim>>>
+        m_grad_Nx_temperature; // gradient of shape function values for
+                               // temperature
 
-    std::vector<std::vector<Tensor<1, dim>>>          m_Nx_disp;       // shape function values for displacement
-    std::vector<std::vector<Tensor<2, dim>>>          m_grad_Nx_disp;  // gradient of shape function values for displacement
-    std::vector<std::vector<SymmetricTensor<2, dim>>> m_symm_grad_Nx_disp;  // symmetric gradient of shape function values for displacement
+    std::vector<std::vector<Tensor<1, dim>>>
+        m_Nx_disp; // shape function values for displacement
+    std::vector<std::vector<Tensor<2, dim>>>
+        m_grad_Nx_disp; // gradient of shape function values for displacement
+    std::vector<std::vector<SymmetricTensor<2, dim>>>
+        m_symm_grad_Nx_disp; // symmetric gradient of shape function values for
+                             // displacement
 
-    const BVector&       m_solution_previous_step;
+    const BVector &m_solution_previous_step;
     std::vector<SymmetricTensor<2, dim>> m_strain_previous_step_cell;
-    std::vector<double>              m_phasefield_previous_step_cell;
-    std::vector<double>              m_temperature_previous_step_cell;
+    std::vector<double> m_phasefield_previous_step_cell;
+    std::vector<double> m_temperature_previous_step_cell;
 
-    ScratchData_ASM_RHS_BFGS(const FiniteElement<dim> & fe_cell,
-                             const QGauss<dim> &        qf_cell,
-                             const UpdateFlags          uf_cell,
-		             const QGauss<dim - 1> &    qf_face,
-		             const UpdateFlags          uf_face,
-		             const BVector& solution_old)
-      : m_fe_values(fe_cell, qf_cell, uf_cell)
-      , m_fe_face_values(fe_cell, qf_face, uf_face)
-      , m_Nx_phasefield(qf_cell.size(),
-	                std::vector<double>(fe_cell.n_dofs_per_cell()))
-      , m_grad_Nx_phasefield(qf_cell.size(),
-		             std::vector<Tensor<1, dim>>(fe_cell.n_dofs_per_cell()))
-      , m_Nx_temperature(qf_cell.size(),
-	                 std::vector<double>(fe_cell.n_dofs_per_cell()))
-      , m_grad_Nx_temperature(qf_cell.size(),
-		              std::vector<Tensor<1, dim>>(fe_cell.n_dofs_per_cell()))
-      , m_Nx_disp(qf_cell.size(),
-		  std::vector<Tensor<1, dim>>(fe_cell.n_dofs_per_cell()))
-      , m_grad_Nx_disp(qf_cell.size(),
-                       std::vector<Tensor<2, dim>>(fe_cell.n_dofs_per_cell()))
-      , m_symm_grad_Nx_disp(qf_cell.size(),
-                            std::vector<SymmetricTensor<2, dim>>(fe_cell.n_dofs_per_cell()))
-      , m_solution_previous_step(solution_old)
-      , m_strain_previous_step_cell(qf_cell.size())
-      , m_phasefield_previous_step_cell(qf_cell.size())
-      , m_temperature_previous_step_cell(qf_cell.size())
-    {}
+    ScratchData_ASM_RHS_BFGS(const FiniteElement<dim> &fe_cell,
+                             const QGauss<dim> &qf_cell,
+                             const UpdateFlags uf_cell,
+                             const QGauss<dim - 1> &qf_face,
+                             const UpdateFlags uf_face,
+                             const BVector &solution_old)
+        : m_fe_values(fe_cell, qf_cell, uf_cell),
+          m_fe_face_values(fe_cell, qf_face, uf_face),
+          m_Nx_phasefield(qf_cell.size(),
+                          std::vector<double>(fe_cell.n_dofs_per_cell())),
+          m_grad_Nx_phasefield(qf_cell.size(), std::vector<Tensor<1, dim>>(
+                                                   fe_cell.n_dofs_per_cell())),
+          m_Nx_temperature(qf_cell.size(),
+                           std::vector<double>(fe_cell.n_dofs_per_cell())),
+          m_grad_Nx_temperature(qf_cell.size(), std::vector<Tensor<1, dim>>(
+                                                    fe_cell.n_dofs_per_cell())),
+          m_Nx_disp(qf_cell.size(),
+                    std::vector<Tensor<1, dim>>(fe_cell.n_dofs_per_cell())),
+          m_grad_Nx_disp(qf_cell.size(),
+                         std::vector<Tensor<2, dim>>(fe_cell.n_dofs_per_cell())),
+          m_symm_grad_Nx_disp(
+              qf_cell.size(),
+              std::vector<SymmetricTensor<2, dim>>(fe_cell.n_dofs_per_cell())),
+          m_solution_previous_step(solution_old),
+          m_strain_previous_step_cell(qf_cell.size()),
+          m_phasefield_previous_step_cell(qf_cell.size()),
+          m_temperature_previous_step_cell(qf_cell.size())
+    {
+    }
 
     ScratchData_ASM_RHS_BFGS(const ScratchData_ASM_RHS_BFGS &rhs)
-      : m_fe_values(rhs.m_fe_values.get_fe(),
-                    rhs.m_fe_values.get_quadrature(),
-                    rhs.m_fe_values.get_update_flags())
-      , m_fe_face_values(rhs.m_fe_face_values.get_fe(),
-	                 rhs.m_fe_face_values.get_quadrature(),
-	                 rhs.m_fe_face_values.get_update_flags())
-      , m_Nx_phasefield(rhs.m_Nx_phasefield)
-      , m_grad_Nx_phasefield(rhs.m_grad_Nx_phasefield)
-      , m_Nx_temperature(rhs.m_Nx_temperature)
-      , m_grad_Nx_temperature(rhs.m_grad_Nx_temperature)
-      , m_Nx_disp(rhs.m_Nx_disp)
-      , m_grad_Nx_disp(rhs.m_grad_Nx_disp)
-      , m_symm_grad_Nx_disp(rhs.m_symm_grad_Nx_disp)
-      , m_solution_previous_step(rhs.m_solution_previous_step)
-      , m_strain_previous_step_cell(rhs.m_strain_previous_step_cell)
-      , m_phasefield_previous_step_cell(rhs.m_phasefield_previous_step_cell)
-      , m_temperature_previous_step_cell(rhs.m_temperature_previous_step_cell)
-    {}
+        : m_fe_values(rhs.m_fe_values.get_fe(), rhs.m_fe_values.get_quadrature(),
+                      rhs.m_fe_values.get_update_flags()),
+          m_fe_face_values(rhs.m_fe_face_values.get_fe(),
+                           rhs.m_fe_face_values.get_quadrature(),
+                           rhs.m_fe_face_values.get_update_flags()),
+          m_Nx_phasefield(rhs.m_Nx_phasefield),
+          m_grad_Nx_phasefield(rhs.m_grad_Nx_phasefield),
+          m_Nx_temperature(rhs.m_Nx_temperature),
+          m_grad_Nx_temperature(rhs.m_grad_Nx_temperature),
+          m_Nx_disp(rhs.m_Nx_disp), m_grad_Nx_disp(rhs.m_grad_Nx_disp),
+          m_symm_grad_Nx_disp(rhs.m_symm_grad_Nx_disp),
+          m_solution_previous_step(rhs.m_solution_previous_step),
+          m_strain_previous_step_cell(rhs.m_strain_previous_step_cell),
+          m_phasefield_previous_step_cell(rhs.m_phasefield_previous_step_cell),
+          m_temperature_previous_step_cell(rhs.m_temperature_previous_step_cell)
+    {
+    }
 
     void reset()
     {
-      const unsigned int n_q_points      = m_Nx_phasefield.size();
+      const unsigned int n_q_points = m_Nx_phasefield.size();
       const unsigned int n_dofs_per_cell = m_Nx_phasefield[0].size();
       for (unsigned int q_point = 0; q_point < n_q_points; ++q_point)
+      {
+        Assert(m_Nx_phasefield[q_point].size() == n_dofs_per_cell,
+               ExcInternalError());
+
+        Assert(m_grad_Nx_phasefield[q_point].size() == n_dofs_per_cell,
+               ExcInternalError());
+
+        Assert(m_Nx_temperature[q_point].size() == n_dofs_per_cell,
+               ExcInternalError());
+
+        Assert(m_grad_Nx_temperature[q_point].size() == n_dofs_per_cell,
+               ExcInternalError());
+
+        Assert(m_Nx_disp[q_point].size() == n_dofs_per_cell, ExcInternalError());
+
+        Assert(m_grad_Nx_disp[q_point].size() == n_dofs_per_cell,
+               ExcInternalError());
+
+        Assert(m_symm_grad_Nx_disp[q_point].size() == n_dofs_per_cell,
+               ExcInternalError());
+
+        m_strain_previous_step_cell[q_point] = 0.0;
+        m_phasefield_previous_step_cell[q_point] = 0.0;
+        m_temperature_previous_step_cell[q_point] = 0.0;
+
+        for (unsigned int k = 0; k < n_dofs_per_cell; ++k)
         {
-          Assert(m_Nx_phasefield[q_point].size() == n_dofs_per_cell,
-		 ExcInternalError());
-
-          Assert(m_grad_Nx_phasefield[q_point].size() == n_dofs_per_cell,
-                 ExcInternalError());
-
-          Assert(m_Nx_temperature[q_point].size() == n_dofs_per_cell,
-		 ExcInternalError());
-
-          Assert(m_grad_Nx_temperature[q_point].size() == n_dofs_per_cell,
-                 ExcInternalError());
-
-          Assert(m_Nx_disp[q_point].size() == n_dofs_per_cell,
-		 ExcInternalError());
-
-          Assert(m_grad_Nx_disp[q_point].size() == n_dofs_per_cell,
-                 ExcInternalError());
-
-          Assert(m_symm_grad_Nx_disp[q_point].size() == n_dofs_per_cell,
-                 ExcInternalError());
-
-          m_strain_previous_step_cell[q_point] = 0.0;
-          m_phasefield_previous_step_cell[q_point] = 0.0;
-          m_temperature_previous_step_cell[q_point] = 0.0;
-
-          for (unsigned int k = 0; k < n_dofs_per_cell; ++k)
-            {
-              m_Nx_phasefield[q_point][k]           = 0.0;
-              m_grad_Nx_phasefield[q_point][k]      = 0.0;
-              m_Nx_temperature[q_point][k]          = 0.0;
-              m_grad_Nx_temperature[q_point][k]     = 0.0;
-              m_Nx_disp[q_point][k]                 = 0.0;
-              m_grad_Nx_disp[q_point][k]            = 0.0;
-              m_symm_grad_Nx_disp[q_point][k]       = 0.0;
-            }
+          m_Nx_phasefield[q_point][k] = 0.0;
+          m_grad_Nx_phasefield[q_point][k] = 0.0;
+          m_Nx_temperature[q_point][k] = 0.0;
+          m_grad_Nx_temperature[q_point][k] = 0.0;
+          m_Nx_disp[q_point][k] = 0.0;
+          m_grad_Nx_disp[q_point][k] = 0.0;
+          m_symm_grad_Nx_disp[q_point][k] = 0.0;
         }
+      }
     }
   };
 
   // constructor has no return type
   template <typename LATraits, typename Tria>
-  PhaseFieldMonolithicSolve<LATraits, Tria>
-::PhaseFieldMonolithicSolve(const Parameters::AllParameters& parameters,
-                            const MPIInfo& mpiInfo,
-                            ConditionalOStream& logfile,
-                            Tria& triangulation)
-    : m_parameters(parameters)
-    , m_triangulation(triangulation)
-    , m_time(m_parameters.m_end_time)
-    , m_mpiInfo(mpiInfo)
-    , m_logfile(logfile)
-    , m_timer(m_logfile, m_mpiInfo, TimerOutput::summary, TimerOutput::wall_times)
-    , m_blocks_desc(m_mpiInfo,
-                    {
-        {dim, "displacement"},
-        {1,   "phase-field"},
-        {1,   "temperature"}
-        })
-    , m_dof_handler(m_triangulation)
-    , m_fe(FE_Q<dim>(m_parameters.m_poly_degree),
-	   dim, // displacement
-	   FE_Q<dim>(m_parameters.m_poly_degree),
-	   1,   // phasefield
-	   FE_Q<dim>(m_parameters.m_poly_degree),
-	   1)   // temperature
-    , m_dofs_per_cell(m_fe.n_dofs_per_cell())
-    , m_u_fe(m_first_u_component)
-    , m_d_fe(m_d_component)
-    , m_t_fe(m_t_component)
-    , m_dofs_per_block(m_n_blocks)
-    , m_qf_cell(m_parameters.m_quad_order)
-    , m_qf_face(m_parameters.m_quad_order)
-    , m_n_q_points(m_qf_cell.size())
-    , m_vol_reference(0.0)
-    , m_tangent_matrix(m_mpiInfo, 
-                       m_blocks_desc,
-                       [](unsigned int, unsigned int){return DoFTools::always;})
-    , m_system_rhs(m_mpiInfo, m_blocks_desc, /*relevance=*/ false)
-    , m_solution(m_mpiInfo, m_blocks_desc, /*relevance=*/ true)
-    , m_solver(m_parameters.m_type_linear_solver == "Direct"
-               ? SolverType::Direct : SolverType::CG,
-               m_parameters.m_cg_u_tol,
-               m_parameters.m_cg_d_tol,
-               m_parameters.m_cg_t_tol,
-               m_blocks_desc,
-               m_mpiInfo)
-    , m_output(m_mpiInfo,
-               m_triangulation,
-               m_dof_handler,
-               m_qf_cell,
-               m_parameters.m_scenario,
-               m_parameters.m_mpi_type)
-  {}
+  PhaseFieldMonolithicSolve<LATraits, Tria>::PhaseFieldMonolithicSolve(
+      const Parameters::AllParameters &parameters, const MPIInfo &mpiInfo,
+      ConditionalOStream &logfile, Tria &triangulation)
+      : m_parameters(parameters), m_triangulation(triangulation),
+        m_time(m_parameters.m_end_time), m_mpiInfo(mpiInfo), m_logfile(logfile),
+        m_timer(m_logfile, m_mpiInfo, TimerOutput::summary,
+                TimerOutput::wall_times),
+        m_blocks_desc(
+            m_mpiInfo,
+            {{dim, "displacement"}, {1, "phase-field"}, {1, "temperature"}}),
+        m_dof_handler(m_triangulation),
+        m_fe(FE_Q<dim>(m_parameters.m_poly_degree),
+             dim, // displacement
+             FE_Q<dim>(m_parameters.m_poly_degree),
+             1, // phasefield
+             FE_Q<dim>(m_parameters.m_poly_degree),
+             1) // temperature
+        ,
+        m_dofs_per_cell(m_fe.n_dofs_per_cell()), m_u_fe(m_first_u_component),
+        m_d_fe(m_d_component), m_t_fe(m_t_component),
+        m_dofs_per_block(m_n_blocks), m_qf_cell(m_parameters.m_quad_order),
+        m_qf_face(m_parameters.m_quad_order), m_n_q_points(m_qf_cell.size()),
+        m_vol_reference(0.0),
+        m_tangent_matrix(m_mpiInfo, m_blocks_desc, [](unsigned int, unsigned int)
+                         { return DoFTools::always; }),
+        m_system_rhs(m_mpiInfo, m_blocks_desc, /*relevance=*/false),
+        m_solution(m_mpiInfo, m_blocks_desc, /*relevance=*/true),
+        m_solver(m_parameters.m_type_linear_solver == "Direct"
+                     ? SolverType::Direct
+                     : SolverType::CG,
+                 m_parameters.m_cg_u_tol, m_parameters.m_cg_d_tol,
+                 m_parameters.m_cg_t_tol, m_blocks_desc, m_mpiInfo),
+        m_output(m_mpiInfo, m_triangulation, m_dof_handler, m_qf_cell,
+                 m_parameters.m_scenario, m_parameters.m_mpi_type)
+  {
+  }
 
-
-template <typename LATraits, typename Tria>
-void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
-{
+  template <typename LATraits, typename Tria>
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
+  {
     if (m_parameters.m_scenario == 1)
     {
-        for(const auto& face : m_triangulation.active_face_iterators())
+      for (const auto &face : m_triangulation.active_face_iterators())
+      {
+        if (face->at_boundary() == true)
         {
-          if (face->at_boundary() == true)
-            {
-              if (std::fabs(face->center()[1] + 0.5 ) < 1.0e-9 )
+          if (std::fabs(face->center()[1] + 0.5) < 1.0e-9)
             face->set_boundary_id(0);
-              else if (std::fabs(face->center()[1] - 0.5 ) < 1.0e-9)
-                face->set_boundary_id(1);
-              else
-                face->set_boundary_id(2);
-            }
+          else if (std::fabs(face->center()[1] - 0.5) < 1.0e-9)
+            face->set_boundary_id(1);
+          else
+            face->set_boundary_id(2);
         }
+      }
     }
     else if (m_parameters.m_scenario == 2)
     {
-        for(const auto& face : m_triangulation.active_face_iterators())
+      for (const auto &face : m_triangulation.active_face_iterators())
+      {
+
+        if (face->at_boundary() == true)
         {
-            
-          if (face->at_boundary() == true)
-            {
-              if (std::fabs(face->center()[1] + 0.5 ) < 1.0e-9 )
+          if (std::fabs(face->center()[1] + 0.5) < 1.0e-9)
             face->set_boundary_id(0);
-              else if (std::fabs(face->center()[1] - 0.5 ) < 1.0e-9)
-                face->set_boundary_id(1);
-              else if (   (std::fabs(face->center()[0] - 0.0 ) < 1.0e-9)
-                   || (std::fabs(face->center()[0] - 1.0 ) < 1.0e-9))
-                face->set_boundary_id(2);
-              else
-                face->set_boundary_id(3);
-            }
+          else if (std::fabs(face->center()[1] - 0.5) < 1.0e-9)
+            face->set_boundary_id(1);
+          else if ((std::fabs(face->center()[0] - 0.0) < 1.0e-9) ||
+                   (std::fabs(face->center()[0] - 1.0) < 1.0e-9))
+            face->set_boundary_id(2);
+          else
+            face->set_boundary_id(3);
         }
+      }
     }
     else if (m_parameters.m_scenario == 3)
     {
-        for(const auto& face : m_triangulation.active_face_iterators())
+      for (const auto &face : m_triangulation.active_face_iterators())
+      {
+        if (face->at_boundary() == true)
         {
-          if (face->at_boundary() == true)
-            {
-              if (std::fabs(face->center()[1] - 0.0 ) < 1.0e-9 )
+          if (std::fabs(face->center()[1] - 0.0) < 1.0e-9)
             face->set_boundary_id(0);
-              else if (std::fabs(face->center()[1] - 1.0 ) < 1.0e-9)
-                face->set_boundary_id(1);
-              else
-                face->set_boundary_id(2);
-            }
+          else if (std::fabs(face->center()[1] - 1.0) < 1.0e-9)
+            face->set_boundary_id(1);
+          else
+            face->set_boundary_id(2);
         }
+      }
     }
     else if (m_parameters.m_scenario == 4)
     {
-        for(const auto& face : m_triangulation.active_face_iterators())
+      for (const auto &face : m_triangulation.active_face_iterators())
+      {
+        if (face->at_boundary() == true)
         {
-          if (face->at_boundary() == true)
-            {
-              if (std::fabs(face->center()[1] - 0.0 ) < 1.0e-9 )
+          if (std::fabs(face->center()[1] - 0.0) < 1.0e-9)
             face->set_boundary_id(0);
-              else if (std::fabs(face->center()[1] - 1.0 ) < 1.0e-9)
-                face->set_boundary_id(1);
-              else if (   (std::fabs(face->center()[0] - 0.0 ) < 1.0e-9)
-                   || (std::fabs(face->center()[0] - 1.0 ) < 1.0e-9))
-                face->set_boundary_id(2);
-              else
-                face->set_boundary_id(3);
-            }
+          else if (std::fabs(face->center()[1] - 1.0) < 1.0e-9)
+            face->set_boundary_id(1);
+          else if ((std::fabs(face->center()[0] - 0.0) < 1.0e-9) ||
+                   (std::fabs(face->center()[0] - 1.0) < 1.0e-9))
+            face->set_boundary_id(2);
+          else
+            face->set_boundary_id(3);
         }
+      }
     }
     else if (m_parameters.m_scenario == 5)
     {
-        for(const auto& face : m_triangulation.active_face_iterators())
+      for (const auto &face : m_triangulation.active_face_iterators())
+      {
+        if (face->at_boundary() == true)
         {
-          if (face->at_boundary() == true)
-            {
-              if (std::fabs(face->center()[0] - 0.0 ) < 1.0e-9 )
+          if (std::fabs(face->center()[0] - 0.0) < 1.0e-9)
             face->set_boundary_id(5);
-              else if (std::fabs(face->center()[1] - 0.0 ) < 1.0e-9)
-                face->set_boundary_id(1);
-              else if (std::fabs(face->center()[0] - 25.0 ) < 1.0e-9)
-                face->set_boundary_id(2);
-              else if (std::fabs(face->center()[1] - 5.0 ) < 1.0e-9)
-                face->set_boundary_id(3);
-              else
-                face->set_boundary_id(4);
-            }
+          else if (std::fabs(face->center()[1] - 0.0) < 1.0e-9)
+            face->set_boundary_id(1);
+          else if (std::fabs(face->center()[0] - 25.0) < 1.0e-9)
+            face->set_boundary_id(2);
+          else if (std::fabs(face->center()[1] - 5.0) < 1.0e-9)
+            face->set_boundary_id(3);
+          else
+            face->set_boundary_id(4);
         }
+      }
     }
     else if (m_parameters.m_scenario == 6)
     {
-        double const length = 25.0; //mm
-        double const width  = 10.0;  //mm
-        
-        for(const auto& face : m_triangulation.active_face_iterators())
+      double const length = 25.0; // mm
+      double const width = 10.0;  // mm
+
+      for (const auto &face : m_triangulation.active_face_iterators())
+      {
+        if (face->at_boundary() == true)
         {
-          if (face->at_boundary() == true)
-            {
-              if (std::fabs(face->center()[0] - 0.0 ) < 1.0e-9 )
+          if (std::fabs(face->center()[0] - 0.0) < 1.0e-9)
             face->set_boundary_id(6);
-              else if (std::fabs(face->center()[1] - 0.0 ) < 1.0e-9)
-                face->set_boundary_id(1);
-              else if (std::fabs(face->center()[0] - length ) < 1.0e-9)
-                face->set_boundary_id(2);
-              else if (std::fabs(face->center()[1] - width ) < 1.0e-9)
-                face->set_boundary_id(3);
-              else
-                face->set_boundary_id(4);
-            }
+          else if (std::fabs(face->center()[1] - 0.0) < 1.0e-9)
+            face->set_boundary_id(1);
+          else if (std::fabs(face->center()[0] - length) < 1.0e-9)
+            face->set_boundary_id(2);
+          else if (std::fabs(face->center()[1] - width) < 1.0e-9)
+            face->set_boundary_id(3);
+          else
+            face->set_boundary_id(4);
         }
+      }
     }
     else if (m_parameters.m_scenario == 7)
     {
-        double const length = 25.0; //mm
-        double const width  = 10.0;  //mm
-        double const thickness = 1.0;  //mm
-        
-        for(const auto& face : m_triangulation.active_face_iterators())
+      double const length = 25.0;   // mm
+      double const width = 10.0;    // mm
+      double const thickness = 1.0; // mm
+
+      for (const auto &face : m_triangulation.active_face_iterators())
+      {
+        if (face->at_boundary() == true)
         {
-          if (face->at_boundary() == true)
-            {
-              if (std::fabs(face->center()[0] - 0.0 ) < 1.0e-9 )
+          if (std::fabs(face->center()[0] - 0.0) < 1.0e-9)
             face->set_boundary_id(0);
-              else if (std::fabs(face->center()[1] - 0.0 ) < 1.0e-9)
-                face->set_boundary_id(1);
-              else if (std::fabs(face->center()[2] - 0.0 ) < 1.0e-9)
-                face->set_boundary_id(2);
-              else if (std::fabs(face->center()[0] - length ) < 1.0e-9)
-                face->set_boundary_id(3);
-              else if (std::fabs(face->center()[1] - width ) < 1.0e-9)
-                face->set_boundary_id(4);
-              else if (std::fabs(face->center()[2] - thickness ) < 1.0e-9)
-                face->set_boundary_id(5);
-              else
-                face->set_boundary_id(6);
-            }
+          else if (std::fabs(face->center()[1] - 0.0) < 1.0e-9)
+            face->set_boundary_id(1);
+          else if (std::fabs(face->center()[2] - 0.0) < 1.0e-9)
+            face->set_boundary_id(2);
+          else if (std::fabs(face->center()[0] - length) < 1.0e-9)
+            face->set_boundary_id(3);
+          else if (std::fabs(face->center()[1] - width) < 1.0e-9)
+            face->set_boundary_id(4);
+          else if (std::fabs(face->center()[2] - thickness) < 1.0e-9)
+            face->set_boundary_id(5);
+          else
+            face->set_boundary_id(6);
         }
+      }
     }
     else if (m_parameters.m_scenario == 8)
     {
-        double const length = 5.0; //mm
-        double const width  = 2.0;  //mm
-        double const thickness = 1.0;  //mm
-        
-        for(const auto& face : m_triangulation.active_face_iterators())
+      double const length = 5.0;    // mm
+      double const width = 2.0;     // mm
+      double const thickness = 1.0; // mm
+
+      for (const auto &face : m_triangulation.active_face_iterators())
+      {
+        if (face->at_boundary() == true)
         {
-                if (face->at_boundary() == true)
-                {
-                    if (std::fabs(face->center()[0] - 0.0 ) < 1.0e-9 )
-                        face->set_boundary_id(0);
-                    else if (std::fabs(face->center()[1] - 0.0 ) < 1.0e-9)
-                        face->set_boundary_id(1);
-                    else if (std::fabs(face->center()[2] - 0.0 ) < 1.0e-9)
-                        face->set_boundary_id(2);
-                    else if (std::fabs(face->center()[0] - length ) < 1.0e-9)
-                        face->set_boundary_id(3);
-                    else if (std::fabs(face->center()[1] - width ) < 1.0e-9)
-                        face->set_boundary_id(4);
-                    else if (std::fabs(face->center()[2] - thickness ) < 1.0e-9)
-                        face->set_boundary_id(5);
-                    else
-                        face->set_boundary_id(6);
-                }
-            }
+          if (std::fabs(face->center()[0] - 0.0) < 1.0e-9)
+            face->set_boundary_id(0);
+          else if (std::fabs(face->center()[1] - 0.0) < 1.0e-9)
+            face->set_boundary_id(1);
+          else if (std::fabs(face->center()[2] - 0.0) < 1.0e-9)
+            face->set_boundary_id(2);
+          else if (std::fabs(face->center()[0] - length) < 1.0e-9)
+            face->set_boundary_id(3);
+          else if (std::fabs(face->center()[1] - width) < 1.0e-9)
+            face->set_boundary_id(4);
+          else if (std::fabs(face->center()[2] - thickness) < 1.0e-9)
+            face->set_boundary_id(5);
+          else
+            face->set_boundary_id(6);
+        }
+      }
     }
     else if (m_parameters.m_scenario == 9)
     {
-        double const length = 5.0; //mm
-        double const width  = 2.0;  //mm
-        double const thickness = 1.0;  //mm
-        
-        for(const auto& face : m_triangulation.active_face_iterators())
+      double const length = 5.0;    // mm
+      double const width = 2.0;     // mm
+      double const thickness = 1.0; // mm
+
+      for (const auto &face : m_triangulation.active_face_iterators())
+      {
+        if (face->at_boundary() == true)
         {
-                if (face->at_boundary() == true)
-                {
-                    if (std::fabs(face->center()[0] - 0.0 ) < 1.0e-9 )
-                        face->set_boundary_id(0);
-                    else if (std::fabs(face->center()[1] - 0.0 ) < 1.0e-9)
-                        face->set_boundary_id(1);
-                    else if (std::fabs(face->center()[2] - 0.0 ) < 1.0e-9)
-                        face->set_boundary_id(2);
-                    else if (std::fabs(face->center()[0] - length ) < 1.0e-9)
-                        face->set_boundary_id(3);
-                    else if (std::fabs(face->center()[1] - width ) < 1.0e-9)
-                        face->set_boundary_id(4);
-                    else if (std::fabs(face->center()[2] - thickness ) < 1.0e-9)
-                        face->set_boundary_id(5);
-                    else
-                        face->set_boundary_id(6);
-                }
-            }
+          if (std::fabs(face->center()[0] - 0.0) < 1.0e-9)
+            face->set_boundary_id(0);
+          else if (std::fabs(face->center()[1] - 0.0) < 1.0e-9)
+            face->set_boundary_id(1);
+          else if (std::fabs(face->center()[2] - 0.0) < 1.0e-9)
+            face->set_boundary_id(2);
+          else if (std::fabs(face->center()[0] - length) < 1.0e-9)
+            face->set_boundary_id(3);
+          else if (std::fabs(face->center()[1] - width) < 1.0e-9)
+            face->set_boundary_id(4);
+          else if (std::fabs(face->center()[2] - thickness) < 1.0e-9)
+            face->set_boundary_id(5);
+          else
+            face->set_boundary_id(6);
+        }
+      }
     }
     else if (m_parameters.m_scenario == 10)
     {
-        double const length = 5.0; //mm
-        double const width  = 2.0;  //mm
-        double const thickness = 1.0;  //mm
-        
-        for(const auto& face : m_triangulation.active_face_iterators())
+      double const length = 5.0;    // mm
+      double const width = 2.0;     // mm
+      double const thickness = 1.0; // mm
+
+      for (const auto &face : m_triangulation.active_face_iterators())
+      {
+        if (face->at_boundary() == true)
         {
-                if (face->at_boundary() == true)
-                {
-                    if (std::fabs(face->center()[0] - 0.0 ) < 1.0e-9 )
-                        face->set_boundary_id(0);
-                    else if (std::fabs(face->center()[1] - 0.0 ) < 1.0e-9)
-                        face->set_boundary_id(1);
-                    else if (std::fabs(face->center()[2] - 0.0 ) < 1.0e-9)
-                        face->set_boundary_id(2);
-                    else if (std::fabs(face->center()[0] - length ) < 1.0e-9)
-                        face->set_boundary_id(3);
-                    else if (std::fabs(face->center()[1] - width ) < 1.0e-9)
-                        face->set_boundary_id(4);
-                    else if (std::fabs(face->center()[2] - thickness ) < 1.0e-9)
-                        face->set_boundary_id(5);
-                    else
-                        face->set_boundary_id(6);
-                }
-            }
+          if (std::fabs(face->center()[0] - 0.0) < 1.0e-9)
+            face->set_boundary_id(0);
+          else if (std::fabs(face->center()[1] - 0.0) < 1.0e-9)
+            face->set_boundary_id(1);
+          else if (std::fabs(face->center()[2] - 0.0) < 1.0e-9)
+            face->set_boundary_id(2);
+          else if (std::fabs(face->center()[0] - length) < 1.0e-9)
+            face->set_boundary_id(3);
+          else if (std::fabs(face->center()[1] - width) < 1.0e-9)
+            face->set_boundary_id(4);
+          else if (std::fabs(face->center()[2] - thickness) < 1.0e-9)
+            face->set_boundary_id(5);
+          else
+            face->set_boundary_id(6);
+        }
+      }
     }
     else if (m_parameters.m_scenario == 11)
     {
-        for(const auto& face : m_triangulation.active_face_iterators())
+      for (const auto &face : m_triangulation.active_face_iterators())
+      {
+        if (face->at_boundary() == true)
         {
-                if (face->at_boundary() == true)
-                {
-                    if (std::fabs(face->center()[0] - 0.0 ) < 1.0e-9 )
-                        face->set_boundary_id(0);
-                    else if (std::fabs(face->center()[1] - 0.0 ) < 1.0e-9)
-                        face->set_boundary_id(1);
-                    else if (std::fabs(face->center()[2] - 0.0 ) < 1.0e-9)
-                        face->set_boundary_id(2);
-                    else
-                        face->set_boundary_id(3);
-                }
-            }
+          if (std::fabs(face->center()[0] - 0.0) < 1.0e-9)
+            face->set_boundary_id(0);
+          else if (std::fabs(face->center()[1] - 0.0) < 1.0e-9)
+            face->set_boundary_id(1);
+          else if (std::fabs(face->center()[2] - 0.0) < 1.0e-9)
+            face->set_boundary_id(2);
+          else
+            face->set_boundary_id(3);
+        }
+      }
     }
     else
-        Assert(false, ExcMessage("The scenario has not been implemented!"));
-
-}
+      Assert(false, ExcMessage("The scenario has not been implemented!"));
+  }
 
   template <typename LATraits, typename Tria>
   void PhaseFieldMonolithicSolve<LATraits, Tria>::make_grid()
@@ -2737,42 +2507,40 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
     else
       Assert(false, ExcMessage("The scenario has not been implemented!"));
 
-      
     set_bcs_id();
-      
-      unsigned int nCells    = m_triangulation.n_active_cells();
-      unsigned int nVertices = m_triangulation.n_used_vertices();
-      
-      if constexpr (is_mpi){
-          nCells = m_triangulation.n_global_active_cells();
-          
-          nVertices = Utilities::MPI::sum(nVertices,
-                                          *m_mpiInfo.mpiCommPtr());
-      }
-      
-    m_logfile << "\t\tTriangulation:"
-              << "\n\t\t\tNumber of active cells: "  << nCells
-              << "\n\t\t\tNumber of used vertices: " << nVertices
-	      << std::endl;
 
-      if constexpr (is_mpi){ 
-          const std::string filename = "original_mesh";
-          DataOut<dim> data_out;
-          data_out.attach_dof_handler(m_dof_handler);
-          data_out.write_vtu_with_pvtu_record(m_parameters.oriDir,
-                                              filename,
-                                              0,
-                                              *m_mpiInfo.mpiCommPtr(),
-                                              1 /*n_digits*/,
-                                              0 /*n_groups*/);
-          
-      } else {
-          std::ofstream out(m_parameters.oriDir + "original_mesh.vtu");
-          GridOut       grid_out;
-          grid_out.write_vtu(m_triangulation, out);
-      }
+    unsigned int nCells = m_triangulation.n_active_cells();
+    unsigned int nVertices = m_triangulation.n_used_vertices();
+
+    if constexpr (is_mpi)
+    {
+      nCells = m_triangulation.n_global_active_cells();
+
+      nVertices = Utilities::MPI::sum(nVertices, *m_mpiInfo.mpiCommPtr());
+    }
+
+    m_logfile << "\t\tTriangulation:" << "\n\t\t\tNumber of active cells: "
+              << nCells << "\n\t\t\tNumber of used vertices: " << nVertices
+              << std::endl;
+
+    if constexpr (is_mpi)
+    {
+      const std::string filename = "original_mesh";
+      DataOut<dim> data_out;
+      data_out.attach_dof_handler(m_dof_handler);
+      data_out.write_vtu_with_pvtu_record(m_parameters.oriDir, filename, 0,
+                                          *m_mpiInfo.mpiCommPtr(), 1 /*n_digits*/,
+                                          0 /*n_groups*/);
+    }
+    else
+    {
+      std::ofstream out(m_parameters.oriDir + "original_mesh.vtu");
+      GridOut grid_out;
+      grid_out.write_vtu(m_triangulation, out);
+    }
     m_vol_reference = GridTools::volume(m_triangulation);
-    m_logfile << "\t\tGrid:\n\t\t\tReference volume: " << m_vol_reference << std::endl;
+    m_logfile << "\t\tGrid:\n\t\t\tReference volume: " << m_vol_reference
+              << std::endl;
   }
 
   template <typename LATraits, typename Tria>
@@ -2786,7 +2554,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
       m_logfile << "*";
     m_logfile << std::endl;
 
-    AssertThrow(dim==2, ExcMessage("The dimension has to be 2D!"));
+    AssertThrow(dim == 2, ExcMessage("The dimension has to be 2D!"));
 
     GridIn<dim> gridin;
     gridin.attach_triangulation(m_triangulation);
@@ -2796,74 +2564,79 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
     m_triangulation.refine_global(m_parameters.m_global_refine_times);
 
     if (m_parameters.m_refinement_strategy == "pre-refine")
+    {
+      unsigned int material_id;
+      double length_scale;
+      for (unsigned int i = 0; i < m_parameters.m_local_prerefine_times; i++)
       {
-	unsigned int material_id;
-	double length_scale;
-	for (unsigned int i = 0; i < m_parameters.m_local_prerefine_times; i++)
-	  {
-	    for (const auto &cell : m_triangulation.active_cell_iterators())
-	      {
-              if constexpr (is_mpi) {
-                  if (!cell->is_locally_owned()) continue;
-              }
-		if (   std::fabs(cell->center()[1]) < 0.01
-		    && cell->center()[0] > 0.495)
-		  {
-		    material_id = cell->material_id();
-		    length_scale = m_material_data[material_id][2];
-		    if (  std::sqrt(cell->measure())
-			> length_scale * m_parameters.m_allowed_max_h_l_ratio )
-		      cell->set_refine_flag();
-		  }
-	      }
-	    m_triangulation.execute_coarsening_and_refinement();
-	  }
-      }
-    else if (m_parameters.m_refinement_strategy == "adaptive-refine")
-      {
-	unsigned int material_id;
-	double length_scale;
-	bool initiation_point_refine_unfinished = true;
-	while (initiation_point_refine_unfinished)
-	  {
-	    initiation_point_refine_unfinished = false;
-	    for (const auto &cell : m_triangulation.active_cell_iterators())
-	      {
-              if constexpr (is_mpi) {
-                  if (!cell->is_locally_owned()) continue;
-              }
-		if (   std::fabs(cell->center()[1] - 0.0) < 0.05
-		    && std::fabs(cell->center()[0] - 0.5) < 0.05)
-		  {
-		    material_id = cell->material_id();
-		    length_scale = m_material_data[material_id][2];
-		    if (  std::sqrt(cell->measure())
-			> length_scale * m_parameters.m_allowed_max_h_l_ratio )
-		      {
-		        cell->set_refine_flag();
-		        initiation_point_refine_unfinished = true;
-		      }
-		  }
-	      }
-          
-          if constexpr (is_mpi) {
-              // accumulate local flag over all ranks
-              const unsigned int local_flag = initiation_point_refine_unfinished ? 1u : 0u;
-              const unsigned int global_flag =
-                  Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
-              initiation_point_refine_unfinished = (global_flag > 0u);
+        for (const auto &cell : m_triangulation.active_cell_iterators())
+        {
+          if constexpr (is_mpi)
+          {
+            if (!cell->is_locally_owned())
+              continue;
           }
-          if(initiation_point_refine_unfinished)
-                  m_triangulation.execute_coarsening_and_refinement();
-	  }
+          if (std::fabs(cell->center()[1]) < 0.01 && cell->center()[0] > 0.495)
+          {
+            material_id = cell->material_id();
+            length_scale = m_material_data[material_id][2];
+            if (std::sqrt(cell->measure()) >
+                length_scale * m_parameters.m_allowed_max_h_l_ratio)
+              cell->set_refine_flag();
+          }
+        }
+        m_triangulation.execute_coarsening_and_refinement();
       }
-    else
+    }
+    else if (m_parameters.m_refinement_strategy == "adaptive-refine")
+    {
+      unsigned int material_id;
+      double length_scale;
+      bool initiation_point_refine_unfinished = true;
+      while (initiation_point_refine_unfinished)
       {
-	AssertThrow(false,
-	            ExcMessage("Selected mesh refinement strategy not implemented!"));
-      }
-  }
+        initiation_point_refine_unfinished = false;
+        for (const auto &cell : m_triangulation.active_cell_iterators())
+        {
+          if constexpr (is_mpi)
+          {
+            if (!cell->is_locally_owned())
+              continue;
+          }
+          if (std::fabs(cell->center()[1] - 0.0) < 0.05 &&
+              std::fabs(cell->center()[0] - 0.5) < 0.05)
+          {
+            material_id = cell->material_id();
+            length_scale = m_material_data[material_id][2];
+            if (std::sqrt(cell->measure()) >
+                length_scale * m_parameters.m_allowed_max_h_l_ratio)
+            {
+              cell->set_refine_flag();
+              initiation_point_refine_unfinished = true;
+            }
+          }
+        }
 
+        if constexpr (is_mpi)
+        {
+          // accumulate local flag over all ranks
+          const unsigned int local_flag =
+              initiation_point_refine_unfinished ? 1u : 0u;
+          const unsigned int global_flag =
+              Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
+          initiation_point_refine_unfinished = (global_flag > 0u);
+        }
+        if (initiation_point_refine_unfinished)
+          m_triangulation.execute_coarsening_and_refinement();
+      }
+    }
+    else
+    {
+      AssertThrow(
+          false,
+          ExcMessage("Selected mesh refinement strategy not implemented!"));
+    }
+  }
 
   template <typename LATraits, typename Tria>
   void PhaseFieldMonolithicSolve<LATraits, Tria>::make_grid_case_2()
@@ -2876,83 +2649,88 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
       m_logfile << "*";
     m_logfile << std::endl;
 
-    AssertThrow(dim==2, ExcMessage("The dimension has to be 2D!"));
+    AssertThrow(dim == 2, ExcMessage("The dimension has to be 2D!"));
 
     GridIn<dim> gridin;
     gridin.attach_triangulation(m_triangulation);
     std::ifstream f("square_shear_unstructured.msh");
     gridin.read_msh(f);
 
-
     m_triangulation.refine_global(m_parameters.m_global_refine_times);
 
     if (m_parameters.m_refinement_strategy == "pre-refine")
+    {
+      unsigned int material_id;
+      double length_scale;
+      for (unsigned int i = 0; i < m_parameters.m_local_prerefine_times; i++)
       {
-	unsigned int material_id;
-	double length_scale;
-	for (unsigned int i = 0; i < m_parameters.m_local_prerefine_times; i++)
-	  {
-	    for (const auto &cell : m_triangulation.active_cell_iterators())
-	      {
-              if constexpr (is_mpi) {
-                  if (!cell->is_locally_owned()) continue;
-              }
-		if (    (cell->center()[0] > 0.45)
-		     && (cell->center()[1] < 0.05) )
-		  {
-		    material_id = cell->material_id();
-		    length_scale = m_material_data[material_id][2];
-		    if (  std::sqrt(cell->measure())
-			> length_scale * m_parameters.m_allowed_max_h_l_ratio )
-		      cell->set_refine_flag();
-		  }
-	      }
-	    m_triangulation.execute_coarsening_and_refinement();
-	  }
-      }
-    else if (m_parameters.m_refinement_strategy == "adaptive-refine")
-      {
-	unsigned int material_id;
-	double length_scale;
-	bool initiation_point_refine_unfinished = true;
-	while (initiation_point_refine_unfinished)
-	  {
-	    initiation_point_refine_unfinished = false;
-	    for (const auto &cell : m_triangulation.active_cell_iterators())
-	      {
-              if constexpr (is_mpi) {
-                  if (!cell->is_locally_owned()) continue;
-              }
-		if (    std::fabs(cell->center()[0] - 0.5) < 0.025
-		     && cell->center()[1] < 0.0 && cell->center()[1] > -0.025)
-		  {
-		    material_id = cell->material_id();
-		    length_scale = m_material_data[material_id][2];
-		    if (  std::sqrt(cell->measure())
-			> length_scale * m_parameters.m_allowed_max_h_l_ratio )
-		      {
-		        cell->set_refine_flag();
-		        initiation_point_refine_unfinished = true;
-		      }
-		  }
-	      }
-          
-          if constexpr (is_mpi) {
-              // accumulate local flag over all ranks
-              const unsigned int local_flag = initiation_point_refine_unfinished ? 1u : 0u;
-              const unsigned int global_flag =
-                  Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
-              initiation_point_refine_unfinished = (global_flag > 0u);
+        for (const auto &cell : m_triangulation.active_cell_iterators())
+        {
+          if constexpr (is_mpi)
+          {
+            if (!cell->is_locally_owned())
+              continue;
           }
-          if(initiation_point_refine_unfinished)
-                  m_triangulation.execute_coarsening_and_refinement();
-	  }
+          if ((cell->center()[0] > 0.45) && (cell->center()[1] < 0.05))
+          {
+            material_id = cell->material_id();
+            length_scale = m_material_data[material_id][2];
+            if (std::sqrt(cell->measure()) >
+                length_scale * m_parameters.m_allowed_max_h_l_ratio)
+              cell->set_refine_flag();
+          }
+        }
+        m_triangulation.execute_coarsening_and_refinement();
       }
-    else
+    }
+    else if (m_parameters.m_refinement_strategy == "adaptive-refine")
+    {
+      unsigned int material_id;
+      double length_scale;
+      bool initiation_point_refine_unfinished = true;
+      while (initiation_point_refine_unfinished)
       {
-	AssertThrow(false,
-	            ExcMessage("Selected mesh refinement strategy not implemented!"));
+        initiation_point_refine_unfinished = false;
+        for (const auto &cell : m_triangulation.active_cell_iterators())
+        {
+          if constexpr (is_mpi)
+          {
+            if (!cell->is_locally_owned())
+              continue;
+          }
+          if (std::fabs(cell->center()[0] - 0.5) < 0.025 &&
+              cell->center()[1] < 0.0 && cell->center()[1] > -0.025)
+          {
+            material_id = cell->material_id();
+            length_scale = m_material_data[material_id][2];
+            if (std::sqrt(cell->measure()) >
+                length_scale * m_parameters.m_allowed_max_h_l_ratio)
+            {
+              cell->set_refine_flag();
+              initiation_point_refine_unfinished = true;
+            }
+          }
+        }
+
+        if constexpr (is_mpi)
+        {
+          // accumulate local flag over all ranks
+          const unsigned int local_flag =
+              initiation_point_refine_unfinished ? 1u : 0u;
+          const unsigned int global_flag =
+              Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
+          initiation_point_refine_unfinished = (global_flag > 0u);
+        }
+        if (initiation_point_refine_unfinished)
+          m_triangulation.execute_coarsening_and_refinement();
       }
+    }
+    else
+    {
+      AssertThrow(
+          false,
+          ExcMessage("Selected mesh refinement strategy not implemented!"));
+    }
   }
 
   template <typename LATraits, typename Tria>
@@ -2966,84 +2744,89 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
       m_logfile << "*";
     m_logfile << std::endl;
 
-    AssertThrow(dim==2, ExcMessage("The dimension has to be 2D!"));
+    AssertThrow(dim == 2, ExcMessage("The dimension has to be 2D!"));
 
     GridIn<dim> gridin;
     gridin.attach_triangulation(m_triangulation);
     std::ifstream f("square_tension_structured.msh");
     gridin.read_msh(f);
 
-      
-
     m_triangulation.refine_global(m_parameters.m_global_refine_times);
 
     if (m_parameters.m_refinement_strategy == "pre-refine")
+    {
+      unsigned int material_id;
+      double length_scale;
+      for (unsigned int i = 0; i < m_parameters.m_local_prerefine_times; i++)
       {
-	unsigned int material_id;
-	double length_scale;
-	for (unsigned int i = 0; i < m_parameters.m_local_prerefine_times; i++)
-	  {
-	    for (const auto &cell : m_triangulation.active_cell_iterators())
-	      {
-              if constexpr (is_mpi) {
-                  if (!cell->is_locally_owned()) continue;
-              }
-		if (    (std::fabs(cell->center()[1] - 0.5) < 0.025)
-		     && (cell->center()[0] > 0.475) )
-		  {
-		    material_id = cell->material_id();
-		    length_scale = m_material_data[material_id][2];
-		    if (  std::sqrt(cell->measure())
-			> length_scale * m_parameters.m_allowed_max_h_l_ratio )
-		      cell->set_refine_flag();
-		  }
-	      }
-	    m_triangulation.execute_coarsening_and_refinement();
-	  }
-      }
-    else if (m_parameters.m_refinement_strategy == "adaptive-refine")
-      {
-	unsigned int material_id;
-	double length_scale;
-	bool initiation_point_refine_unfinished = true;
-	while (initiation_point_refine_unfinished)
-	  {
-	    initiation_point_refine_unfinished = false;
-	    for (const auto &cell : m_triangulation.active_cell_iterators())
-	      {
-              if constexpr (is_mpi) {
-                  if (!cell->is_locally_owned()) continue;
-              }
-		if (    std::fabs(cell->center()[0] - 0.5) < 0.025
-		     && std::fabs(cell->center()[1] - 0.5) < 0.025 )
-		  {
-		    material_id = cell->material_id();
-		    length_scale = m_material_data[material_id][2];
-		    if (  std::sqrt(cell->measure())
-			> length_scale * m_parameters.m_allowed_max_h_l_ratio )
-		      {
-		        cell->set_refine_flag();
-		        initiation_point_refine_unfinished = true;
-		      }
-		  }
-	      }
-          
-          if constexpr (is_mpi) {
-              // accumulate local flag over all ranks
-              const unsigned int local_flag = initiation_point_refine_unfinished ? 1u : 0u;
-              const unsigned int global_flag =
-                  Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
-              initiation_point_refine_unfinished = (global_flag > 0u);
+        for (const auto &cell : m_triangulation.active_cell_iterators())
+        {
+          if constexpr (is_mpi)
+          {
+            if (!cell->is_locally_owned())
+              continue;
           }
-          if(initiation_point_refine_unfinished)
-                  m_triangulation.execute_coarsening_and_refinement();
-	  }
+          if ((std::fabs(cell->center()[1] - 0.5) < 0.025) &&
+              (cell->center()[0] > 0.475))
+          {
+            material_id = cell->material_id();
+            length_scale = m_material_data[material_id][2];
+            if (std::sqrt(cell->measure()) >
+                length_scale * m_parameters.m_allowed_max_h_l_ratio)
+              cell->set_refine_flag();
+          }
+        }
+        m_triangulation.execute_coarsening_and_refinement();
       }
-    else
+    }
+    else if (m_parameters.m_refinement_strategy == "adaptive-refine")
+    {
+      unsigned int material_id;
+      double length_scale;
+      bool initiation_point_refine_unfinished = true;
+      while (initiation_point_refine_unfinished)
       {
-	AssertThrow(false,
-	            ExcMessage("Selected mesh refinement strategy not implemented!"));
+        initiation_point_refine_unfinished = false;
+        for (const auto &cell : m_triangulation.active_cell_iterators())
+        {
+          if constexpr (is_mpi)
+          {
+            if (!cell->is_locally_owned())
+              continue;
+          }
+          if (std::fabs(cell->center()[0] - 0.5) < 0.025 &&
+              std::fabs(cell->center()[1] - 0.5) < 0.025)
+          {
+            material_id = cell->material_id();
+            length_scale = m_material_data[material_id][2];
+            if (std::sqrt(cell->measure()) >
+                length_scale * m_parameters.m_allowed_max_h_l_ratio)
+            {
+              cell->set_refine_flag();
+              initiation_point_refine_unfinished = true;
+            }
+          }
+        }
+
+        if constexpr (is_mpi)
+        {
+          // accumulate local flag over all ranks
+          const unsigned int local_flag =
+              initiation_point_refine_unfinished ? 1u : 0u;
+          const unsigned int global_flag =
+              Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
+          initiation_point_refine_unfinished = (global_flag > 0u);
+        }
+        if (initiation_point_refine_unfinished)
+          m_triangulation.execute_coarsening_and_refinement();
       }
+    }
+    else
+    {
+      AssertThrow(
+          false,
+          ExcMessage("Selected mesh refinement strategy not implemented!"));
+    }
   }
 
   template <typename LATraits, typename Tria>
@@ -3057,86 +2840,88 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
       m_logfile << "*";
     m_logfile << std::endl;
 
-    AssertThrow(dim==2, ExcMessage("The dimension has to be 2D!"));
+    AssertThrow(dim == 2, ExcMessage("The dimension has to be 2D!"));
 
     GridIn<dim> gridin;
     gridin.attach_triangulation(m_triangulation);
     std::ifstream f("square_shear_structured.msh");
     gridin.read_msh(f);
 
-
-      
-      
-
     m_triangulation.refine_global(m_parameters.m_global_refine_times);
 
     if (m_parameters.m_refinement_strategy == "pre-refine")
+    {
+      unsigned int material_id;
+      double length_scale;
+      for (unsigned int i = 0; i < m_parameters.m_local_prerefine_times; i++)
       {
-	unsigned int material_id;
-	double length_scale;
-	for (unsigned int i = 0; i < m_parameters.m_local_prerefine_times; i++)
-	  {
-	    for (const auto &cell : m_triangulation.active_cell_iterators())
-	      {
-              if constexpr (is_mpi) {
-                  if (!cell->is_locally_owned()) continue;
-              }
-		if (    (cell->center()[0] > 0.475)
-		     && (cell->center()[1] < 0.525) )
-		  {
-		    material_id = cell->material_id();
-		    length_scale = m_material_data[material_id][2];
-		    if (  std::sqrt(cell->measure())
-			> length_scale * m_parameters.m_allowed_max_h_l_ratio )
-		      cell->set_refine_flag();
-		  }
-	      }
-	    m_triangulation.execute_coarsening_and_refinement();
-	  }
-      }
-    else if (m_parameters.m_refinement_strategy == "adaptive-refine")
-      {
-	unsigned int material_id;
-	double length_scale;
-	bool initiation_point_refine_unfinished = true;
-	while (initiation_point_refine_unfinished)
-	  {
-	    initiation_point_refine_unfinished = false;
-	    for (const auto &cell : m_triangulation.active_cell_iterators())
-	      {
-              if constexpr (is_mpi) {
-                  if (!cell->is_locally_owned()) continue;
-              }
-		if (    std::fabs(cell->center()[0] - 0.5) < 0.025
-		     && cell->center()[1] < 0.5 && cell->center()[1] > 0.475 )
-		  {
-		    material_id = cell->material_id();
-		    length_scale = m_material_data[material_id][2];
-		    if (  std::sqrt(cell->measure())
-			> length_scale * m_parameters.m_allowed_max_h_l_ratio )
-		      {
-		        cell->set_refine_flag();
-		        initiation_point_refine_unfinished = true;
-		      }
-		  }
-	      }
-          
-          if constexpr (is_mpi) {
-              // accumulate local flag over all ranks
-              const unsigned int local_flag = initiation_point_refine_unfinished ? 1u : 0u;
-              const unsigned int global_flag =
-                  Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
-              initiation_point_refine_unfinished = (global_flag > 0u);
+        for (const auto &cell : m_triangulation.active_cell_iterators())
+        {
+          if constexpr (is_mpi)
+          {
+            if (!cell->is_locally_owned())
+              continue;
           }
-          if(initiation_point_refine_unfinished)
-                  m_triangulation.execute_coarsening_and_refinement();
-	  }
+          if ((cell->center()[0] > 0.475) && (cell->center()[1] < 0.525))
+          {
+            material_id = cell->material_id();
+            length_scale = m_material_data[material_id][2];
+            if (std::sqrt(cell->measure()) >
+                length_scale * m_parameters.m_allowed_max_h_l_ratio)
+              cell->set_refine_flag();
+          }
+        }
+        m_triangulation.execute_coarsening_and_refinement();
       }
-    else
+    }
+    else if (m_parameters.m_refinement_strategy == "adaptive-refine")
+    {
+      unsigned int material_id;
+      double length_scale;
+      bool initiation_point_refine_unfinished = true;
+      while (initiation_point_refine_unfinished)
       {
-	AssertThrow(false,
-	            ExcMessage("Selected mesh refinement strategy not implemented!"));
+        initiation_point_refine_unfinished = false;
+        for (const auto &cell : m_triangulation.active_cell_iterators())
+        {
+          if constexpr (is_mpi)
+          {
+            if (!cell->is_locally_owned())
+              continue;
+          }
+          if (std::fabs(cell->center()[0] - 0.5) < 0.025 &&
+              cell->center()[1] < 0.5 && cell->center()[1] > 0.475)
+          {
+            material_id = cell->material_id();
+            length_scale = m_material_data[material_id][2];
+            if (std::sqrt(cell->measure()) >
+                length_scale * m_parameters.m_allowed_max_h_l_ratio)
+            {
+              cell->set_refine_flag();
+              initiation_point_refine_unfinished = true;
+            }
+          }
+        }
+
+        if constexpr (is_mpi)
+        {
+          // accumulate local flag over all ranks
+          const unsigned int local_flag =
+              initiation_point_refine_unfinished ? 1u : 0u;
+          const unsigned int global_flag =
+              Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
+          initiation_point_refine_unfinished = (global_flag > 0u);
+        }
+        if (initiation_point_refine_unfinished)
+          m_triangulation.execute_coarsening_and_refinement();
       }
+    }
+    else
+    {
+      AssertThrow(
+          false,
+          ExcMessage("Selected mesh refinement strategy not implemented!"));
+    }
   }
 
   template <typename LATraits, typename Tria>
@@ -3150,114 +2935,116 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
       m_logfile << "*";
     m_logfile << std::endl;
 
-    AssertThrow(dim==2, ExcMessage("The dimension has to be 2D!"));
+    AssertThrow(dim == 2, ExcMessage("The dimension has to be 2D!"));
 
-    double const length = 25.0; //mm
-    double const width  = 5.0;  //mm
+    double const length = 25.0; // mm
+    double const width = 5.0;   // mm
 
     std::vector<unsigned int> repetitions(dim, 1);
     repetitions[0] = 100;
     repetitions[1] = 20;
 
-    GridGenerator::subdivided_hyper_rectangle(m_triangulation,
-					      repetitions,
-					      Point<dim>( 0.0,      0.0 ),
-					      Point<dim>( length,   width ) );
+    GridGenerator::subdivided_hyper_rectangle(m_triangulation, repetitions,
+                                              Point<dim>(0.0, 0.0),
+                                              Point<dim>(length, width));
 
-
-      
     if (m_parameters.m_refinement_strategy == "pre-refine")
+    {
+      // m_triangulation.refine_global(m_parameters.m_global_refine_times);
+      unsigned int material_id;
+      double length_scale;
+      bool initiation_point_refine_unfinished = true;
+      while (initiation_point_refine_unfinished)
       {
-	//m_triangulation.refine_global(m_parameters.m_global_refine_times);
-	unsigned int material_id;
-	double length_scale;
-	bool initiation_point_refine_unfinished = true;
-	while (initiation_point_refine_unfinished)
-	  {
-	    initiation_point_refine_unfinished = false;
-	    for (const auto &cell : m_triangulation.active_cell_iterators())
-	      {
-              if constexpr (is_mpi) {
-                  if (!cell->is_locally_owned()) continue;
-              }
-		if (   (cell->center()[0] >  0.0 && cell->center()[0] <  3.0)
-		    || (cell->center()[1] >  0.0 && cell->center()[1] <  3.0)
-		    )
-		  {
-		    // Because the mesh is not imported from gmsh, there is no
-		    // material ID associated with each cell. We need to manually
-		    // set this ID based on the materialDateFIle
-		    material_id = cell->material_id();
-		    length_scale = m_material_data[material_id][2];
-		    if (  std::sqrt(cell->measure())
-			> length_scale * m_parameters.m_allowed_max_h_l_ratio )
-		      {
-			cell->set_refine_flag();
-			initiation_point_refine_unfinished = true;
-		      }
-		  }
-	      }
-	    
-          
-          if constexpr (is_mpi) {
-              // accumulate local flag over all ranks
-              const unsigned int local_flag = initiation_point_refine_unfinished ? 1u : 0u;
-              const unsigned int global_flag =
-                  Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
-              initiation_point_refine_unfinished = (global_flag > 0u);
-          }
-          if(initiation_point_refine_unfinished)
-                  m_triangulation.execute_coarsening_and_refinement();
-	  }
-      }
-    else if (m_parameters.m_refinement_strategy == "adaptive-refine")
-      {
-	unsigned int material_id;
-	double length_scale;
-	bool initiation_point_refine_unfinished = true;
-          
-          while (initiation_point_refine_unfinished)
+        initiation_point_refine_unfinished = false;
+        for (const auto &cell : m_triangulation.active_cell_iterators())
+        {
+          if constexpr (is_mpi)
           {
-              initiation_point_refine_unfinished = false;
-              for (const auto &cell : m_triangulation.active_cell_iterators())
-              {
-                  if constexpr (is_mpi) {
-                      if (!cell->is_locally_owned()) continue;
-                  }
-                  if (   (cell->center()[0] >  0.0 && cell->center()[0] <  0.13)
-                      || (cell->center()[1] >  0.0 && cell->center()[1] <  0.13)
-                      )
-                  {
-                      // Because the mesh is not imported from gmsh, there is no
-                      // material ID associated with each cell. We need to manually
-                      // set this ID based on the materialDateFIle
-                      material_id = cell->material_id();
-                      length_scale = m_material_data[material_id][2];
-                      if (  std::sqrt(cell->measure())
-                          > length_scale * m_parameters.m_allowed_max_h_l_ratio )
-                      {
-                          cell->set_refine_flag();
-                          initiation_point_refine_unfinished = true;
-                      }
-                  }
-              }
-            
-              
-              if constexpr (is_mpi) {
-                  // accumulate local flag over all ranks
-                  const unsigned int local_flag = initiation_point_refine_unfinished ? 1u : 0u;
-                  const unsigned int global_flag =
-                      Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
-                  initiation_point_refine_unfinished = (global_flag > 0u);
-              }
+            if (!cell->is_locally_owned())
+              continue;
           }
-          if(initiation_point_refine_unfinished)
-                  m_triangulation.execute_coarsening_and_refinement();
+          if ((cell->center()[0] > 0.0 && cell->center()[0] < 3.0) ||
+              (cell->center()[1] > 0.0 && cell->center()[1] < 3.0))
+          {
+            // Because the mesh is not imported from gmsh, there is no
+            // material ID associated with each cell. We need to manually
+            // set this ID based on the materialDateFIle
+            material_id = cell->material_id();
+            length_scale = m_material_data[material_id][2];
+            if (std::sqrt(cell->measure()) >
+                length_scale * m_parameters.m_allowed_max_h_l_ratio)
+            {
+              cell->set_refine_flag();
+              initiation_point_refine_unfinished = true;
+            }
+          }
+        }
+
+        if constexpr (is_mpi)
+        {
+          // accumulate local flag over all ranks
+          const unsigned int local_flag =
+              initiation_point_refine_unfinished ? 1u : 0u;
+          const unsigned int global_flag =
+              Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
+          initiation_point_refine_unfinished = (global_flag > 0u);
+        }
+        if (initiation_point_refine_unfinished)
+          m_triangulation.execute_coarsening_and_refinement();
       }
+    }
+    else if (m_parameters.m_refinement_strategy == "adaptive-refine")
+    {
+      unsigned int material_id;
+      double length_scale;
+      bool initiation_point_refine_unfinished = true;
+
+      while (initiation_point_refine_unfinished)
+      {
+        initiation_point_refine_unfinished = false;
+        for (const auto &cell : m_triangulation.active_cell_iterators())
+        {
+          if constexpr (is_mpi)
+          {
+            if (!cell->is_locally_owned())
+              continue;
+          }
+          if ((cell->center()[0] > 0.0 && cell->center()[0] < 0.13) ||
+              (cell->center()[1] > 0.0 && cell->center()[1] < 0.13))
+          {
+            // Because the mesh is not imported from gmsh, there is no
+            // material ID associated with each cell. We need to manually
+            // set this ID based on the materialDateFIle
+            material_id = cell->material_id();
+            length_scale = m_material_data[material_id][2];
+            if (std::sqrt(cell->measure()) >
+                length_scale * m_parameters.m_allowed_max_h_l_ratio)
+            {
+              cell->set_refine_flag();
+              initiation_point_refine_unfinished = true;
+            }
+          }
+        }
+
+        if constexpr (is_mpi)
+        {
+          // accumulate local flag over all ranks
+          const unsigned int local_flag =
+              initiation_point_refine_unfinished ? 1u : 0u;
+          const unsigned int global_flag =
+              Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
+          initiation_point_refine_unfinished = (global_flag > 0u);
+        }
+      }
+      if (initiation_point_refine_unfinished)
+        m_triangulation.execute_coarsening_and_refinement();
+    }
     else
     {
-        AssertThrow(false,
-                    ExcMessage("Selected mesh refinement strategy not implemented!"));
+      AssertThrow(
+          false,
+          ExcMessage("Selected mesh refinement strategy not implemented!"));
     }
   }
 
@@ -3272,73 +3059,75 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
       m_logfile << "*";
     m_logfile << std::endl;
 
-    AssertThrow(dim==2, ExcMessage("The dimension has to be 2D!"));
+    AssertThrow(dim == 2, ExcMessage("The dimension has to be 2D!"));
 
-    double const length = 25.0; //mm
-    double const width  = 10.0;  //mm
+    double const length = 25.0; // mm
+    double const width = 10.0;  // mm
 
     std::vector<unsigned int> repetitions(dim, 1);
     repetitions[0] = 125;
     repetitions[1] = 50;
 
-    GridGenerator::subdivided_hyper_rectangle(m_triangulation,
-					      repetitions,
-					      Point<dim>( 0.0,      0.0 ),
-					      Point<dim>( length,   width ) );
-      
+    GridGenerator::subdivided_hyper_rectangle(m_triangulation, repetitions,
+                                              Point<dim>(0.0, 0.0),
+                                              Point<dim>(length, width));
 
     if (m_parameters.m_refinement_strategy == "pre-refine")
-      {
-	m_triangulation.refine_global(m_parameters.m_global_refine_times);
-      }
+    {
+      m_triangulation.refine_global(m_parameters.m_global_refine_times);
+    }
     else if (m_parameters.m_refinement_strategy == "adaptive-refine")
+    {
+      unsigned int material_id;
+      double length_scale;
+      bool initiation_point_refine_unfinished = true;
+      while (initiation_point_refine_unfinished)
       {
-	unsigned int material_id;
-	double length_scale;
-	bool initiation_point_refine_unfinished = true;
-	while (initiation_point_refine_unfinished)
-	  {
-	    initiation_point_refine_unfinished = false;
-	    for (const auto &cell : m_triangulation.active_cell_iterators())
-	      {
-              if constexpr (is_mpi) {
-                  if (!cell->is_locally_owned()) continue;
-              }
-		if (   (cell->center()[0] >  0.0 && cell->center()[0] <  0.13)
-		    || (cell->center()[1] >  0.0 && cell->center()[1] <  0.13)
-		    || (cell->center()[1] >  width - 0.13)
-		    )
-		  {
-		    // Because the mesh is not imported from gmsh, there is no
-		    // material ID associated with each cell. We need to manually
-		    // set this ID based on the materialDateFIle
-		    material_id = cell->material_id();
-		    length_scale = m_material_data[material_id][2];
-		    if (  std::sqrt(cell->measure())
-			> length_scale * m_parameters.m_allowed_max_h_l_ratio )
-		      {
-		        cell->set_refine_flag();
-		        initiation_point_refine_unfinished = true;
-		      }
-		  }
-	      }
-          
-          if constexpr (is_mpi) {
-              // accumulate local flag over all ranks
-              const unsigned int local_flag = initiation_point_refine_unfinished ? 1u : 0u;
-              const unsigned int global_flag =
-                  Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
-              initiation_point_refine_unfinished = (global_flag > 0u);
+        initiation_point_refine_unfinished = false;
+        for (const auto &cell : m_triangulation.active_cell_iterators())
+        {
+          if constexpr (is_mpi)
+          {
+            if (!cell->is_locally_owned())
+              continue;
           }
-          if(initiation_point_refine_unfinished)
-              m_triangulation.execute_coarsening_and_refinement();
-	  }
+          if ((cell->center()[0] > 0.0 && cell->center()[0] < 0.13) ||
+              (cell->center()[1] > 0.0 && cell->center()[1] < 0.13) ||
+              (cell->center()[1] > width - 0.13))
+          {
+            // Because the mesh is not imported from gmsh, there is no
+            // material ID associated with each cell. We need to manually
+            // set this ID based on the materialDateFIle
+            material_id = cell->material_id();
+            length_scale = m_material_data[material_id][2];
+            if (std::sqrt(cell->measure()) >
+                length_scale * m_parameters.m_allowed_max_h_l_ratio)
+            {
+              cell->set_refine_flag();
+              initiation_point_refine_unfinished = true;
+            }
+          }
+        }
+
+        if constexpr (is_mpi)
+        {
+          // accumulate local flag over all ranks
+          const unsigned int local_flag =
+              initiation_point_refine_unfinished ? 1u : 0u;
+          const unsigned int global_flag =
+              Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
+          initiation_point_refine_unfinished = (global_flag > 0u);
+        }
+        if (initiation_point_refine_unfinished)
+          m_triangulation.execute_coarsening_and_refinement();
       }
+    }
     else
-      {
-	AssertThrow(false,
-	            ExcMessage("Selected mesh refinement strategy not implemented!"));
-      }
+    {
+      AssertThrow(
+          false,
+          ExcMessage("Selected mesh refinement strategy not implemented!"));
+    }
   }
 
   template <typename LATraits, typename Tria>
@@ -3347,82 +3136,87 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
     for (unsigned int i = 0; i < 80; ++i)
       m_logfile << "*";
     m_logfile << std::endl;
-    m_logfile << "\t\t\t\tQuenching test (3D, half size, 1mm thickness)" << std::endl;
+    m_logfile << "\t\t\t\tQuenching test (3D, half size, 1mm thickness)"
+              << std::endl;
     for (unsigned int i = 0; i < 80; ++i)
       m_logfile << "*";
     m_logfile << std::endl;
 
-    AssertThrow(dim==3, ExcMessage("The dimension has to be 3D!"));
+    AssertThrow(dim == 3, ExcMessage("The dimension has to be 3D!"));
 
-    double const length = 25.0; //mm
-    double const width  = 10.0;  //mm
-    double const thickness = 1.0;  //mm
+    double const length = 25.0;   // mm
+    double const width = 10.0;    // mm
+    double const thickness = 1.0; // mm
 
     std::vector<unsigned int> repetitions(dim, 1);
     repetitions[0] = 100;
     repetitions[1] = 40;
     repetitions[2] = 4;
 
-    GridGenerator::subdivided_hyper_rectangle(m_triangulation,
-					      repetitions,
-					      Point<dim>( 0.0,      0.0,    0.0),
-					      Point<dim>( length,   width,  thickness ) );
+    GridGenerator::subdivided_hyper_rectangle(
+        m_triangulation, repetitions, Point<dim>(0.0, 0.0, 0.0),
+        Point<dim>(length, width, thickness));
 
     if (m_parameters.m_refinement_strategy == "pre-refine")
-      {
-	AssertThrow(false,
-		    ExcMessage("3D problem cannot afford a pre-refined mesh!"));
-      }
+    {
+      AssertThrow(false,
+                  ExcMessage("3D problem cannot afford a pre-refined mesh!"));
+    }
     else if (m_parameters.m_refinement_strategy == "adaptive-refine")
+    {
+      unsigned int material_id;
+      double length_scale;
+      bool initiation_point_refine_unfinished = true;
+      while (initiation_point_refine_unfinished)
       {
-	unsigned int material_id;
-	double length_scale;
-	bool initiation_point_refine_unfinished = true;
-	while (initiation_point_refine_unfinished)
-	  {
-	    initiation_point_refine_unfinished = false;
-	    for (const auto &cell : m_triangulation.active_cell_iterators())
-	      {
-              if constexpr (is_mpi) {
-                  if (!cell->is_locally_owned()) continue;
-              }
-              if (   (cell->center()[0] >  0.0 && cell->center()[0] <  0.13)
-                          || (cell->center()[1] >  0.0 && cell->center()[1] <  0.13)
-                          || (cell->center()[1] >  (width - 0.13) && cell->center()[1] <  width)
-                          || (cell->center()[2] >  0.0 && cell->center()[2] <  0.13)
-                          || (cell->center()[2] >  (thickness - 0.13) && cell->center()[2] <  thickness)
-                          )
-		  {
-		    // Because the mesh is not imported from gmsh, there is no
-		    // material ID associated with each cell. We need to manually
-		    // set this ID based on the materialDateFIle
-		    material_id = cell->material_id();
-		    length_scale = m_material_data[material_id][2];
-		    if (  std::cbrt(cell->measure())
-			> length_scale * m_parameters.m_allowed_max_h_l_ratio )
-		      {
-		        cell->set_refine_flag();
-		        initiation_point_refine_unfinished = true;
-		      }
-		  }
-	      }
-	    
-          if constexpr (is_mpi) {
-              // accumulate local flag over all ranks
-              const unsigned int local_flag = initiation_point_refine_unfinished ? 1u : 0u;
-              const unsigned int global_flag =
-                  Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
-              initiation_point_refine_unfinished = (global_flag > 0u);
+        initiation_point_refine_unfinished = false;
+        for (const auto &cell : m_triangulation.active_cell_iterators())
+        {
+          if constexpr (is_mpi)
+          {
+            if (!cell->is_locally_owned())
+              continue;
           }
-          if(initiation_point_refine_unfinished)
-              m_triangulation.execute_coarsening_and_refinement();
-	  }
+          if ((cell->center()[0] > 0.0 && cell->center()[0] < 0.13) ||
+              (cell->center()[1] > 0.0 && cell->center()[1] < 0.13) ||
+              (cell->center()[1] > (width - 0.13) && cell->center()[1] < width) ||
+              (cell->center()[2] > 0.0 && cell->center()[2] < 0.13) ||
+              (cell->center()[2] > (thickness - 0.13) &&
+               cell->center()[2] < thickness))
+          {
+            // Because the mesh is not imported from gmsh, there is no
+            // material ID associated with each cell. We need to manually
+            // set this ID based on the materialDateFIle
+            material_id = cell->material_id();
+            length_scale = m_material_data[material_id][2];
+            if (std::cbrt(cell->measure()) >
+                length_scale * m_parameters.m_allowed_max_h_l_ratio)
+            {
+              cell->set_refine_flag();
+              initiation_point_refine_unfinished = true;
+            }
+          }
+        }
+
+        if constexpr (is_mpi)
+        {
+          // accumulate local flag over all ranks
+          const unsigned int local_flag =
+              initiation_point_refine_unfinished ? 1u : 0u;
+          const unsigned int global_flag =
+              Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
+          initiation_point_refine_unfinished = (global_flag > 0u);
+        }
+        if (initiation_point_refine_unfinished)
+          m_triangulation.execute_coarsening_and_refinement();
       }
+    }
     else
-      {
-	AssertThrow(false,
-	            ExcMessage("Selected mesh refinement strategy not implemented!"));
-      }
+    {
+      AssertThrow(
+          false,
+          ExcMessage("Selected mesh refinement strategy not implemented!"));
+    }
   }
 
   template <typename LATraits, typename Tria>
@@ -3436,77 +3230,79 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
       m_logfile << "*";
     m_logfile << std::endl;
 
-    AssertThrow(dim==3, ExcMessage("The dimension has to be 3D!"));
+    AssertThrow(dim == 3, ExcMessage("The dimension has to be 3D!"));
 
-    double const length = 5.0; //mm
-    double const width  = 2.0;  //mm
-    double const thickness = 1.0;  //mm
+    double const length = 5.0;    // mm
+    double const width = 2.0;     // mm
+    double const thickness = 1.0; // mm
 
     std::vector<unsigned int> repetitions(dim, 1);
     repetitions[0] = 20;
     repetitions[1] = 8;
     repetitions[2] = 4;
 
-    GridGenerator::subdivided_hyper_rectangle(m_triangulation,
-					      repetitions,
-					      Point<dim>( 0.0,      0.0,    0.0),
-					      Point<dim>( length,   width,  thickness ) );
-      
+    GridGenerator::subdivided_hyper_rectangle(
+        m_triangulation, repetitions, Point<dim>(0.0, 0.0, 0.0),
+        Point<dim>(length, width, thickness));
 
     if (m_parameters.m_refinement_strategy == "pre-refine")
-      {
-	AssertThrow(false,
-		    ExcMessage("3D problem cannot afford a pre-refined mesh!"));
-      }
+    {
+      AssertThrow(false,
+                  ExcMessage("3D problem cannot afford a pre-refined mesh!"));
+    }
     else if (m_parameters.m_refinement_strategy == "adaptive-refine")
+    {
+      unsigned int material_id;
+      double length_scale;
+      bool initiation_point_refine_unfinished = true;
+      while (initiation_point_refine_unfinished)
       {
-	unsigned int material_id;
-	double length_scale;
-	bool initiation_point_refine_unfinished = true;
-	while (initiation_point_refine_unfinished)
-	  {
-	    initiation_point_refine_unfinished = false;
-	    for (const auto &cell : m_triangulation.active_cell_iterators())
-	      {
-              if constexpr (is_mpi) {
-                  if (!cell->is_locally_owned()) continue;
-              }
-		if (   (cell->center()[0] >  0.0 && cell->center()[0] <  0.13)
-		    || (cell->center()[1] >  0.0 && cell->center()[1] <  0.13)
-		    || (cell->center()[2] >  0.0 && cell->center()[2] <  0.13)
-		    || (cell->center()[2] >  thickness - 0.13)
-		    )
-		  {
-		    // Because the mesh is not imported from gmsh, there is no
-		    // material ID associated with each cell. We need to manually
-		    // set this ID based on the materialDateFIle
-		    material_id = cell->material_id();
-		    length_scale = m_material_data[material_id][2];
-		    if (  std::cbrt(cell->measure())
-			> length_scale * m_parameters.m_allowed_max_h_l_ratio )
-		      {
-		        cell->set_refine_flag();
-		        initiation_point_refine_unfinished = true;
-		      }
-		  }
-	      }
-          
-          if constexpr (is_mpi) {
-              // accumulate local flag over all ranks
-              const unsigned int local_flag = initiation_point_refine_unfinished ? 1u : 0u;
-              const unsigned int global_flag =
-                  Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
-              initiation_point_refine_unfinished = (global_flag > 0u);
+        initiation_point_refine_unfinished = false;
+        for (const auto &cell : m_triangulation.active_cell_iterators())
+        {
+          if constexpr (is_mpi)
+          {
+            if (!cell->is_locally_owned())
+              continue;
           }
-          if(initiation_point_refine_unfinished)
-                  m_triangulation.execute_coarsening_and_refinement();
-	  }
+          if ((cell->center()[0] > 0.0 && cell->center()[0] < 0.13) ||
+              (cell->center()[1] > 0.0 && cell->center()[1] < 0.13) ||
+              (cell->center()[2] > 0.0 && cell->center()[2] < 0.13) ||
+              (cell->center()[2] > thickness - 0.13))
+          {
+            // Because the mesh is not imported from gmsh, there is no
+            // material ID associated with each cell. We need to manually
+            // set this ID based on the materialDateFIle
+            material_id = cell->material_id();
+            length_scale = m_material_data[material_id][2];
+            if (std::cbrt(cell->measure()) >
+                length_scale * m_parameters.m_allowed_max_h_l_ratio)
+            {
+              cell->set_refine_flag();
+              initiation_point_refine_unfinished = true;
+            }
+          }
+        }
+
+        if constexpr (is_mpi)
+        {
+          // accumulate local flag over all ranks
+          const unsigned int local_flag =
+              initiation_point_refine_unfinished ? 1u : 0u;
+          const unsigned int global_flag =
+              Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
+          initiation_point_refine_unfinished = (global_flag > 0u);
+        }
+        if (initiation_point_refine_unfinished)
+          m_triangulation.execute_coarsening_and_refinement();
       }
+    }
     else
-      {
-	AssertThrow(false,
-	            ExcMessage("Selected mesh refinement strategy not implemented!"));
-      }
+    {
+      AssertThrow(
+          false,
+          ExcMessage("Selected mesh refinement strategy not implemented!"));
+    }
   }
 
   template <typename LATraits, typename Tria>
@@ -3515,82 +3311,85 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
     for (unsigned int i = 0; i < 80; ++i)
       m_logfile << "*";
     m_logfile << std::endl;
-    m_logfile << "\t\t\t\tQuenching test (3D, quarter box, bottom shock)" << std::endl;
+    m_logfile << "\t\t\t\tQuenching test (3D, quarter box, bottom shock)"
+              << std::endl;
     for (unsigned int i = 0; i < 80; ++i)
       m_logfile << "*";
     m_logfile << std::endl;
 
-    AssertThrow(dim==3, ExcMessage("The dimension has to be 3D!"));
+    AssertThrow(dim == 3, ExcMessage("The dimension has to be 3D!"));
 
-    double const length = 5.0; //mm
-    double const width  = 2.0;  //mm
-    double const thickness = 1.0;  //mm
+    double const length = 5.0;    // mm
+    double const width = 2.0;     // mm
+    double const thickness = 1.0; // mm
 
     std::vector<unsigned int> repetitions(dim, 1);
     repetitions[0] = 20;
     repetitions[1] = 8;
     repetitions[2] = 4;
 
-    GridGenerator::subdivided_hyper_rectangle(m_triangulation,
-					      repetitions,
-					      Point<dim>( 0.0,      0.0,    0.0),
-					      Point<dim>( length,   width,  thickness ) );
-      
+    GridGenerator::subdivided_hyper_rectangle(
+        m_triangulation, repetitions, Point<dim>(0.0, 0.0, 0.0),
+        Point<dim>(length, width, thickness));
 
     if (m_parameters.m_refinement_strategy == "pre-refine")
-      {
-	AssertThrow(false,
-		    ExcMessage("3D problem cannot afford a pre-refined mesh!"));
-      }
+    {
+      AssertThrow(false,
+                  ExcMessage("3D problem cannot afford a pre-refined mesh!"));
+    }
     else if (m_parameters.m_refinement_strategy == "adaptive-refine")
+    {
+      unsigned int material_id;
+      double length_scale;
+      bool initiation_point_refine_unfinished = true;
+      while (initiation_point_refine_unfinished)
       {
-	unsigned int material_id;
-	double length_scale;
-	bool initiation_point_refine_unfinished = true;
-	while (initiation_point_refine_unfinished)
-	  {
-	    initiation_point_refine_unfinished = false;
-	    for (const auto &cell : m_triangulation.active_cell_iterators())
-	      {
-              if constexpr (is_mpi) {
-                  if (!cell->is_locally_owned()) continue;
-              }
-		if (   (cell->center()[0] >  0.0 && cell->center()[0] <  0.13)
-		    || (cell->center()[1] >  0.0 && cell->center()[1] <  0.13)
-		    || (cell->center()[2] >  0.0 && cell->center()[2] <  0.13)
-		    || (cell->center()[2] >  thickness - 0.13)
-		    )
-		  {
-		    // Because the mesh is not imported from gmsh, there is no
-		    // material ID associated with each cell. We need to manually
-		    // set this ID based on the materialDateFIle
-		    material_id = cell->material_id();
-		    length_scale = m_material_data[material_id][2];
-		    if (  std::cbrt(cell->measure())
-			> length_scale * m_parameters.m_allowed_max_h_l_ratio )
-		      {
-		        cell->set_refine_flag();
-		        initiation_point_refine_unfinished = true;
-		      }
-		  }
-	      }
-          
-          if constexpr (is_mpi) {
-              // accumulate local flag over all ranks
-              const unsigned int local_flag = initiation_point_refine_unfinished ? 1u : 0u;
-              const unsigned int global_flag =
-                  Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
-              initiation_point_refine_unfinished = (global_flag > 0u);
+        initiation_point_refine_unfinished = false;
+        for (const auto &cell : m_triangulation.active_cell_iterators())
+        {
+          if constexpr (is_mpi)
+          {
+            if (!cell->is_locally_owned())
+              continue;
           }
-          if(initiation_point_refine_unfinished)
-                  m_triangulation.execute_coarsening_and_refinement();
-	  }
+          if ((cell->center()[0] > 0.0 && cell->center()[0] < 0.13) ||
+              (cell->center()[1] > 0.0 && cell->center()[1] < 0.13) ||
+              (cell->center()[2] > 0.0 && cell->center()[2] < 0.13) ||
+              (cell->center()[2] > thickness - 0.13))
+          {
+            // Because the mesh is not imported from gmsh, there is no
+            // material ID associated with each cell. We need to manually
+            // set this ID based on the materialDateFIle
+            material_id = cell->material_id();
+            length_scale = m_material_data[material_id][2];
+            if (std::cbrt(cell->measure()) >
+                length_scale * m_parameters.m_allowed_max_h_l_ratio)
+            {
+              cell->set_refine_flag();
+              initiation_point_refine_unfinished = true;
+            }
+          }
+        }
+
+        if constexpr (is_mpi)
+        {
+          // accumulate local flag over all ranks
+          const unsigned int local_flag =
+              initiation_point_refine_unfinished ? 1u : 0u;
+          const unsigned int global_flag =
+              Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
+          initiation_point_refine_unfinished = (global_flag > 0u);
+        }
+        if (initiation_point_refine_unfinished)
+          m_triangulation.execute_coarsening_and_refinement();
       }
+    }
     else
-      {
-	AssertThrow(false,
-	            ExcMessage("Selected mesh refinement strategy not implemented!"));
-      }
+    {
+      AssertThrow(
+          false,
+          ExcMessage("Selected mesh refinement strategy not implemented!"));
+    }
   }
 
   template <typename LATraits, typename Tria>
@@ -3599,78 +3398,82 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
     for (unsigned int i = 0; i < 80; ++i)
       m_logfile << "*";
     m_logfile << std::endl;
-    m_logfile << "\t\t\t\tQuenching test (3D, quarter box, side shock)" << std::endl;
+    m_logfile << "\t\t\t\tQuenching test (3D, quarter box, side shock)"
+              << std::endl;
     for (unsigned int i = 0; i < 80; ++i)
       m_logfile << "*";
     m_logfile << std::endl;
 
-    AssertThrow(dim==3, ExcMessage("The dimension has to be 3D!"));
+    AssertThrow(dim == 3, ExcMessage("The dimension has to be 3D!"));
 
-    double const length = 5.0; //mm
-    double const width  = 2.0;  //mm
-    double const thickness = 1.0;  //mm
+    double const length = 5.0;    // mm
+    double const width = 2.0;     // mm
+    double const thickness = 1.0; // mm
 
     std::vector<unsigned int> repetitions(dim, 1);
     repetitions[0] = 20;
     repetitions[1] = 8;
     repetitions[2] = 4;
 
-    GridGenerator::subdivided_hyper_rectangle(m_triangulation,
-					      repetitions,
-					      Point<dim>( 0.0,      0.0,    0.0),
-					      Point<dim>( length,   width,  thickness ) );
-      
+    GridGenerator::subdivided_hyper_rectangle(
+        m_triangulation, repetitions, Point<dim>(0.0, 0.0, 0.0),
+        Point<dim>(length, width, thickness));
+
     if (m_parameters.m_refinement_strategy == "pre-refine")
-      {
-	AssertThrow(false,
-		    ExcMessage("3D problem cannot afford a pre-refined mesh!"));
-      }
+    {
+      AssertThrow(false,
+                  ExcMessage("3D problem cannot afford a pre-refined mesh!"));
+    }
     else if (m_parameters.m_refinement_strategy == "adaptive-refine")
+    {
+      unsigned int material_id;
+      double length_scale;
+      bool initiation_point_refine_unfinished = true;
+      while (initiation_point_refine_unfinished)
       {
-	unsigned int material_id;
-	double length_scale;
-	bool initiation_point_refine_unfinished = true;
-	while (initiation_point_refine_unfinished)
-	  {
-	    initiation_point_refine_unfinished = false;
-	    for (const auto &cell : m_triangulation.active_cell_iterators())
-	      {
-              if constexpr (is_mpi) {
-                  if (!cell->is_locally_owned()) continue;
-              }
-		if (  (cell->center()[1] >  0.0 && cell->center()[1] <  0.13)
-		    )
-		  {
-		    // Because the mesh is not imported from gmsh, there is no
-		    // material ID associated with each cell. We need to manually
-		    // set this ID based on the materialDateFIle
-		    material_id = cell->material_id();
-		    length_scale = m_material_data[material_id][2];
-		    if (  std::cbrt(cell->measure())
-			> length_scale * m_parameters.m_allowed_max_h_l_ratio )
-		      {
-		        cell->set_refine_flag();
-		        initiation_point_refine_unfinished = true;
-		      }
-		  }
-	      }
-          
-          if constexpr (is_mpi) {
-              // accumulate local flag over all ranks
-              const unsigned int local_flag = initiation_point_refine_unfinished ? 1u : 0u;
-              const unsigned int global_flag =
-                  Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
-              initiation_point_refine_unfinished = (global_flag > 0u);
+        initiation_point_refine_unfinished = false;
+        for (const auto &cell : m_triangulation.active_cell_iterators())
+        {
+          if constexpr (is_mpi)
+          {
+            if (!cell->is_locally_owned())
+              continue;
           }
-          if(initiation_point_refine_unfinished)
-                  m_triangulation.execute_coarsening_and_refinement();
-	  }
+          if ((cell->center()[1] > 0.0 && cell->center()[1] < 0.13))
+          {
+            // Because the mesh is not imported from gmsh, there is no
+            // material ID associated with each cell. We need to manually
+            // set this ID based on the materialDateFIle
+            material_id = cell->material_id();
+            length_scale = m_material_data[material_id][2];
+            if (std::cbrt(cell->measure()) >
+                length_scale * m_parameters.m_allowed_max_h_l_ratio)
+            {
+              cell->set_refine_flag();
+              initiation_point_refine_unfinished = true;
+            }
+          }
+        }
+
+        if constexpr (is_mpi)
+        {
+          // accumulate local flag over all ranks
+          const unsigned int local_flag =
+              initiation_point_refine_unfinished ? 1u : 0u;
+          const unsigned int global_flag =
+              Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
+          initiation_point_refine_unfinished = (global_flag > 0u);
+        }
+        if (initiation_point_refine_unfinished)
+          m_triangulation.execute_coarsening_and_refinement();
       }
+    }
     else
-      {
-	AssertThrow(false,
-	            ExcMessage("Selected mesh refinement strategy not implemented!"));
-      }
+    {
+      AssertThrow(
+          false,
+          ExcMessage("Selected mesh refinement strategy not implemented!"));
+    }
   }
 
   template <typename LATraits, typename Tria>
@@ -3684,1567 +3487,1542 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::set_bcs_id()
       m_logfile << "*";
     m_logfile << std::endl;
 
-    AssertThrow(dim==3, ExcMessage("The dimension has to be 3D!"));
+    AssertThrow(dim == 3, ExcMessage("The dimension has to be 3D!"));
 
     const double radius = 5.0;
     GridGenerator::quarter_hyper_ball(m_triangulation, Point<dim>(), radius);
 
-
-      
-
     m_triangulation.refine_global(m_parameters.m_global_refine_times);
 
     if (m_parameters.m_refinement_strategy == "pre-refine")
+    {
+      // m_triangulation.refine_global(m_parameters.m_global_refine_times);
+      unsigned int material_id;
+      double length_scale;
+      bool initiation_point_refine_unfinished = true;
+      while (initiation_point_refine_unfinished)
       {
-	//m_triangulation.refine_global(m_parameters.m_global_refine_times);
-	unsigned int material_id;
-	double length_scale;
-	bool initiation_point_refine_unfinished = true;
-	while (initiation_point_refine_unfinished)
-	  {
-	    initiation_point_refine_unfinished = false;
-	    for (const auto &cell : m_triangulation.active_cell_iterators())
-	      {
-              if constexpr (is_mpi) {
-                  if (!cell->is_locally_owned()) continue;
-              }
-		double distance2center = std::sqrt( cell->center()[0]*cell->center()[0]
-					          + cell->center()[1]*cell->center()[1]
-						  + cell->center()[2]*cell->center()[2]
-						  );
-
-		if (distance2center > 2.0*radius/3)
-		  {
-		    // Because the mesh is not imported from gmsh, there is no
-		    // material ID associated with each cell. We need to manually
-		    // set this ID based on the materialDateFIle
-		    material_id = cell->material_id();
-		    length_scale = m_material_data[material_id][2];
-		    if (  std::cbrt(cell->measure())
-			> length_scale * m_parameters.m_allowed_max_h_l_ratio )
-		      {
-			cell->set_refine_flag();
-			initiation_point_refine_unfinished = true;
-		      }
-		  }
-	      }
-	    
-          if constexpr (is_mpi) {
-              // accumulate local flag over all ranks
-              const unsigned int local_flag = initiation_point_refine_unfinished ? 1u : 0u;
-              const unsigned int global_flag =
-                  Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
-              initiation_point_refine_unfinished = (global_flag > 0u);
+        initiation_point_refine_unfinished = false;
+        for (const auto &cell : m_triangulation.active_cell_iterators())
+        {
+          if constexpr (is_mpi)
+          {
+            if (!cell->is_locally_owned())
+              continue;
           }
-          if(initiation_point_refine_unfinished)
-                  m_triangulation.execute_coarsening_and_refinement();
-	  }
+          double distance2center =
+              std::sqrt(cell->center()[0] * cell->center()[0] +
+                        cell->center()[1] * cell->center()[1] +
+                        cell->center()[2] * cell->center()[2]);
+
+          if (distance2center > 2.0 * radius / 3)
+          {
+            // Because the mesh is not imported from gmsh, there is no
+            // material ID associated with each cell. We need to manually
+            // set this ID based on the materialDateFIle
+            material_id = cell->material_id();
+            length_scale = m_material_data[material_id][2];
+            if (std::cbrt(cell->measure()) >
+                length_scale * m_parameters.m_allowed_max_h_l_ratio)
+            {
+              cell->set_refine_flag();
+              initiation_point_refine_unfinished = true;
+            }
+          }
+        }
+
+        if constexpr (is_mpi)
+        {
+          // accumulate local flag over all ranks
+          const unsigned int local_flag =
+              initiation_point_refine_unfinished ? 1u : 0u;
+          const unsigned int global_flag =
+              Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
+          initiation_point_refine_unfinished = (global_flag > 0u);
+        }
+        if (initiation_point_refine_unfinished)
+          m_triangulation.execute_coarsening_and_refinement();
       }
+    }
     else if (m_parameters.m_refinement_strategy == "adaptive-refine")
+    {
+      unsigned int material_id;
+      double length_scale;
+      bool initiation_point_refine_unfinished = true;
+      while (initiation_point_refine_unfinished)
       {
-	unsigned int material_id;
-	double length_scale;
-	bool initiation_point_refine_unfinished = true;
-	while (initiation_point_refine_unfinished)
-	  {
-	    initiation_point_refine_unfinished = false;
-	    for (const auto &cell : m_triangulation.active_cell_iterators())
-	      {
-              if constexpr (is_mpi) {
-                  if (!cell->is_locally_owned()) continue;
-              }
-		double distance2center = std::sqrt( cell->center()[0]*cell->center()[0]
-							          + cell->center()[1]*cell->center()[1]
-								  + cell->center()[2]*cell->center()[2]
-								  );
-                double ratio = std::pow(2, m_parameters.m_global_refine_times+1);
-
-		if (distance2center > radius * (ratio-1) / ratio)
-		  {
-		    // Because the mesh is not imported from gmsh, there is no
-		    // material ID associated with each cell. We need to manually
-		    // set this ID based on the materialDateFIle
-		    material_id = cell->material_id();
-		    length_scale = m_material_data[material_id][2];
-		    if (  std::cbrt(cell->measure())
-			> length_scale * m_parameters.m_allowed_max_h_l_ratio )
-		      {
-		        cell->set_refine_flag();
-		        initiation_point_refine_unfinished = true;
-		      }
-		  }
-	      }
-	    
-          if constexpr (is_mpi) {
-              // accumulate local flag over all ranks
-              const unsigned int local_flag = initiation_point_refine_unfinished ? 1u : 0u;
-              const unsigned int global_flag =
-                  Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
-              initiation_point_refine_unfinished = (global_flag > 0u);
+        initiation_point_refine_unfinished = false;
+        for (const auto &cell : m_triangulation.active_cell_iterators())
+        {
+          if constexpr (is_mpi)
+          {
+            if (!cell->is_locally_owned())
+              continue;
           }
-          if(initiation_point_refine_unfinished)
-                  m_triangulation.execute_coarsening_and_refinement();
-	  }
+          double distance2center =
+              std::sqrt(cell->center()[0] * cell->center()[0] +
+                        cell->center()[1] * cell->center()[1] +
+                        cell->center()[2] * cell->center()[2]);
+          double ratio = std::pow(2, m_parameters.m_global_refine_times + 1);
+
+          if (distance2center > radius * (ratio - 1) / ratio)
+          {
+            // Because the mesh is not imported from gmsh, there is no
+            // material ID associated with each cell. We need to manually
+            // set this ID based on the materialDateFIle
+            material_id = cell->material_id();
+            length_scale = m_material_data[material_id][2];
+            if (std::cbrt(cell->measure()) >
+                length_scale * m_parameters.m_allowed_max_h_l_ratio)
+            {
+              cell->set_refine_flag();
+              initiation_point_refine_unfinished = true;
+            }
+          }
+        }
+
+        if constexpr (is_mpi)
+        {
+          // accumulate local flag over all ranks
+          const unsigned int local_flag =
+              initiation_point_refine_unfinished ? 1u : 0u;
+          const unsigned int global_flag =
+              Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
+          initiation_point_refine_unfinished = (global_flag > 0u);
+        }
+        if (initiation_point_refine_unfinished)
+          m_triangulation.execute_coarsening_and_refinement();
       }
+    }
     else
-      {
-	AssertThrow(false,
-	            ExcMessage("Selected mesh refinement strategy not implemented!"));
-      }
+    {
+      AssertThrow(
+          false,
+          ExcMessage("Selected mesh refinement strategy not implemented!"));
+    }
   }
 
   template <typename LATraits, typename Tria>
   void PhaseFieldMonolithicSolve<LATraits, Tria>::setup_system()
   {
-      const std::string sectionName = "Setup system";
+    const std::string sectionName = "Setup system";
     m_timer.enter_subsection(sectionName);
-//
-//    std::vector<unsigned int> block_component(m_n_components,
-//                                              m_u_dof); // displacement
-//    block_component[m_d_component] = m_d_dof;           // phasefield
-//    block_component[m_t_component] = m_t_dof;           // temperature
+    //
+    //    std::vector<unsigned int> block_component(m_n_components,
+    //                                              m_u_dof); // displacement
+    //    block_component[m_d_component] = m_d_dof;           // phasefield
+    //    block_component[m_t_component] = m_t_dof;           // temperature
 
     m_dof_handler.distribute_dofs(m_fe);
     DoFRenumbering::Cuthill_McKee(m_dof_handler);
     DoFRenumbering::component_wise(m_dof_handler, m_blocks_desc.groupIDs());
 
-      m_blocks_desc.updateDoFsInfo(m_dof_handler);
-      
+    m_blocks_desc.updateDoFsInfo(m_dof_handler);
+
     m_constraints.clear();
-      if constexpr (is_mpi)
-      {
-          VersionAdapter::cstReinit(m_constraints,
-                                    m_dof_handler.locally_owned_dofs(),
-                                    *m_blocks_desc.localRelevantPartition(),
-                                    *m_mpiInfo.mpiCommPtr());
-      }
+    if constexpr (is_mpi)
+    {
+      VersionAdapter::cstReinit(m_constraints, m_dof_handler.locally_owned_dofs(),
+                                *m_blocks_desc.localRelevantPartition(),
+                                *m_mpiInfo.mpiCommPtr());
+    }
     DoFTools::make_hanging_node_constraints(m_dof_handler, m_constraints);
-      if constexpr (is_mpi){
-          m_constraints.make_consistent_in_parallel(m_dof_handler.locally_owned_dofs(),
-                                                  *m_blocks_desc.localRelevantPartition(),
-                                                  *m_mpiInfo.mpiCommPtr());
-      }
-      m_constraints.close();
-      
-    
-      unsigned int nCells    = m_triangulation.n_active_cells();
-      unsigned int nVertices = m_triangulation.n_used_vertices();
-      unsigned int nLines    = m_triangulation.n_active_lines();
-      unsigned int nFaces    = m_triangulation.n_active_faces();
-      
-      if constexpr (is_mpi){
-          nCells    = m_triangulation.n_global_active_cells();
-          nVertices = Utilities::MPI::sum(nVertices, *m_mpiInfo.mpiCommPtr());
-          nLines    = Utilities::MPI::sum(nLines,    *m_mpiInfo.mpiCommPtr());
-          nFaces    = Utilities::MPI::sum(nFaces,    *m_mpiInfo.mpiCommPtr());
-      }
-      
+    if constexpr (is_mpi)
+    {
+      m_constraints.make_consistent_in_parallel(
+          m_dof_handler.locally_owned_dofs(),
+          *m_blocks_desc.localRelevantPartition(), *m_mpiInfo.mpiCommPtr());
+    }
+    m_constraints.close();
 
-    m_logfile << "\t\tTriangulation:"
-              << "\n\t\t\t Number of active cells: "  << nCells
-              << "\n\t\t\t Number of used vertices: " << nVertices
-              << "\n\t\t\t Number of active edges: "  << nLines
-              << "\n\t\t\t Number of active faces: "  << nFaces
+    unsigned int nCells = m_triangulation.n_active_cells();
+    unsigned int nVertices = m_triangulation.n_used_vertices();
+    unsigned int nLines = m_triangulation.n_active_lines();
+    unsigned int nFaces = m_triangulation.n_active_faces();
+
+    if constexpr (is_mpi)
+    {
+      nCells = m_triangulation.n_global_active_cells();
+      nVertices = Utilities::MPI::sum(nVertices, *m_mpiInfo.mpiCommPtr());
+      nLines = Utilities::MPI::sum(nLines, *m_mpiInfo.mpiCommPtr());
+      nFaces = Utilities::MPI::sum(nFaces, *m_mpiInfo.mpiCommPtr());
+    }
+
+    m_logfile << "\t\tTriangulation:" << "\n\t\t\t Number of active cells: "
+              << nCells << "\n\t\t\t Number of used vertices: " << nVertices
+              << "\n\t\t\t Number of active edges: " << nLines
+              << "\n\t\t\t Number of active faces: " << nFaces
               << "\n\t\t\t Number of degrees of freedom (total): "
-	      << m_dof_handler.n_dofs()
-	      << "\n\t\t\t Number of degrees of freedom (disp): "
-	      << (*m_blocks_desc.dofsPerBlockPtr())[m_u_dof]
-	      << "\n\t\t\t Number of degrees of freedom (phasefield): "
-	      << (*m_blocks_desc.dofsPerBlockPtr())[m_d_dof]
-	      << "\n\t\t\t Number of degrees of freedom (temperature): "
-	      << (*m_blocks_desc.dofsPerBlockPtr())[m_t_dof]
-              << std::endl;
+              << m_dof_handler.n_dofs()
+              << "\n\t\t\t Number of degrees of freedom (disp): "
+              << (*m_blocks_desc.dofsPerBlockPtr())[m_u_dof]
+              << "\n\t\t\t Number of degrees of freedom (phasefield): "
+              << (*m_blocks_desc.dofsPerBlockPtr())[m_d_dof]
+              << "\n\t\t\t Number of degrees of freedom (temperature): "
+              << (*m_blocks_desc.dofsPerBlockPtr())[m_t_dof] << std::endl;
 
-      m_tangent_matrix.initalize(m_dof_handler, m_constraints, false);
-      
-      m_system_rhs.initialize();
-      m_solution.initialize();
-      
+    m_tangent_matrix.initalize(m_dof_handler, m_constraints, false);
+
+    m_system_rhs.initialize();
+    m_solution.initialize();
+
     setup_qph();
 
     m_timer.leave_subsection(sectionName);
   }
 
-
-
-template <typename LATraits, typename Tria>
-void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std::function<bool(const Point<dim>&)>& func,
-                                                                      const double cool_down_temperature)
-{
+  template <typename LATraits, typename Tria>
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(
+      const std::function<bool(const Point<dim> &)> &func,
+      const double cool_down_temperature)
+  {
     std::map<types::global_dof_index, Point<dim>> support_points_T;
-    
+
     ComponentMask temperature_mask = m_fe.component_mask(m_t_fe);
-    
-#  if DEAL_II_VERSION_GTE(9, 5, 0)
-    support_points_T = DoFTools::map_dofs_to_support_points (MappingQ1<dim>(),
-                                                             m_dof_handler,
-                                                             temperature_mask);
-#else
-    DoFTools::map_dofs_to_support_points (MappingQ1<dim>(),
-                                          m_dof_handler,
-                                          support_points_T,
-                                          temperature_mask);
-#endif
-    
+
+  #if DEAL_II_VERSION_GTE(9, 5, 0)
+    support_points_T = DoFTools::map_dofs_to_support_points(
+        MappingQ1<dim>(), m_dof_handler, temperature_mask);
+  #else
+    DoFTools::map_dofs_to_support_points(MappingQ1<dim>(), m_dof_handler,
+                                         support_points_T, temperature_mask);
+  #endif
+
     if constexpr (is_mpi)
     {
-        const auto& owned_dofs = m_dof_handler.locally_owned_dofs();
+      const auto &owned_dofs = m_dof_handler.locally_owned_dofs();
 
-        for (const auto &item : support_points_T)
-        {
-            const types::global_dof_index dof = item.first;
-            const Point<dim>&             pnt = item.second;
+      for (const auto &item : support_points_T)
+      {
+        const types::global_dof_index dof = item.first;
+        const Point<dim> &pnt = item.second;
 
-            // Return whether the specified index is an element of the index set.
-            if (!owned_dofs.is_element(dof))
-                continue;
+        // Return whether the specified index is an element of the index set.
+        if (!owned_dofs.is_element(dof))
+          continue;
 
-            if (func(pnt))
-                m_solution(dof) = cool_down_temperature;
-        }
-        
-        m_solution.compress(dealii::VectorOperation::insert);
-        m_solution.updateRelevance();
-    } else {
-        
-        for (auto const & item : support_points_T)
-        {
-            if (func(item.second))
-            {
-                m_solution(item.first) = cool_down_temperature;
-            }
-        }
+        if (func(pnt))
+          m_solution(dof) = cool_down_temperature;
+      }
+
+      m_solution.compress(dealii::VectorOperation::insert);
+      m_solution.updateRelevance();
     }
-}
+    else
+    {
 
-
-  template <typename LATraits, typename Tria>
-  void PhaseFieldMonolithicSolve<LATraits, Tria>::setup_temperature_initial_conditions()
-{
-      if (   m_parameters.m_scenario == 3
-          || m_parameters.m_scenario == 4)
+      for (auto const &item : support_points_T)
       {
-          m_solution.assignDoubleOverABlock(m_t_dof,
-                                            m_parameters.m_ref_temperature);
+        if (func(item.second))
+        {
+          m_solution(item.first) = cool_down_temperature;
+        }
       }
-      else if (m_parameters.m_scenario == 5)
-      {
-          m_solution.assignDoubleOverABlock(m_t_dof,
-                                            m_parameters.m_ref_temperature);
-
-          
-          
-          addSupportTemperature([](const Point<dim>& pnt) -> bool {
-              return (std::fabs(pnt[0] -  0.0) < 1.0e-9)
-                  || (std::fabs(pnt[1] -  0.0) < 1.0e-9);
-          });
-      }
-      else if (m_parameters.m_scenario == 6)
-      {
-          m_solution.assignDoubleOverABlock(m_t_dof,
-                                            m_parameters.m_ref_temperature);
-          
-          
-          addSupportTemperature([](const Point<dim>& pnt) -> bool {
-              return    (std::fabs(pnt[0] -  0.0) < 1.0e-9)
-                     || (std::fabs(pnt[1] -  0.0) < 1.0e-9)
-                     || (std::fabs(pnt[1] -  10.0) < 1.0e-9);
-          });
-      }
-      else if (m_parameters.m_scenario == 7)
-      {
-          m_solution.assignDoubleOverABlock(m_t_dof,
-                                            m_parameters.m_ref_temperature);
-          
-          
-          
-          addSupportTemperature([](const Point<dim>& pnt) -> bool {
-              return (std::fabs(pnt[0] -  0.0) < 1.0e-9)
-                    || (std::fabs(pnt[1] -  0.0) < 1.0e-9)
-                    || (std::fabs(pnt[1] - 10.0) < 1.0e-9)
-                    || (std::fabs(pnt[2] -  0.0) < 1.0e-9)
-                    || (std::fabs(pnt[2] -  1.0) < 1.0e-9);
-          });
-      }
-      else if (m_parameters.m_scenario == 8)
-      {
-          m_solution.assignDoubleOverABlock(m_t_dof,
-                                            m_parameters.m_ref_temperature);
-          
-          
-          
-          addSupportTemperature([](const Point<dim>& pnt) -> bool {
-              return   (std::fabs(pnt[0] -  0.0) < 1.0e-9)
-                    || (std::fabs(pnt[1] -  0.0) < 1.0e-9)
-                    || (std::fabs(pnt[2] -  0.0) < 1.0e-9)
-                    || (std::fabs(pnt[2] -  1.0) < 1.0e-9);
-          });
-      }
-      else if (m_parameters.m_scenario == 9)
-      {
-          m_solution.assignDoubleOverABlock(m_t_dof,
-                                            m_parameters.m_ref_temperature);
-          
-          
-          
-          addSupportTemperature([](const Point<dim>& pnt) -> bool {
-              return (std::fabs(pnt[2] -  0.0) < 1.0e-9);
-          });
-      }
-      else if (m_parameters.m_scenario == 10)
-      {
-          m_solution.assignDoubleOverABlock(m_t_dof,
-                                            m_parameters.m_ref_temperature);
-          
-          
-          addSupportTemperature([](const Point<dim>& pnt) -> bool {
-              return (std::fabs(pnt[1] -  0.0) < 1.0e-9);
-          });
-      }
-      else if (m_parameters.m_scenario == 11)
-      {
-          m_solution.assignDoubleOverABlock(m_t_dof,
-                                            m_parameters.m_ref_temperature);
-          
-          
-          addSupportTemperature([](const Point<dim>& pnt) -> bool {
-              const double radius = 5.0;
-              return std::fabs(pnt.distance(Point<dim>()) - radius) < 1.0e-6;
-          });
-          
-      }
-      else
-      {
-          Assert(false, ExcMessage("The scenario has not been implemented!"));
-      }
-      
+    }
   }
 
   template <typename LATraits, typename Tria>
-  void PhaseFieldMonolithicSolve<LATraits, Tria>::make_constraints(const unsigned int it_nr)
-{
-      const bool apply_dirichlet_bc = (it_nr == 0);
-      
-      if (it_nr > 1)
-      {
-          if (m_parameters.m_output_iteration_history)
-              m_logfile << " --- " << std::flush;
-          return;
-      }
-      
+  void PhaseFieldMonolithicSolve<LATraits,
+                                 Tria>::setup_temperature_initial_conditions()
+  {
+    if (m_parameters.m_scenario == 3 || m_parameters.m_scenario == 4)
+    {
+      m_solution.assignDoubleOverABlock(m_t_dof, m_parameters.m_ref_temperature);
+    }
+    else if (m_parameters.m_scenario == 5)
+    {
+      m_solution.assignDoubleOverABlock(m_t_dof, m_parameters.m_ref_temperature);
+
+      addSupportTemperature(
+          [](const Point<dim> &pnt) -> bool
+          {
+            return (std::fabs(pnt[0] - 0.0) < 1.0e-9) ||
+                   (std::fabs(pnt[1] - 0.0) < 1.0e-9);
+          });
+    }
+    else if (m_parameters.m_scenario == 6)
+    {
+      m_solution.assignDoubleOverABlock(m_t_dof, m_parameters.m_ref_temperature);
+
+      addSupportTemperature(
+          [](const Point<dim> &pnt) -> bool
+          {
+            return (std::fabs(pnt[0] - 0.0) < 1.0e-9) ||
+                   (std::fabs(pnt[1] - 0.0) < 1.0e-9) ||
+                   (std::fabs(pnt[1] - 10.0) < 1.0e-9);
+          });
+    }
+    else if (m_parameters.m_scenario == 7)
+    {
+      m_solution.assignDoubleOverABlock(m_t_dof, m_parameters.m_ref_temperature);
+
+      addSupportTemperature(
+          [](const Point<dim> &pnt) -> bool
+          {
+            return (std::fabs(pnt[0] - 0.0) < 1.0e-9) ||
+                   (std::fabs(pnt[1] - 0.0) < 1.0e-9) ||
+                   (std::fabs(pnt[1] - 10.0) < 1.0e-9) ||
+                   (std::fabs(pnt[2] - 0.0) < 1.0e-9) ||
+                   (std::fabs(pnt[2] - 1.0) < 1.0e-9);
+          });
+    }
+    else if (m_parameters.m_scenario == 8)
+    {
+      m_solution.assignDoubleOverABlock(m_t_dof, m_parameters.m_ref_temperature);
+
+      addSupportTemperature(
+          [](const Point<dim> &pnt) -> bool
+          {
+            return (std::fabs(pnt[0] - 0.0) < 1.0e-9) ||
+                   (std::fabs(pnt[1] - 0.0) < 1.0e-9) ||
+                   (std::fabs(pnt[2] - 0.0) < 1.0e-9) ||
+                   (std::fabs(pnt[2] - 1.0) < 1.0e-9);
+          });
+    }
+    else if (m_parameters.m_scenario == 9)
+    {
+      m_solution.assignDoubleOverABlock(m_t_dof, m_parameters.m_ref_temperature);
+
+      addSupportTemperature([](const Point<dim> &pnt) -> bool
+                            { return (std::fabs(pnt[2] - 0.0) < 1.0e-9); });
+    }
+    else if (m_parameters.m_scenario == 10)
+    {
+      m_solution.assignDoubleOverABlock(m_t_dof, m_parameters.m_ref_temperature);
+
+      addSupportTemperature([](const Point<dim> &pnt) -> bool
+                            { return (std::fabs(pnt[1] - 0.0) < 1.0e-9); });
+    }
+    else if (m_parameters.m_scenario == 11)
+    {
+      m_solution.assignDoubleOverABlock(m_t_dof, m_parameters.m_ref_temperature);
+
+      addSupportTemperature(
+          [](const Point<dim> &pnt) -> bool
+          {
+            const double radius = 5.0;
+            return std::fabs(pnt.distance(Point<dim>()) - radius) < 1.0e-6;
+          });
+    }
+    else
+    {
+      Assert(false, ExcMessage("The scenario has not been implemented!"));
+    }
+  }
+
+  template <typename LATraits, typename Tria>
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::make_constraints(
+      const unsigned int it_nr)
+  {
+    const bool apply_dirichlet_bc = (it_nr == 0);
+
+    if (it_nr > 1)
+    {
       if (m_parameters.m_output_iteration_history)
-          m_logfile << " CST " << std::flush;
-      
-      set_bcs_id();
-      
-      if (apply_dirichlet_bc)
-      {
-          m_constraints.clear();
-          if constexpr (is_mpi)
-          {
-              VersionAdapter::cstReinit(m_constraints,
-                                        m_dof_handler.locally_owned_dofs(),
-                                        DoFTools::extract_locally_relevant_dofs(m_dof_handler),
-                                        *m_mpiInfo.mpiCommPtr());
-          }
-          DoFTools::make_hanging_node_constraints(m_dof_handler,
-                                                  m_constraints);
-          
-          const FEValuesExtractors::Scalar x_displacement(0);
-          const FEValuesExtractors::Scalar y_displacement(1);
-          const FEValuesExtractors::Scalar z_displacement(dim-1);
-          
-          const FEValuesExtractors::Vector displacements(0);
-          
-          const FEValuesExtractors::Scalar temperature(dim+1);
-          
-          if (   m_parameters.m_scenario == 1
-              || m_parameters.m_scenario == 3)
-          {
-              // Remember, the essential B.C. is applied incrementally during each time step.
-              // If a constant temperature is needed through time, the B.C should be set as zero.
-              double delta_temperature = 0.0; // temperature change per load step
-              
-              // Dirichlet B,C. bottom surface
-              const int boundary_id_bottom_surface = 0;
-              VectorTools::interpolate_boundary_values(m_dof_handler,
-                                                       boundary_id_bottom_surface,
-                                                       Functions::ZeroFunction<dim>(m_n_components),
-                                                       m_constraints,
-                                                       m_fe.component_mask(y_displacement));
-              
-              // temperature B.C. at the bottom surface
-              VectorTools::interpolate_boundary_values(m_dof_handler,
-                                                       boundary_id_bottom_surface,
-                                                       Functions::ConstantFunction<dim>(
-                                                                                        delta_temperature, m_n_components),
-                                                       m_constraints,
-                                                       m_fe.component_mask(temperature));
-              
-              std::vector<types::global_dof_index> node_xy(m_fe.dofs_per_vertex);
-              
-              if constexpr (is_mpi) {
-                  const unsigned int n_dofs = m_fe.dofs_per_vertex;
-                  std::vector<bool> locally_owned_vertices =  GridTools::get_locally_owned_vertices(m_dof_handler.get_triangulation());
-                  for (auto const & cell : m_dof_handler.active_cell_iterators()) {
-                      if (!cell->is_locally_owned() || !cell->at_boundary()) continue;
-                      
-                      for (const auto vertex : cell->vertex_indices())
-                      {
-                          // skip ghost cells
-                          if (!locally_owned_vertices[cell->vertex_index(vertex)]) continue;
-                          
-                          const Point<dim> point = cell->vertex(vertex);
-                          
-                          if (   (std::fabs(point[0] - 0.0) < 1.0e-9)
-                              && (std::fabs(point[1] - 0.0) < 1.0e-9) )
-                          {
-                              for (unsigned int i = 0; i < n_dofs; ++i)
-                                  node_xy[i] = cell->vertex_dof_index(vertex, i);
-                              
-                          }
-                      }
-                  }
-                  
-              } else {
-                  
-                  typename Triangulation<dim>::active_vertex_iterator vertex_itr;
-                  vertex_itr = m_triangulation.begin_active_vertex();
-                  
-                  for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
-                  {
-                      if (   (std::fabs(vertex_itr->vertex()[0] - 0.0) < 1.0e-9)
-                          && (std::fabs(vertex_itr->vertex()[1] - 0.0) < 1.0e-9) )
-                      {
-                          node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
-                      }
-                  }
-              }
-              
-              m_constraints.add_line(node_xy[0]);
-              m_constraints.set_inhomogeneity(node_xy[0], 0.0);
-              
-              m_constraints.add_line(node_xy[1]);
-              m_constraints.set_inhomogeneity(node_xy[1], 0.0);
-              
-              const int boundary_id_top_surface = 1;
-              /*
-               VectorTools::interpolate_boundary_values(m_dof_handler,
-               boundary_id_top_surface,
-               Functions::ZeroFunction<dim>(m_n_components),
-               m_constraints,
-               m_fe.component_mask(x_displacement));
-               */
-              const double time_inc = m_time.get_delta_t();
-              double disp_magnitude = m_time.get_magnitude();
-              VectorTools::interpolate_boundary_values(m_dof_handler,
-                                                       boundary_id_top_surface,
-                                                       Functions::ConstantFunction<dim>(
-                                                                                        disp_magnitude*time_inc, m_n_components),
-                                                       m_constraints,
-                                                       m_fe.component_mask(y_displacement));
-              
-              // temperature B.C. at the top surface
-              if (m_time.current() <= 0.25e-3)
-                  delta_temperature = -time_inc * 1.0e5; //cool down
-              //	      delta_temperature =  time_inc * 1.0e5; //warn up
-              //	      delta_temperature = 0.0; //constant
-              
-              VectorTools::interpolate_boundary_values(m_dof_handler,
-                                                       boundary_id_top_surface,
-                                                       Functions::ConstantFunction<dim>(
-                                                                                        delta_temperature, m_n_components),
-                                                       m_constraints,
-                                                       m_fe.component_mask(temperature));
-          }
-          else if (   m_parameters.m_scenario == 2
-                   || m_parameters.m_scenario == 4)
-          {
-              // Remember, the essential B.C. is applied incrementally during each time step.
-              // If a constant temperature is needed through time, the B.C should be set as zero.
-              double delta_temperature = 0.0; // temperature change per load step
-              
-              // Dirichlet B,C. bottom surface
-              const int boundary_id_bottom_surface = 0;
-              VectorTools::interpolate_boundary_values(m_dof_handler,
-                                                       boundary_id_bottom_surface,
-                                                       Functions::ZeroFunction<dim>(m_n_components),
-                                                       m_constraints,
-                                                       m_fe.component_mask(displacements));
-              
-              // temperature B.C. at the bottom surface
-              VectorTools::interpolate_boundary_values(m_dof_handler,
-                                                       boundary_id_bottom_surface,
-                                                       Functions::ConstantFunction<dim>(
-                                                                                        delta_temperature, m_n_components),
-                                                       m_constraints,
-                                                       m_fe.component_mask(temperature));
-              
-              const int boundary_id_top_surface = 1;
-              VectorTools::interpolate_boundary_values(m_dof_handler,
-                                                       boundary_id_top_surface,
-                                                       Functions::ZeroFunction<dim>(m_n_components),
-                                                       m_constraints,
-                                                       m_fe.component_mask(y_displacement));
-              
-              const double time_inc = m_time.get_delta_t();
-              double disp_magnitude = m_time.get_magnitude();
-              VectorTools::interpolate_boundary_values(m_dof_handler,
-                                                       boundary_id_top_surface,
-                                                       Functions::ConstantFunction<dim>(
-                                                                                        disp_magnitude*time_inc, m_n_components),
-                                                       m_constraints,
-                                                       m_fe.component_mask(x_displacement));
-              
-              const int boundary_id_side_surfaces = 2;
-              VectorTools::interpolate_boundary_values(m_dof_handler,
-                                                       boundary_id_side_surfaces,
-                                                       Functions::ZeroFunction<dim>(m_n_components),
-                                                       m_constraints,
-                                                       m_fe.component_mask(y_displacement));
-              
-              // temperature B.C. at the top surface
-              if (m_time.current() <= 10.0001e-3)
-                  delta_temperature = -time_inc * 2.0e4; //cool down
-              //	      delta_temperature =  time_inc * 2.0e4; //warm up
-              
-              VectorTools::interpolate_boundary_values(m_dof_handler,
-                                                       boundary_id_top_surface,
-                                                       Functions::ConstantFunction<dim>(
-                                                                                        delta_temperature, m_n_components),
-                                                       m_constraints,
-                                                       m_fe.component_mask(temperature));
-          }
-          else if (m_parameters.m_scenario == 5)
-          {
-              const int boundary_id_mid_surface_x = 2;
-              VectorTools::interpolate_boundary_values(m_dof_handler,
-                                                       boundary_id_mid_surface_x,
-                                                       Functions::ZeroFunction<dim>(m_n_components),
-                                                       m_constraints,
-                                                       m_fe.component_mask(x_displacement));
-              
-              const int boundary_id_mid_surface_y = 3;
-              VectorTools::interpolate_boundary_values(m_dof_handler,
-                                                       boundary_id_mid_surface_y,
-                                                       Functions::ZeroFunction<dim>(m_n_components),
-                                                       m_constraints,
-                                                       m_fe.component_mask(y_displacement));
-              
-              // Remember, the essential B.C. is applied incrementally during each time step.
-              // If a constant temperature is needed through time, the B.C should be set as zero.
-              double delta_temperature = 0.0; // temperature change per load step
-              const int boundary_id_left_surface = 5;
-              VectorTools::interpolate_boundary_values(m_dof_handler,
-                                                       boundary_id_left_surface,
-                                                       Functions::ConstantFunction<dim>(
-                                                                                        delta_temperature, m_n_components),
-                                                       m_constraints,
-                                                       m_fe.component_mask(temperature));
-              
-              const int boundary_id_bottom_surface = 1;
-              VectorTools::interpolate_boundary_values(m_dof_handler,
-                                                       boundary_id_bottom_surface,
-                                                       Functions::ConstantFunction<dim>(
-                                                                                        delta_temperature, m_n_components),
-                                                       m_constraints,
-                                                       m_fe.component_mask(temperature));
-          }
-          else if (m_parameters.m_scenario == 6)
-          {
-              const int boundary_id_mid_surface_x = 2;
-              VectorTools::interpolate_boundary_values(m_dof_handler,
-                                                       boundary_id_mid_surface_x,
-                                                       Functions::ZeroFunction<dim>(m_n_components),
-                                                       m_constraints,
-                                                       m_fe.component_mask(x_displacement));
-              
-              std::vector<types::global_dof_index> node_xy(m_fe.dofs_per_vertex);
-              bool hasCst = false;
-              if constexpr (is_mpi) {
-                  const unsigned int n_dofs = m_fe.dofs_per_vertex;
-                  std::vector<bool> locally_owned_vertices =  GridTools::get_locally_owned_vertices(m_triangulation);
-                  for (auto const & cell : m_dof_handler.active_cell_iterators()) {
-                      // skip ghost cells
-                      if (!cell->is_locally_owned() || !cell->at_boundary()) continue;
-                      
-                      for (const auto vertex : cell->vertex_indices())
-                      {
-                          // skip dofs that not owned by current rank
-                          if (!locally_owned_vertices[cell->vertex_index(vertex)]) continue;
-                          
-                          const Point<dim> point = cell->vertex(vertex);
-                          
-                          if (   (std::fabs(point[0] - 25.0) < 1.0e-9)
-                              && (std::fabs(point[1] - 5.0) < 1.0e-9) )
-                          {
-                              for (unsigned int i = 0; i < n_dofs; ++i){
-                                  node_xy[i] = cell->vertex_dof_index(vertex, i);
-                              }
-                              hasCst = true;
-                              break; // break, only single cst pnt
-                          }
-                      }
-                      if(hasCst) break;
-                  }
-                  
-              } else {
-                  typename Triangulation<dim>::active_vertex_iterator vertex_itr;
-                  vertex_itr = m_triangulation.begin_active_vertex();
-                  
-                  
-                  for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
-                  {
-                      if (   (std::fabs(vertex_itr->vertex()[0] - 25.0) < 1.0e-9)
-                          && (std::fabs(vertex_itr->vertex()[1] -  5.0) < 1.0e-9) )
-                      {
-                          node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
-                          hasCst = true;
-                          break;
-                      }
-                  }
-              }
-              
-              if (      hasCst
-                  &&    m_dof_handler.locally_owned_dofs().is_element(node_xy[1])) {
-                  m_constraints.add_line(node_xy[1]);
-                  m_constraints.set_inhomogeneity(node_xy[1], 0.0);
-              }
-              
-              // Remember, the essential B.C. is applied incrementally during each time step.
-              // If a constant temperature is needed through time, the B.C should be set as zero.
-              double delta_temperature = 0.0; // temperature change per load step
-              const int boundary_id_left_surface = 6;
-              VectorTools::interpolate_boundary_values(m_dof_handler,
-                                                       boundary_id_left_surface,
-                                                       Functions::ConstantFunction<dim>(
-                                                                                        delta_temperature, m_n_components),
-                                                       m_constraints,
-                                                       m_fe.component_mask(temperature));
-              
-              const int boundary_id_bottom_surface = 1;
-              VectorTools::interpolate_boundary_values(m_dof_handler,
-                                                       boundary_id_bottom_surface,
-                                                       Functions::ConstantFunction<dim>(
-                                                                                        delta_temperature, m_n_components),
-                                                       m_constraints,
-                                                       m_fe.component_mask(temperature));
-              
-              const int boundary_id_top_surface = 3;
-              VectorTools::interpolate_boundary_values(m_dof_handler,
-                                                       boundary_id_top_surface,
-                                                       Functions::ConstantFunction<dim>(
-                                                                                        delta_temperature, m_n_components),
-                                                       m_constraints,
-                                                       m_fe.component_mask(temperature));
-          }
-          else if (m_parameters.m_scenario == 7)
-          {
-              const int boundary_id_mid_surface_x = 3;
-              VectorTools::interpolate_boundary_values(m_dof_handler,
-                                                       boundary_id_mid_surface_x,
-                                                       Functions::ZeroFunction<dim>(m_n_components),
-                                                       m_constraints,
-                                                       m_fe.component_mask(x_displacement));
-              
-              if constexpr (is_mpi) {
-              
-                  // the constrainted points
-                  std::vector<CstPnt> cstPnts({
-                      // Points                             cstDoFs cstValues
-                      // center pnt
-                      CstPnt(Point<dim>( 0.0,   5.0,  0.5), {1, 2}, {0.0, 0.0}),
-                      
-                      // center pnt on the symmetric plane
-                      CstPnt(Point<dim>(25.0,   5.0,  0.5), {1, 2}, {0.0, 0.0}),
-                      
-                      // pnts on the sides of the symmetric plane
-                      CstPnt(Point<dim>(25.0,   0.0,  0.5), {2},    {0.0}),
-                      CstPnt(Point<dim>(25.0,  10.0,  0.5), {2},    {0.0}),
-                      CstPnt(Point<dim>(25.0,   5.0,  0.0), {1},    {0.0}),
-                      CstPnt(Point<dim>(25.0,   5.0,  1.0), {1},    {0.0}),
-                  });
-                  
-                  
-                  // record if there is a constrained on current rank
-                  bool hasCst = false;
-                  
-                  std::vector<bool> locally_owned_vertices =  GridTools::get_locally_owned_vertices(m_triangulation);
-                  for (auto const & cell : m_dof_handler.active_cell_iterators()) {
-                      // skip ghost cells or cells that are not at boundary
-                      if (!cell->is_locally_owned() || !cell->at_boundary()) continue;
-                      
-                      // loop over vertices on the locally owned cells at boundary
-                      for (const auto vertex : cell->vertex_indices())
-                      {
-                          // skip vertices that are not owned by current rank.
-                          // This operation is necessary because some vertices are shared by cells owned by other ranks. Or, it may cause unexpected results.
-                          if (!locally_owned_vertices[cell->vertex_index(vertex)]) continue;
-        
-                          // obtain vertex
-                          const Point<dim> point = cell->vertex(vertex);
-        
-                          // loop over prescribed constraints
-                          for (unsigned int j = 0; j < cstPnts.size(); ++j)
-                          {
-                              // j-th prescribed CstPnt
-                              CstPnt& cstPoint = cstPnts[j];
-                              
-                              // skip further operations, if this point has been handled.
-                              if(cstPoint.found) continue;
-                              
-                              // the vertex is close enough to the constrained point
-                              if (point.distance(cstPoint.pnt) < 1.0e-9)
-                              {
-                                  cstPoint.found = true;
-                                  // The constrained point is owned by current rank.
-                                  hasCst = true;
-                                  // extract constrained DoFs
-                                  cstPoint.extractDoFs(cell, vertex);
-                                  
-                                  // no need to look at other constrained points
-                                  break;
-                              }
-                          } // loop over constrainted pnts
-                      } // loop over vertices in cell
-                  } // loop over cells
+        m_logfile << " --- " << std::flush;
+      return;
+    }
 
-                  // only the rank with constrained points will apply BCs.
-                  if(hasCst)
-                  {
-                      const IndexSet& localDoFs = m_dof_handler.locally_owned_dofs();
-                      
-                      for (unsigned int i = 0; i < cstPnts.size(); ++i) {
-                          const CstPnt& cstPoint = cstPnts[i];
-                          if(cstPoint.applyCsts(localDoFs, m_constraints))
-                          {
-                              // TODO: remve after debugging
-                              std::string cstInfo = "\n\ncstPnt: \nrank: " + std::to_string(m_mpiInfo.rank()) + "\n";
-                              cstInfo += "Pnt: " + std::to_string(cstPoint.pnt[0]) + ", "
-                              + std::to_string(cstPoint.pnt[1]) + ", "
-                              + std::to_string(cstPoint.pnt[2]) + "\n\n\n\n";
-                              std::cout << cstInfo << std::endl;
-                          }
-                      } // loop over constrainted points
-                  }
-              } else {
-                  typename Triangulation<dim>::active_vertex_iterator vertex_itr;
-                  vertex_itr = m_triangulation.begin_active_vertex();
-                  std::vector<types::global_dof_index> node_xy(m_fe.dofs_per_vertex);
-                  
-                  
-                  for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
-                  {
-                      if (   (std::fabs(vertex_itr->vertex()[0] - 25.0) < 1.0e-9)
-                          && (std::fabs(vertex_itr->vertex()[1] -  5.0) < 1.0e-9)
-                          && (std::fabs(vertex_itr->vertex()[2] -  0.5) < 1.0e-9) )
-                      {
-                          node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
-                      }
-                  }
-                  m_constraints.add_line(node_xy[2]);
-                  m_constraints.set_inhomogeneity(node_xy[2], 0.0);
-                  m_constraints.add_line(node_xy[1]);
-                  m_constraints.set_inhomogeneity(node_xy[1], 0.0);
-                  
-                  
-                  for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
-                  {
-                      if (   (std::fabs(vertex_itr->vertex()[0] - 25.0) < 1.0e-9)
-                          && (std::fabs(vertex_itr->vertex()[1] -  0.0) < 1.0e-9)
-                          && (std::fabs(vertex_itr->vertex()[2] -  0.5) < 1.0e-9) )
-                      {
-                          node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
-                      }
-                  }
-                  m_constraints.add_line(node_xy[2]);
-                  m_constraints.set_inhomogeneity(node_xy[2], 0.0);
-                  
-                  
-                  for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
-                  {
-                      if (   (std::fabs(vertex_itr->vertex()[0] - 25.0) < 1.0e-9)
-                          && (std::fabs(vertex_itr->vertex()[1] - 10.0) < 1.0e-9)
-                          && (std::fabs(vertex_itr->vertex()[2] -  0.5) < 1.0e-9) )
-                      {
-                          node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
-                      }
-                  }
-                  m_constraints.add_line(node_xy[2]);
-                  m_constraints.set_inhomogeneity(node_xy[2], 0.0);
-                  
-                  
-                  for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
-                  {
-                      if (   (std::fabs(vertex_itr->vertex()[0] -  0.0) < 1.0e-9)
-                          && (std::fabs(vertex_itr->vertex()[1] -  5.0) < 1.0e-9)
-                          && (std::fabs(vertex_itr->vertex()[2] -  0.5) < 1.0e-9) )
-                      {
-                          node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
-                      }
-                  }
-                  m_constraints.add_line(node_xy[2]);
-                  m_constraints.set_inhomogeneity(node_xy[2], 0.0);
-                  m_constraints.add_line(node_xy[1]);
-                  m_constraints.set_inhomogeneity(node_xy[1], 0.0);
-                  
-                  
-                  for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
-                  {
-                      if (   (std::fabs(vertex_itr->vertex()[0] - 25.0) < 1.0e-9)
-                          && (std::fabs(vertex_itr->vertex()[1] -  5.0) < 1.0e-9)
-                          && (std::fabs(vertex_itr->vertex()[2] -  0.0) < 1.0e-9) )
-                      {
-                          node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
-                      }
-                  }
-                  m_constraints.add_line(node_xy[1]);
-                  m_constraints.set_inhomogeneity(node_xy[1], 0.0);
-                  
-                  
-                  for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
-                  {
-                      if (   (std::fabs(vertex_itr->vertex()[0] - 25.0) < 1.0e-9)
-                          && (std::fabs(vertex_itr->vertex()[1] -  5.0) < 1.0e-9)
-                          && (std::fabs(vertex_itr->vertex()[2] -  1.0) < 1.0e-9) )
-                      {
-                          node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
-                      }
-                  }
-                  m_constraints.add_line(node_xy[1]);
-                  m_constraints.set_inhomogeneity(node_xy[1], 0.0);
-              }
-/*
-              // Remember, the essential B.C. is applied incrementally during each time step.
-              // If a constant temperature is needed through time, the B.C should be set as zero.
-              const int boundary_id_mid_surface_x = 3;
-              VectorTools::interpolate_boundary_values(m_dof_handler,
-                                                       boundary_id_mid_surface_x,
-                                                       Functions::ZeroFunction<dim>(m_n_components),
-                                                       m_constraints,
-                                                       m_fe.component_mask(x_displacement));
- */
-              
-/*
-              // TODO: add_line
-              for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
-              {
-                  if (   (std::fabs(vertex_itr->vertex()[0] - 25.0) < 1.0e-9)
-                      && (std::fabs(vertex_itr->vertex()[1] -  5.0) < 1.0e-9)
-                      && (std::fabs(vertex_itr->vertex()[2] -  0.0) < 1.0e-9) )
-                  {
-                      node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
-                  }
-              }
-              m_constraints.add_line(node_xy[1]);
-              m_constraints.set_inhomogeneity(node_xy[1], 0.0);
+    if (m_parameters.m_output_iteration_history)
+      m_logfile << " CST " << std::flush;
 
-              // TODO: add_line
-              for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
-              {
-                  if (   (std::fabs(vertex_itr->vertex()[0] - 25.0) < 1.0e-9)
-                      && (std::fabs(vertex_itr->vertex()[1] -  5.0) < 1.0e-9)
-                      && (std::fabs(vertex_itr->vertex()[2] -  1.0) < 1.0e-9) )
-                  {
-                      node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
-                  }
-              }
-              m_constraints.add_line(node_xy[1]);
-              m_constraints.set_inhomogeneity(node_xy[1], 0.0);
-*/
-              // Remember, the essential B.C. is applied incrementally during each time step.
-              // If a constant temperature is needed through time, the B.C should be set as zero.
-              double delta_temperature = 0.0; // temperature change per load step
-              const int boundary_id_left_surface = 0;
-              VectorTools::interpolate_boundary_values(m_dof_handler,
-                                                       boundary_id_left_surface,
-                                                       Functions::ConstantFunction<dim>(
-                                                                                        delta_temperature, m_n_components),
-                                                       m_constraints,
-                                                       m_fe.component_mask(temperature));
-              
-              const int boundary_id_front_surface = 1;
-              VectorTools::interpolate_boundary_values(m_dof_handler,
-                                                       boundary_id_front_surface,
-                                                       Functions::ConstantFunction<dim>(
-                                                                                        delta_temperature, m_n_components),
-                                                       m_constraints,
-                                                       m_fe.component_mask(temperature));
-              
-              const int boundary_id_bottom_surface = 2;
-              VectorTools::interpolate_boundary_values(m_dof_handler,
-                                                       boundary_id_bottom_surface,
-                                                       Functions::ConstantFunction<dim>(
-                                                                                        delta_temperature, m_n_components),
-                                                       m_constraints,
-                                                       m_fe.component_mask(temperature));
-              
-              const int boundary_id_back_surface = 4;
-              VectorTools::interpolate_boundary_values(m_dof_handler,
-                                                       boundary_id_back_surface,
-                                                       Functions::ConstantFunction<dim>(
-                                                                                        delta_temperature, m_n_components),
-                                                       m_constraints,
-                                                       m_fe.component_mask(temperature));
-              
-              const int boundary_id_top_surface = 5;
-              VectorTools::interpolate_boundary_values(m_dof_handler,
-                                                       boundary_id_top_surface,
-                                                       Functions::ConstantFunction<dim>(
-                                                                                        delta_temperature, m_n_components),
-                                                       m_constraints,
-                                                       m_fe.component_mask(temperature));
-          }
-          else if (m_parameters.m_scenario == 8)
-          {
-              const int boundary_id_mid_surface_x = 3;
-              VectorTools::interpolate_boundary_values(m_dof_handler,
-                                                       boundary_id_mid_surface_x,
-                                                       Functions::ZeroFunction<dim>(m_n_components),
-                                                       m_constraints,
-                                                       m_fe.component_mask(x_displacement));
-              
-              const int boundary_id_mid_surface_y = 4;
-              VectorTools::interpolate_boundary_values(m_dof_handler,
-                                                       boundary_id_mid_surface_y,
-                                                       Functions::ZeroFunction<dim>(m_n_components),
-                                                       m_constraints,
-                                                       m_fe.component_mask(y_displacement));
-              
-              typename Triangulation<dim>::active_vertex_iterator vertex_itr;
-              vertex_itr = m_triangulation.begin_active_vertex();
-              std::vector<types::global_dof_index> node_xy(m_fe.dofs_per_vertex);
-              // TODO: add_line
-              for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
-              {
-                  if (   (std::fabs(vertex_itr->vertex()[0] -  0.0) < 1.0e-9)
-                      && (std::fabs(vertex_itr->vertex()[1] -  0.0) < 1.0e-9)
-                      && (std::fabs(vertex_itr->vertex()[2] -  0.5) < 1.0e-9) )
-                  {
-                      node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
-                  }
-              }
-              m_constraints.add_line(node_xy[2]);
-              m_constraints.set_inhomogeneity(node_xy[2], 0.0);
-              // TODO: add_line
-              for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
-              {
-                  if (   (std::fabs(vertex_itr->vertex()[0] -  5.0) < 1.0e-9)
-                      && (std::fabs(vertex_itr->vertex()[1] -  0.0) < 1.0e-9)
-                      && (std::fabs(vertex_itr->vertex()[2] -  0.5) < 1.0e-9) )
-                  {
-                      node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
-                  }
-              }
-              m_constraints.add_line(node_xy[2]);
-              m_constraints.set_inhomogeneity(node_xy[2], 0.0);
-              
-              for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
-              {
-                  if (   (std::fabs(vertex_itr->vertex()[0] -  0.0) < 1.0e-9)
-                      && (std::fabs(vertex_itr->vertex()[1] -  2.0) < 1.0e-9)
-                      && (std::fabs(vertex_itr->vertex()[2] -  0.5) < 1.0e-9) )
-                  {
-                      node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
-                  }
-              }
-              m_constraints.add_line(node_xy[2]);
-              m_constraints.set_inhomogeneity(node_xy[2], 0.0);
-              
-              // Remember, the essential B.C. is applied incrementally during each time step.
-              // If a constant temperature is needed through time, the B.C should be set as zero.
-              double delta_temperature = 0.0; // temperature change per load step
-              const int boundary_id_left_surface = 0;
-              VectorTools::interpolate_boundary_values(m_dof_handler,
-                                                       boundary_id_left_surface,
-                                                       Functions::ConstantFunction<dim>(
-                                                                                        delta_temperature, m_n_components),
-                                                       m_constraints,
-                                                       m_fe.component_mask(temperature));
-              
-              const int boundary_id_front_surface = 1;
-              VectorTools::interpolate_boundary_values(m_dof_handler,
-                                                       boundary_id_front_surface,
-                                                       Functions::ConstantFunction<dim>(
-                                                                                        delta_temperature, m_n_components),
-                                                       m_constraints,
-                                                       m_fe.component_mask(temperature));
-              
-              const int boundary_id_bottom_surface = 2;
-              VectorTools::interpolate_boundary_values(m_dof_handler,
-                                                       boundary_id_bottom_surface,
-                                                       Functions::ConstantFunction<dim>(
-                                                                                        delta_temperature, m_n_components),
-                                                       m_constraints,
-                                                       m_fe.component_mask(temperature));
-              
-              const int boundary_id_top_surface = 5;
-              VectorTools::interpolate_boundary_values(m_dof_handler,
-                                                       boundary_id_top_surface,
-                                                       Functions::ConstantFunction<dim>(
-                                                                                        delta_temperature, m_n_components),
-                                                       m_constraints,
-                                                       m_fe.component_mask(temperature));
-          }
-          else if (m_parameters.m_scenario == 9)
-          {
-              const int boundary_id_mid_surface_x = 3;
-              VectorTools::interpolate_boundary_values(m_dof_handler,
-                                                       boundary_id_mid_surface_x,
-                                                       Functions::ZeroFunction<dim>(m_n_components),
-                                                       m_constraints,
-                                                       m_fe.component_mask(x_displacement));
-              
-              const int boundary_id_mid_surface_y = 4;
-              VectorTools::interpolate_boundary_values(m_dof_handler,
-                                                       boundary_id_mid_surface_y,
-                                                       Functions::ZeroFunction<dim>(m_n_components),
-                                                       m_constraints,
-                                                       m_fe.component_mask(y_displacement));
-              // TODO: add_line
-              typename Triangulation<dim>::active_vertex_iterator vertex_itr;
-              vertex_itr = m_triangulation.begin_active_vertex();
-              std::vector<types::global_dof_index> node_xy(m_fe.dofs_per_vertex);
-              
-              for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
-              {
-                  if (   (std::fabs(vertex_itr->vertex()[0] -  5.0) < 1.0e-9)
-                      && (std::fabs(vertex_itr->vertex()[1] -  2.0) < 1.0e-9)
-                      && (std::fabs(vertex_itr->vertex()[2] -  0.5) < 1.0e-9) )
-                  {
-                      node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
-                  }
-              }
-              m_constraints.add_line(node_xy[2]);
-              m_constraints.set_inhomogeneity(node_xy[2], 0.0);
-              
-              // Remember, the essential B.C. is applied incrementally during each time step.
-              // If a constant temperature is needed through time, the B.C should be set as zero.
-              double delta_temperature = 0.0; // temperature change per load step
-              const int boundary_id_bottom_surface = 2;
-              VectorTools::interpolate_boundary_values(m_dof_handler,
-                                                       boundary_id_bottom_surface,
-                                                       Functions::ConstantFunction<dim>(
-                                                                                        delta_temperature, m_n_components),
-                                                       m_constraints,
-                                                       m_fe.component_mask(temperature));
-          }
-          else if (m_parameters.m_scenario == 10)
-          {
-              const int boundary_id_mid_surface_x = 3;
-              VectorTools::interpolate_boundary_values(m_dof_handler,
-                                                       boundary_id_mid_surface_x,
-                                                       Functions::ZeroFunction<dim>(m_n_components),
-                                                       m_constraints,
-                                                       m_fe.component_mask(x_displacement));
-              
-              const int boundary_id_mid_surface_y = 4;
-              VectorTools::interpolate_boundary_values(m_dof_handler,
-                                                       boundary_id_mid_surface_y,
-                                                       Functions::ZeroFunction<dim>(m_n_components),
-                                                       m_constraints,
-                                                       m_fe.component_mask(y_displacement));
-              // TODO: add_line
-              typename Triangulation<dim>::active_vertex_iterator vertex_itr;
-              vertex_itr = m_triangulation.begin_active_vertex();
-              std::vector<types::global_dof_index> node_xy(m_fe.dofs_per_vertex);
-              
-              for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
-              {
-                  if (   (std::fabs(vertex_itr->vertex()[0] -  5.0) < 1.0e-9)
-                      && (std::fabs(vertex_itr->vertex()[1] -  2.0) < 1.0e-9)
-                      && (std::fabs(vertex_itr->vertex()[2] -  1.0) < 1.0e-9) )
-                  {
-                      node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
-                  }
-              }
-              m_constraints.add_line(node_xy[2]);
-              m_constraints.set_inhomogeneity(node_xy[2], 0.0);
-              
-              // Remember, the essential B.C. is applied incrementally during each time step.
-              // If a constant temperature is needed through time, the B.C should be set as zero.
-              double delta_temperature = 0.0; // temperature change per load step
-              const int boundary_id_front_surface = 1;
-              VectorTools::interpolate_boundary_values(m_dof_handler,
-                                                       boundary_id_front_surface,
-                                                       Functions::ConstantFunction<dim>(
-                                                                                        delta_temperature, m_n_components),
-                                                       m_constraints,
-                                                       m_fe.component_mask(temperature));
-          }
-          else if (m_parameters.m_scenario == 11)
-          {
-              const int boundary_id_surface_x = 0;
-              VectorTools::interpolate_boundary_values(m_dof_handler,
-                                                       boundary_id_surface_x,
-                                                       Functions::ZeroFunction<dim>(m_n_components),
-                                                       m_constraints,
-                                                       m_fe.component_mask(x_displacement));
-              
-              const int boundary_id_surface_y = 1;
-              VectorTools::interpolate_boundary_values(m_dof_handler,
-                                                       boundary_id_surface_y,
-                                                       Functions::ZeroFunction<dim>(m_n_components),
-                                                       m_constraints,
-                                                       m_fe.component_mask(y_displacement));
-              
-              const int boundary_id_surface_z = 2;
-              VectorTools::interpolate_boundary_values(m_dof_handler,
-                                                       boundary_id_surface_z,
-                                                       Functions::ZeroFunction<dim>(m_n_components),
-                                                       m_constraints,
-                                                       m_fe.component_mask(z_displacement));
-              
-              // Remember, the essential B.C. is applied incrementally during each time step.
-              // If a constant temperature is needed through time, the B.C should be set as zero.
-              double delta_temperature = 0.0; // temperature change per load step
-              const int boundary_id_sphere_surface = 3;
-              VectorTools::interpolate_boundary_values(m_dof_handler,
-                                                       boundary_id_sphere_surface,
-                                                       Functions::ConstantFunction<dim>(
-                                                                                        delta_temperature, m_n_components),
-                                                       m_constraints,
-                                                       m_fe.component_mask(temperature));
-          }
-          else
-              Assert(false, ExcMessage("The scenario has not been implemented!"));
-          
-          if constexpr (is_mpi){
-              
-              m_constraints.make_consistent_in_parallel(m_dof_handler.locally_owned_dofs(),
-                                                        *m_blocks_desc.localRelevantPartition(),
-                                                        *m_mpiInfo.mpiCommPtr());
-              
-          }
-      }
-      else  // inhomogeneous constraints
+    set_bcs_id();
+
+    if (apply_dirichlet_bc)
+    {
+      m_constraints.clear();
+      if constexpr (is_mpi)
       {
-          bool has_inhomo = m_constraints.has_inhomogeneities();
-          
-          if constexpr (is_mpi) {
-              // accumulate local flag over all ranks
-              const unsigned int local_flag = has_inhomo ? 1u : 0u;
-              const unsigned int global_flag =
-                  Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
-              has_inhomo = (global_flag > 0u);
-          }
-          
-          if (has_inhomo)
-          {
-              AffineConstraints<double> homoCst(m_constraints);
-              if constexpr (is_mpi)
-              {
-                  std::vector<IndexSet::size_type> indices;
-                  m_dof_handler.locally_owned_dofs().fill_index_vector(indices);
-                  
-                  for (unsigned int dof : indices)
-                      if (homoCst.is_inhomogeneously_constrained(dof))
-                          homoCst.set_inhomogeneity(dof, 0.0);
-              } else {
-                  for (unsigned int dof = 0; dof != m_dof_handler.n_dofs(); ++dof)
-                      if (homoCst.is_inhomogeneously_constrained(dof))
-                          homoCst.set_inhomogeneity(dof, 0.0);
-              }
-              homoCst.close();
-              
-              m_constraints.clear();
-              
-              if constexpr (is_mpi)
-              {
-                  VersionAdapter::cstReinit(m_constraints,
-                                            m_dof_handler.locally_owned_dofs(),
-                                            DoFTools::extract_locally_relevant_dofs(m_dof_handler),
-                                            *m_mpiInfo.mpiCommPtr());
-              }
-              
-              m_constraints.copy_from(homoCst);
-          }
+        VersionAdapter::cstReinit(
+            m_constraints, m_dof_handler.locally_owned_dofs(),
+            DoFTools::extract_locally_relevant_dofs(m_dof_handler),
+            *m_mpiInfo.mpiCommPtr());
       }
-      m_constraints.close();
+      DoFTools::make_hanging_node_constraints(m_dof_handler, m_constraints);
+
+      const FEValuesExtractors::Scalar x_displacement(0);
+      const FEValuesExtractors::Scalar y_displacement(1);
+      const FEValuesExtractors::Scalar z_displacement(dim - 1);
+
+      const FEValuesExtractors::Vector displacements(0);
+
+      const FEValuesExtractors::Scalar temperature(dim + 1);
+
+      if (m_parameters.m_scenario == 1 || m_parameters.m_scenario == 3)
+      {
+        // Remember, the essential B.C. is applied incrementally during each time
+        // step. If a constant temperature is needed through time, the B.C should
+        // be set as zero.
+        double delta_temperature = 0.0; // temperature change per load step
+
+        // Dirichlet B,C. bottom surface
+        const int boundary_id_bottom_surface = 0;
+        VectorTools::interpolate_boundary_values(
+            m_dof_handler, boundary_id_bottom_surface,
+            Functions::ZeroFunction<dim>(m_n_components), m_constraints,
+            m_fe.component_mask(y_displacement));
+
+        // temperature B.C. at the bottom surface
+        VectorTools::interpolate_boundary_values(
+            m_dof_handler, boundary_id_bottom_surface,
+            Functions::ConstantFunction<dim>(delta_temperature, m_n_components),
+            m_constraints, m_fe.component_mask(temperature));
+
+        std::vector<types::global_dof_index> node_xy(m_fe.dofs_per_vertex);
+
+        if constexpr (is_mpi)
+        {
+          const unsigned int n_dofs = m_fe.dofs_per_vertex;
+          std::vector<bool> locally_owned_vertices =
+              GridTools::get_locally_owned_vertices(
+                  m_dof_handler.get_triangulation());
+          for (auto const &cell : m_dof_handler.active_cell_iterators())
+          {
+            if (!cell->is_locally_owned() || !cell->at_boundary())
+              continue;
+
+            for (const auto vertex : cell->vertex_indices())
+            {
+              // skip ghost cells
+              if (!locally_owned_vertices[cell->vertex_index(vertex)])
+                continue;
+
+              const Point<dim> point = cell->vertex(vertex);
+
+              if ((std::fabs(point[0] - 0.0) < 1.0e-9) &&
+                  (std::fabs(point[1] - 0.0) < 1.0e-9))
+              {
+                for (unsigned int i = 0; i < n_dofs; ++i)
+                  node_xy[i] = cell->vertex_dof_index(vertex, i);
+              }
+            }
+          }
+        }
+        else
+        {
+
+          typename Triangulation<dim>::active_vertex_iterator vertex_itr;
+          vertex_itr = m_triangulation.begin_active_vertex();
+
+          for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
+          {
+            if ((std::fabs(vertex_itr->vertex()[0] - 0.0) < 1.0e-9) &&
+                (std::fabs(vertex_itr->vertex()[1] - 0.0) < 1.0e-9))
+            {
+              node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
+            }
+          }
+        }
+
+        m_constraints.add_line(node_xy[0]);
+        m_constraints.set_inhomogeneity(node_xy[0], 0.0);
+
+        m_constraints.add_line(node_xy[1]);
+        m_constraints.set_inhomogeneity(node_xy[1], 0.0);
+
+        const int boundary_id_top_surface = 1;
+        /*
+         VectorTools::interpolate_boundary_values(m_dof_handler,
+         boundary_id_top_surface,
+         Functions::ZeroFunction<dim>(m_n_components),
+         m_constraints,
+         m_fe.component_mask(x_displacement));
+         */
+        const double time_inc = m_time.get_delta_t();
+        double disp_magnitude = m_time.get_magnitude();
+        VectorTools::interpolate_boundary_values(
+            m_dof_handler, boundary_id_top_surface,
+            Functions::ConstantFunction<dim>(disp_magnitude * time_inc,
+                                             m_n_components),
+            m_constraints, m_fe.component_mask(y_displacement));
+
+        // temperature B.C. at the top surface
+        if (m_time.current() <= 0.25e-3)
+          delta_temperature = -time_inc * 1.0e5; // cool down
+        //        delta_temperature =  time_inc * 1.0e5; //warn up
+        //        delta_temperature = 0.0; //constant
+
+        VectorTools::interpolate_boundary_values(
+            m_dof_handler, boundary_id_top_surface,
+            Functions::ConstantFunction<dim>(delta_temperature, m_n_components),
+            m_constraints, m_fe.component_mask(temperature));
+      }
+      else if (m_parameters.m_scenario == 2 || m_parameters.m_scenario == 4)
+      {
+        // Remember, the essential B.C. is applied incrementally during each time
+        // step. If a constant temperature is needed through time, the B.C should
+        // be set as zero.
+        double delta_temperature = 0.0; // temperature change per load step
+
+        // Dirichlet B,C. bottom surface
+        const int boundary_id_bottom_surface = 0;
+        VectorTools::interpolate_boundary_values(
+            m_dof_handler, boundary_id_bottom_surface,
+            Functions::ZeroFunction<dim>(m_n_components), m_constraints,
+            m_fe.component_mask(displacements));
+
+        // temperature B.C. at the bottom surface
+        VectorTools::interpolate_boundary_values(
+            m_dof_handler, boundary_id_bottom_surface,
+            Functions::ConstantFunction<dim>(delta_temperature, m_n_components),
+            m_constraints, m_fe.component_mask(temperature));
+
+        const int boundary_id_top_surface = 1;
+        VectorTools::interpolate_boundary_values(
+            m_dof_handler, boundary_id_top_surface,
+            Functions::ZeroFunction<dim>(m_n_components), m_constraints,
+            m_fe.component_mask(y_displacement));
+
+        const double time_inc = m_time.get_delta_t();
+        double disp_magnitude = m_time.get_magnitude();
+        VectorTools::interpolate_boundary_values(
+            m_dof_handler, boundary_id_top_surface,
+            Functions::ConstantFunction<dim>(disp_magnitude * time_inc,
+                                             m_n_components),
+            m_constraints, m_fe.component_mask(x_displacement));
+
+        const int boundary_id_side_surfaces = 2;
+        VectorTools::interpolate_boundary_values(
+            m_dof_handler, boundary_id_side_surfaces,
+            Functions::ZeroFunction<dim>(m_n_components), m_constraints,
+            m_fe.component_mask(y_displacement));
+
+        // temperature B.C. at the top surface
+        if (m_time.current() <= 10.0001e-3)
+          delta_temperature = -time_inc * 2.0e4; // cool down
+        //        delta_temperature =  time_inc * 2.0e4; //warm up
+
+        VectorTools::interpolate_boundary_values(
+            m_dof_handler, boundary_id_top_surface,
+            Functions::ConstantFunction<dim>(delta_temperature, m_n_components),
+            m_constraints, m_fe.component_mask(temperature));
+      }
+      else if (m_parameters.m_scenario == 5)
+      {
+        const int boundary_id_mid_surface_x = 2;
+        VectorTools::interpolate_boundary_values(
+            m_dof_handler, boundary_id_mid_surface_x,
+            Functions::ZeroFunction<dim>(m_n_components), m_constraints,
+            m_fe.component_mask(x_displacement));
+
+        const int boundary_id_mid_surface_y = 3;
+        VectorTools::interpolate_boundary_values(
+            m_dof_handler, boundary_id_mid_surface_y,
+            Functions::ZeroFunction<dim>(m_n_components), m_constraints,
+            m_fe.component_mask(y_displacement));
+
+        // Remember, the essential B.C. is applied incrementally during each time
+        // step. If a constant temperature is needed through time, the B.C should
+        // be set as zero.
+        double delta_temperature = 0.0; // temperature change per load step
+        const int boundary_id_left_surface = 5;
+        VectorTools::interpolate_boundary_values(
+            m_dof_handler, boundary_id_left_surface,
+            Functions::ConstantFunction<dim>(delta_temperature, m_n_components),
+            m_constraints, m_fe.component_mask(temperature));
+
+        const int boundary_id_bottom_surface = 1;
+        VectorTools::interpolate_boundary_values(
+            m_dof_handler, boundary_id_bottom_surface,
+            Functions::ConstantFunction<dim>(delta_temperature, m_n_components),
+            m_constraints, m_fe.component_mask(temperature));
+      }
+      else if (m_parameters.m_scenario == 6)
+      {
+        const int boundary_id_mid_surface_x = 2;
+        VectorTools::interpolate_boundary_values(
+            m_dof_handler, boundary_id_mid_surface_x,
+            Functions::ZeroFunction<dim>(m_n_components), m_constraints,
+            m_fe.component_mask(x_displacement));
+
+        std::vector<types::global_dof_index> node_xy(m_fe.dofs_per_vertex);
+        bool hasCst = false;
+        if constexpr (is_mpi)
+        {
+          const unsigned int n_dofs = m_fe.dofs_per_vertex;
+          std::vector<bool> locally_owned_vertices =
+              GridTools::get_locally_owned_vertices(m_triangulation);
+          for (auto const &cell : m_dof_handler.active_cell_iterators())
+          {
+            // skip ghost cells
+            if (!cell->is_locally_owned() || !cell->at_boundary())
+              continue;
+
+            for (const auto vertex : cell->vertex_indices())
+            {
+              // skip dofs that not owned by current rank
+              if (!locally_owned_vertices[cell->vertex_index(vertex)])
+                continue;
+
+              const Point<dim> point = cell->vertex(vertex);
+
+              if ((std::fabs(point[0] - 25.0) < 1.0e-9) &&
+                  (std::fabs(point[1] - 5.0) < 1.0e-9))
+              {
+                for (unsigned int i = 0; i < n_dofs; ++i)
+                {
+                  node_xy[i] = cell->vertex_dof_index(vertex, i);
+                }
+                hasCst = true;
+                break; // break, only single cst pnt
+              }
+            }
+            if (hasCst)
+              break;
+          }
+        }
+        else
+        {
+          typename Triangulation<dim>::active_vertex_iterator vertex_itr;
+          vertex_itr = m_triangulation.begin_active_vertex();
+
+          for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
+          {
+            if ((std::fabs(vertex_itr->vertex()[0] - 25.0) < 1.0e-9) &&
+                (std::fabs(vertex_itr->vertex()[1] - 5.0) < 1.0e-9))
+            {
+              node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
+              hasCst = true;
+              break;
+            }
+          }
+        }
+
+        if (hasCst && m_dof_handler.locally_owned_dofs().is_element(node_xy[1]))
+        {
+          m_constraints.add_line(node_xy[1]);
+          m_constraints.set_inhomogeneity(node_xy[1], 0.0);
+        }
+
+        // Remember, the essential B.C. is applied incrementally during each time
+        // step. If a constant temperature is needed through time, the B.C should
+        // be set as zero.
+        double delta_temperature = 0.0; // temperature change per load step
+        const int boundary_id_left_surface = 6;
+        VectorTools::interpolate_boundary_values(
+            m_dof_handler, boundary_id_left_surface,
+            Functions::ConstantFunction<dim>(delta_temperature, m_n_components),
+            m_constraints, m_fe.component_mask(temperature));
+
+        const int boundary_id_bottom_surface = 1;
+        VectorTools::interpolate_boundary_values(
+            m_dof_handler, boundary_id_bottom_surface,
+            Functions::ConstantFunction<dim>(delta_temperature, m_n_components),
+            m_constraints, m_fe.component_mask(temperature));
+
+        const int boundary_id_top_surface = 3;
+        VectorTools::interpolate_boundary_values(
+            m_dof_handler, boundary_id_top_surface,
+            Functions::ConstantFunction<dim>(delta_temperature, m_n_components),
+            m_constraints, m_fe.component_mask(temperature));
+      }
+      else if (m_parameters.m_scenario == 7)
+      {
+        const int boundary_id_mid_surface_x = 3;
+        VectorTools::interpolate_boundary_values(
+            m_dof_handler, boundary_id_mid_surface_x,
+            Functions::ZeroFunction<dim>(m_n_components), m_constraints,
+            m_fe.component_mask(x_displacement));
+
+        if constexpr (is_mpi)
+        {
+
+          // the constrainted points
+          std::vector<CstPnt> cstPnts({
+              // Points                             cstDoFs cstValues
+              // center pnt
+              CstPnt(Point<dim>(0.0, 5.0, 0.5), {1, 2}, {0.0, 0.0}),
+
+              // center pnt on the symmetric plane
+              CstPnt(Point<dim>(25.0, 5.0, 0.5), {1, 2}, {0.0, 0.0}),
+
+              // pnts on the sides of the symmetric plane
+              CstPnt(Point<dim>(25.0, 0.0, 0.5), {2}, {0.0}),
+              CstPnt(Point<dim>(25.0, 10.0, 0.5), {2}, {0.0}),
+              CstPnt(Point<dim>(25.0, 5.0, 0.0), {1}, {0.0}),
+              CstPnt(Point<dim>(25.0, 5.0, 1.0), {1}, {0.0}),
+          });
+
+          // record if there is a constrained on current rank
+          bool hasCst = false;
+
+          std::vector<bool> locally_owned_vertices =
+              GridTools::get_locally_owned_vertices(m_triangulation);
+          for (auto const &cell : m_dof_handler.active_cell_iterators())
+          {
+            // skip ghost cells or cells that are not at boundary
+            if (!cell->is_locally_owned() || !cell->at_boundary())
+              continue;
+
+            // loop over vertices on the locally owned cells at boundary
+            for (const auto vertex : cell->vertex_indices())
+            {
+              // skip vertices that are not owned by current rank.
+              // This operation is necessary because some vertices are shared by
+              // cells owned by other ranks. Or, it may cause unexpected results.
+              if (!locally_owned_vertices[cell->vertex_index(vertex)])
+                continue;
+
+              // obtain vertex
+              const Point<dim> point = cell->vertex(vertex);
+
+              // loop over prescribed constraints
+              for (unsigned int j = 0; j < cstPnts.size(); ++j)
+              {
+                // j-th prescribed CstPnt
+                CstPnt &cstPoint = cstPnts[j];
+
+                // skip further operations, if this point has been handled.
+                if (cstPoint.found)
+                  continue;
+
+                // the vertex is close enough to the constrained point
+                if (point.distance(cstPoint.pnt) < 1.0e-9)
+                {
+                  cstPoint.found = true;
+                  // The constrained point is owned by current rank.
+                  hasCst = true;
+                  // extract constrained DoFs
+                  cstPoint.extractDoFs(cell, vertex);
+
+                  // no need to look at other constrained points
+                  break;
+                }
+              } // loop over constrainted pnts
+            } // loop over vertices in cell
+          } // loop over cells
+
+          // only the rank with constrained points will apply BCs.
+          if (hasCst)
+          {
+            const IndexSet &localDoFs = m_dof_handler.locally_owned_dofs();
+
+            for (unsigned int i = 0; i < cstPnts.size(); ++i)
+            {
+              const CstPnt &cstPoint = cstPnts[i];
+              if (cstPoint.applyCsts(localDoFs, m_constraints))
+              {
+                // TODO: remve after debugging
+                std::string cstInfo =
+                    "\n\ncstPnt: \nrank: " + std::to_string(m_mpiInfo.rank()) +
+                    "\n";
+                cstInfo += "Pnt: " + std::to_string(cstPoint.pnt[0]) + ", " +
+                           std::to_string(cstPoint.pnt[1]) + ", " +
+                           std::to_string(cstPoint.pnt[2]) + "\n\n\n\n";
+                std::cout << cstInfo << std::endl;
+              }
+            } // loop over constrainted points
+          }
+        }
+        else
+        {
+          typename Triangulation<dim>::active_vertex_iterator vertex_itr;
+          vertex_itr = m_triangulation.begin_active_vertex();
+          std::vector<types::global_dof_index> node_xy(m_fe.dofs_per_vertex);
+
+          for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
+          {
+            if ((std::fabs(vertex_itr->vertex()[0] - 25.0) < 1.0e-9) &&
+                (std::fabs(vertex_itr->vertex()[1] - 5.0) < 1.0e-9) &&
+                (std::fabs(vertex_itr->vertex()[2] - 0.5) < 1.0e-9))
+            {
+              node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
+            }
+          }
+          m_constraints.add_line(node_xy[2]);
+          m_constraints.set_inhomogeneity(node_xy[2], 0.0);
+          m_constraints.add_line(node_xy[1]);
+          m_constraints.set_inhomogeneity(node_xy[1], 0.0);
+
+          for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
+          {
+            if ((std::fabs(vertex_itr->vertex()[0] - 25.0) < 1.0e-9) &&
+                (std::fabs(vertex_itr->vertex()[1] - 0.0) < 1.0e-9) &&
+                (std::fabs(vertex_itr->vertex()[2] - 0.5) < 1.0e-9))
+            {
+              node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
+            }
+          }
+          m_constraints.add_line(node_xy[2]);
+          m_constraints.set_inhomogeneity(node_xy[2], 0.0);
+
+          for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
+          {
+            if ((std::fabs(vertex_itr->vertex()[0] - 25.0) < 1.0e-9) &&
+                (std::fabs(vertex_itr->vertex()[1] - 10.0) < 1.0e-9) &&
+                (std::fabs(vertex_itr->vertex()[2] - 0.5) < 1.0e-9))
+            {
+              node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
+            }
+          }
+          m_constraints.add_line(node_xy[2]);
+          m_constraints.set_inhomogeneity(node_xy[2], 0.0);
+
+          for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
+          {
+            if ((std::fabs(vertex_itr->vertex()[0] - 0.0) < 1.0e-9) &&
+                (std::fabs(vertex_itr->vertex()[1] - 5.0) < 1.0e-9) &&
+                (std::fabs(vertex_itr->vertex()[2] - 0.5) < 1.0e-9))
+            {
+              node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
+            }
+          }
+          m_constraints.add_line(node_xy[2]);
+          m_constraints.set_inhomogeneity(node_xy[2], 0.0);
+          m_constraints.add_line(node_xy[1]);
+          m_constraints.set_inhomogeneity(node_xy[1], 0.0);
+
+          for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
+          {
+            if ((std::fabs(vertex_itr->vertex()[0] - 25.0) < 1.0e-9) &&
+                (std::fabs(vertex_itr->vertex()[1] - 5.0) < 1.0e-9) &&
+                (std::fabs(vertex_itr->vertex()[2] - 0.0) < 1.0e-9))
+            {
+              node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
+            }
+          }
+          m_constraints.add_line(node_xy[1]);
+          m_constraints.set_inhomogeneity(node_xy[1], 0.0);
+
+          for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
+          {
+            if ((std::fabs(vertex_itr->vertex()[0] - 25.0) < 1.0e-9) &&
+                (std::fabs(vertex_itr->vertex()[1] - 5.0) < 1.0e-9) &&
+                (std::fabs(vertex_itr->vertex()[2] - 1.0) < 1.0e-9))
+            {
+              node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
+            }
+          }
+          m_constraints.add_line(node_xy[1]);
+          m_constraints.set_inhomogeneity(node_xy[1], 0.0);
+        }
+        /*
+                      // Remember, the essential B.C. is applied incrementally
+           during each time step.
+                      // If a constant temperature is needed through time, the B.C
+           should be set as zero. const int boundary_id_mid_surface_x = 3;
+                      VectorTools::interpolate_boundary_values(m_dof_handler,
+                                                               boundary_id_mid_surface_x,
+                                                               Functions::ZeroFunction<dim>(m_n_components),
+                                                               m_constraints,
+                                                               m_fe.component_mask(x_displacement));
+         */
+
+        /*
+                      // TODO: add_line
+                      for (; vertex_itr != m_triangulation.end_vertex();
+           ++vertex_itr)
+                      {
+                          if (   (std::fabs(vertex_itr->vertex()[0] - 25.0)
+           < 1.0e-9)
+                              && (std::fabs(vertex_itr->vertex()[1] -  5.0)
+           < 1.0e-9)
+                              && (std::fabs(vertex_itr->vertex()[2] -  0.0)
+           < 1.0e-9) )
+                          {
+                              node_xy = usr_utilities::get_vertex_dofs(vertex_itr,
+           m_dof_handler);
+                          }
+                      }
+                      m_constraints.add_line(node_xy[1]);
+                      m_constraints.set_inhomogeneity(node_xy[1], 0.0);
+
+                      // TODO: add_line
+                      for (; vertex_itr != m_triangulation.end_vertex();
+           ++vertex_itr)
+                      {
+                          if (   (std::fabs(vertex_itr->vertex()[0] - 25.0)
+           < 1.0e-9)
+                              && (std::fabs(vertex_itr->vertex()[1] -  5.0)
+           < 1.0e-9)
+                              && (std::fabs(vertex_itr->vertex()[2] -  1.0)
+           < 1.0e-9) )
+                          {
+                              node_xy = usr_utilities::get_vertex_dofs(vertex_itr,
+           m_dof_handler);
+                          }
+                      }
+                      m_constraints.add_line(node_xy[1]);
+                      m_constraints.set_inhomogeneity(node_xy[1], 0.0);
+        */
+        // Remember, the essential B.C. is applied incrementally during each time
+        // step. If a constant temperature is needed through time, the B.C should
+        // be set as zero.
+        double delta_temperature = 0.0; // temperature change per load step
+        const int boundary_id_left_surface = 0;
+        VectorTools::interpolate_boundary_values(
+            m_dof_handler, boundary_id_left_surface,
+            Functions::ConstantFunction<dim>(delta_temperature, m_n_components),
+            m_constraints, m_fe.component_mask(temperature));
+
+        const int boundary_id_front_surface = 1;
+        VectorTools::interpolate_boundary_values(
+            m_dof_handler, boundary_id_front_surface,
+            Functions::ConstantFunction<dim>(delta_temperature, m_n_components),
+            m_constraints, m_fe.component_mask(temperature));
+
+        const int boundary_id_bottom_surface = 2;
+        VectorTools::interpolate_boundary_values(
+            m_dof_handler, boundary_id_bottom_surface,
+            Functions::ConstantFunction<dim>(delta_temperature, m_n_components),
+            m_constraints, m_fe.component_mask(temperature));
+
+        const int boundary_id_back_surface = 4;
+        VectorTools::interpolate_boundary_values(
+            m_dof_handler, boundary_id_back_surface,
+            Functions::ConstantFunction<dim>(delta_temperature, m_n_components),
+            m_constraints, m_fe.component_mask(temperature));
+
+        const int boundary_id_top_surface = 5;
+        VectorTools::interpolate_boundary_values(
+            m_dof_handler, boundary_id_top_surface,
+            Functions::ConstantFunction<dim>(delta_temperature, m_n_components),
+            m_constraints, m_fe.component_mask(temperature));
+      }
+      else if (m_parameters.m_scenario == 8)
+      {
+        const int boundary_id_mid_surface_x = 3;
+        VectorTools::interpolate_boundary_values(
+            m_dof_handler, boundary_id_mid_surface_x,
+            Functions::ZeroFunction<dim>(m_n_components), m_constraints,
+            m_fe.component_mask(x_displacement));
+
+        const int boundary_id_mid_surface_y = 4;
+        VectorTools::interpolate_boundary_values(
+            m_dof_handler, boundary_id_mid_surface_y,
+            Functions::ZeroFunction<dim>(m_n_components), m_constraints,
+            m_fe.component_mask(y_displacement));
+
+        typename Triangulation<dim>::active_vertex_iterator vertex_itr;
+        vertex_itr = m_triangulation.begin_active_vertex();
+        std::vector<types::global_dof_index> node_xy(m_fe.dofs_per_vertex);
+        // TODO: add_line
+        for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
+        {
+          if ((std::fabs(vertex_itr->vertex()[0] - 0.0) < 1.0e-9) &&
+              (std::fabs(vertex_itr->vertex()[1] - 0.0) < 1.0e-9) &&
+              (std::fabs(vertex_itr->vertex()[2] - 0.5) < 1.0e-9))
+          {
+            node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
+          }
+        }
+        m_constraints.add_line(node_xy[2]);
+        m_constraints.set_inhomogeneity(node_xy[2], 0.0);
+        // TODO: add_line
+        for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
+        {
+          if ((std::fabs(vertex_itr->vertex()[0] - 5.0) < 1.0e-9) &&
+              (std::fabs(vertex_itr->vertex()[1] - 0.0) < 1.0e-9) &&
+              (std::fabs(vertex_itr->vertex()[2] - 0.5) < 1.0e-9))
+          {
+            node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
+          }
+        }
+        m_constraints.add_line(node_xy[2]);
+        m_constraints.set_inhomogeneity(node_xy[2], 0.0);
+
+        for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
+        {
+          if ((std::fabs(vertex_itr->vertex()[0] - 0.0) < 1.0e-9) &&
+              (std::fabs(vertex_itr->vertex()[1] - 2.0) < 1.0e-9) &&
+              (std::fabs(vertex_itr->vertex()[2] - 0.5) < 1.0e-9))
+          {
+            node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
+          }
+        }
+        m_constraints.add_line(node_xy[2]);
+        m_constraints.set_inhomogeneity(node_xy[2], 0.0);
+
+        // Remember, the essential B.C. is applied incrementally during each time
+        // step. If a constant temperature is needed through time, the B.C should
+        // be set as zero.
+        double delta_temperature = 0.0; // temperature change per load step
+        const int boundary_id_left_surface = 0;
+        VectorTools::interpolate_boundary_values(
+            m_dof_handler, boundary_id_left_surface,
+            Functions::ConstantFunction<dim>(delta_temperature, m_n_components),
+            m_constraints, m_fe.component_mask(temperature));
+
+        const int boundary_id_front_surface = 1;
+        VectorTools::interpolate_boundary_values(
+            m_dof_handler, boundary_id_front_surface,
+            Functions::ConstantFunction<dim>(delta_temperature, m_n_components),
+            m_constraints, m_fe.component_mask(temperature));
+
+        const int boundary_id_bottom_surface = 2;
+        VectorTools::interpolate_boundary_values(
+            m_dof_handler, boundary_id_bottom_surface,
+            Functions::ConstantFunction<dim>(delta_temperature, m_n_components),
+            m_constraints, m_fe.component_mask(temperature));
+
+        const int boundary_id_top_surface = 5;
+        VectorTools::interpolate_boundary_values(
+            m_dof_handler, boundary_id_top_surface,
+            Functions::ConstantFunction<dim>(delta_temperature, m_n_components),
+            m_constraints, m_fe.component_mask(temperature));
+      }
+      else if (m_parameters.m_scenario == 9)
+      {
+        const int boundary_id_mid_surface_x = 3;
+        VectorTools::interpolate_boundary_values(
+            m_dof_handler, boundary_id_mid_surface_x,
+            Functions::ZeroFunction<dim>(m_n_components), m_constraints,
+            m_fe.component_mask(x_displacement));
+
+        const int boundary_id_mid_surface_y = 4;
+        VectorTools::interpolate_boundary_values(
+            m_dof_handler, boundary_id_mid_surface_y,
+            Functions::ZeroFunction<dim>(m_n_components), m_constraints,
+            m_fe.component_mask(y_displacement));
+        // TODO: add_line
+        typename Triangulation<dim>::active_vertex_iterator vertex_itr;
+        vertex_itr = m_triangulation.begin_active_vertex();
+        std::vector<types::global_dof_index> node_xy(m_fe.dofs_per_vertex);
+
+        for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
+        {
+          if ((std::fabs(vertex_itr->vertex()[0] - 5.0) < 1.0e-9) &&
+              (std::fabs(vertex_itr->vertex()[1] - 2.0) < 1.0e-9) &&
+              (std::fabs(vertex_itr->vertex()[2] - 0.5) < 1.0e-9))
+          {
+            node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
+          }
+        }
+        m_constraints.add_line(node_xy[2]);
+        m_constraints.set_inhomogeneity(node_xy[2], 0.0);
+
+        // Remember, the essential B.C. is applied incrementally during each time
+        // step. If a constant temperature is needed through time, the B.C should
+        // be set as zero.
+        double delta_temperature = 0.0; // temperature change per load step
+        const int boundary_id_bottom_surface = 2;
+        VectorTools::interpolate_boundary_values(
+            m_dof_handler, boundary_id_bottom_surface,
+            Functions::ConstantFunction<dim>(delta_temperature, m_n_components),
+            m_constraints, m_fe.component_mask(temperature));
+      }
+      else if (m_parameters.m_scenario == 10)
+      {
+        const int boundary_id_mid_surface_x = 3;
+        VectorTools::interpolate_boundary_values(
+            m_dof_handler, boundary_id_mid_surface_x,
+            Functions::ZeroFunction<dim>(m_n_components), m_constraints,
+            m_fe.component_mask(x_displacement));
+
+        const int boundary_id_mid_surface_y = 4;
+        VectorTools::interpolate_boundary_values(
+            m_dof_handler, boundary_id_mid_surface_y,
+            Functions::ZeroFunction<dim>(m_n_components), m_constraints,
+            m_fe.component_mask(y_displacement));
+        // TODO: add_line
+        typename Triangulation<dim>::active_vertex_iterator vertex_itr;
+        vertex_itr = m_triangulation.begin_active_vertex();
+        std::vector<types::global_dof_index> node_xy(m_fe.dofs_per_vertex);
+
+        for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
+        {
+          if ((std::fabs(vertex_itr->vertex()[0] - 5.0) < 1.0e-9) &&
+              (std::fabs(vertex_itr->vertex()[1] - 2.0) < 1.0e-9) &&
+              (std::fabs(vertex_itr->vertex()[2] - 1.0) < 1.0e-9))
+          {
+            node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
+          }
+        }
+        m_constraints.add_line(node_xy[2]);
+        m_constraints.set_inhomogeneity(node_xy[2], 0.0);
+
+        // Remember, the essential B.C. is applied incrementally during each time
+        // step. If a constant temperature is needed through time, the B.C should
+        // be set as zero.
+        double delta_temperature = 0.0; // temperature change per load step
+        const int boundary_id_front_surface = 1;
+        VectorTools::interpolate_boundary_values(
+            m_dof_handler, boundary_id_front_surface,
+            Functions::ConstantFunction<dim>(delta_temperature, m_n_components),
+            m_constraints, m_fe.component_mask(temperature));
+      }
+      else if (m_parameters.m_scenario == 11)
+      {
+        const int boundary_id_surface_x = 0;
+        VectorTools::interpolate_boundary_values(
+            m_dof_handler, boundary_id_surface_x,
+            Functions::ZeroFunction<dim>(m_n_components), m_constraints,
+            m_fe.component_mask(x_displacement));
+
+        const int boundary_id_surface_y = 1;
+        VectorTools::interpolate_boundary_values(
+            m_dof_handler, boundary_id_surface_y,
+            Functions::ZeroFunction<dim>(m_n_components), m_constraints,
+            m_fe.component_mask(y_displacement));
+
+        const int boundary_id_surface_z = 2;
+        VectorTools::interpolate_boundary_values(
+            m_dof_handler, boundary_id_surface_z,
+            Functions::ZeroFunction<dim>(m_n_components), m_constraints,
+            m_fe.component_mask(z_displacement));
+
+        // Remember, the essential B.C. is applied incrementally during each time
+        // step. If a constant temperature is needed through time, the B.C should
+        // be set as zero.
+        double delta_temperature = 0.0; // temperature change per load step
+        const int boundary_id_sphere_surface = 3;
+        VectorTools::interpolate_boundary_values(
+            m_dof_handler, boundary_id_sphere_surface,
+            Functions::ConstantFunction<dim>(delta_temperature, m_n_components),
+            m_constraints, m_fe.component_mask(temperature));
+      }
+      else
+        Assert(false, ExcMessage("The scenario has not been implemented!"));
+
+      if constexpr (is_mpi)
+      {
+
+        m_constraints.make_consistent_in_parallel(
+            m_dof_handler.locally_owned_dofs(),
+            *m_blocks_desc.localRelevantPartition(), *m_mpiInfo.mpiCommPtr());
+      }
+    }
+    else // inhomogeneous constraints
+    {
+      bool has_inhomo = m_constraints.has_inhomogeneities();
+
+      if constexpr (is_mpi)
+      {
+        // accumulate local flag over all ranks
+        const unsigned int local_flag = has_inhomo ? 1u : 0u;
+        const unsigned int global_flag =
+            Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
+        has_inhomo = (global_flag > 0u);
+      }
+
+      if (has_inhomo)
+      {
+        AffineConstraints<double> homoCst(m_constraints);
+        if constexpr (is_mpi)
+        {
+          std::vector<IndexSet::size_type> indices;
+          m_dof_handler.locally_owned_dofs().fill_index_vector(indices);
+
+          for (unsigned int dof : indices)
+            if (homoCst.is_inhomogeneously_constrained(dof))
+              homoCst.set_inhomogeneity(dof, 0.0);
+        }
+        else
+        {
+          for (unsigned int dof = 0; dof != m_dof_handler.n_dofs(); ++dof)
+            if (homoCst.is_inhomogeneously_constrained(dof))
+              homoCst.set_inhomogeneity(dof, 0.0);
+        }
+        homoCst.close();
+
+        m_constraints.clear();
+
+        if constexpr (is_mpi)
+        {
+          VersionAdapter::cstReinit(
+              m_constraints, m_dof_handler.locally_owned_dofs(),
+              DoFTools::extract_locally_relevant_dofs(m_dof_handler),
+              *m_mpiInfo.mpiCommPtr());
+        }
+
+        m_constraints.copy_from(homoCst);
+      }
+    }
+    m_constraints.close();
   }
 
   template <typename LATraits, typename Tria>
   void PhaseFieldMonolithicSolve<LATraits, Tria>::assemble_system_B0()
   {
-      const std::string sectionName = "Assemble B0";
+    const std::string sectionName = "Assemble B0";
     m_timer.enter_subsection(sectionName);
 
-      
     m_tangent_matrix = 0.0;
 
     const UpdateFlags uf_cell(update_values | update_gradients |
-			      update_quadrature_points | update_JxW_values);
+                              update_quadrature_points | update_JxW_values);
     const UpdateFlags uf_face(update_values | update_normal_vectors |
                               update_JxW_values);
 
     PerTaskData_ASM per_task_data(m_fe.n_dofs_per_cell());
     ScratchData_ASM scratch_data(m_fe, m_qf_cell, uf_cell, m_qf_face, uf_face);
 
-      if constexpr (!is_mpi){
-          // non-mpi mode
-          
-          auto worker =
+    if constexpr (!is_mpi)
+    {
+      // non-mpi mode
+
+      auto worker =
           [this](const typename DoFHandler<dim>::active_cell_iterator &cell,
-                 ScratchData_ASM & scratch,
-                 PerTaskData_ASM & data)
-          {
-              this->assemble_system_B0_one_cell(cell, scratch, data);
-          };
-          
-          auto copier = [this](const PerTaskData_ASM &data)
-          {
-              this->m_constraints.distribute_local_to_global(data.m_cell_matrix,
-                                                             data.m_local_dof_indices,
-                                                             m_tangent_matrix.base());
-          };
-          
-          WorkStream::run(
-                          m_dof_handler.active_cell_iterators(),
-                          worker,
-                          copier,
-                          scratch_data,
-                          per_task_data);
-      } else {
-          // mpi mode
-          for (const auto &cell : m_dof_handler.active_cell_iterators())
-              if (cell->is_locally_owned())
-              {
-                  assemble_system_B0_one_cell(cell, scratch_data, per_task_data);
-                  
-                  m_constraints.distribute_local_to_global(per_task_data.m_cell_matrix,
-                                                           per_task_data.m_local_dof_indices,
-                                                           m_tangent_matrix.base());
-              }
-          
-          /*  *  *  *   *   *   *   *   *  MPI  *   *   *   *   *   *   *   *   */
-          m_tangent_matrix.compress(VectorOperation::add);
-          /*  *  *  *   *   *   *   *   *  MPI  *   *   *   *   *   *   *   *   */
-          
-          
-      }
+                 ScratchData_ASM &scratch, PerTaskData_ASM &data)
+      { this->assemble_system_B0_one_cell(cell, scratch, data); };
+
+      auto copier = [this](const PerTaskData_ASM &data)
+      {
+        this->m_constraints.distribute_local_to_global(data.m_cell_matrix,
+                                                       data.m_local_dof_indices,
+                                                       m_tangent_matrix.base());
+      };
+
+      WorkStream::run(m_dof_handler.active_cell_iterators(), worker, copier,
+                      scratch_data, per_task_data);
+    }
+    else
+    {
+      // mpi mode
+      for (const auto &cell : m_dof_handler.active_cell_iterators())
+        if (cell->is_locally_owned())
+        {
+          assemble_system_B0_one_cell(cell, scratch_data, per_task_data);
+
+          m_constraints.distribute_local_to_global(
+              per_task_data.m_cell_matrix, per_task_data.m_local_dof_indices,
+              m_tangent_matrix.base());
+        }
+
+      /*  *  *  *   *   *   *   *   *  MPI  *   *   *   *   *   *   *   *   */
+      m_tangent_matrix.compress(VectorOperation::add);
+      /*  *  *  *   *   *   *   *   *  MPI  *   *   *   *   *   *   *   *   */
+    }
 
     m_timer.leave_subsection(sectionName);
   }
 
   template <typename LATraits, typename Tria>
-  void PhaseFieldMonolithicSolve<LATraits, Tria>::assemble_system_rhs_LBFGS_parallel(const BVector & solution_old,
-								         BVector & system_rhs)
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::
+      assemble_system_rhs_LBFGS_parallel(const BVector &solution_old,
+                                         BVector &system_rhs)
   {
-      const std::string sectionName = "Assemble RHS";
+    const std::string sectionName = "Assemble RHS";
     m_timer.enter_subsection(sectionName);
 
-    //m_logfile << " A_RHS " << std::flush;
+    // m_logfile << " A_RHS " << std::flush;
 
-      
     system_rhs = 0.0;
 
     const UpdateFlags uf_cell(update_values | update_gradients |
-			      update_quadrature_points | update_JxW_values);
+                              update_quadrature_points | update_JxW_values);
     const UpdateFlags uf_face(update_values | update_normal_vectors |
-			      update_JxW_values);
+                              update_JxW_values);
 
     PerTaskData_ASM_RHS_BFGS per_task_data(m_fe.n_dofs_per_cell());
-    ScratchData_ASM_RHS_BFGS scratch_data(m_fe, m_qf_cell, uf_cell, m_qf_face, uf_face, solution_old);
+    ScratchData_ASM_RHS_BFGS scratch_data(m_fe, m_qf_cell, uf_cell, m_qf_face,
+                                          uf_face, solution_old);
 
-      if constexpr (!is_mpi){
-          // non-mpi mode
-          
-    auto worker =
-      [this](const typename DoFHandler<dim>::active_cell_iterator &cell,
-	     ScratchData_ASM_RHS_BFGS & scratch,
-	     PerTaskData_ASM_RHS_BFGS & data)
+    if constexpr (!is_mpi)
+    {
+      // non-mpi mode
+
+      auto worker =
+          [this](const typename DoFHandler<dim>::active_cell_iterator &cell,
+                 ScratchData_ASM_RHS_BFGS &scratch,
+                 PerTaskData_ASM_RHS_BFGS &data)
+      { this->assemble_system_rhs_LBFGS_one_cell(cell, scratch, data); };
+
+      auto copier = [this, &system_rhs](const PerTaskData_ASM_RHS_BFGS &data)
       {
-        this->assemble_system_rhs_LBFGS_one_cell(cell, scratch, data);
+        this->m_constraints.distribute_local_to_global(
+            data.m_cell_rhs, data.m_local_dof_indices, system_rhs.base());
       };
 
-    auto copier = [this, &system_rhs](const PerTaskData_ASM_RHS_BFGS &data)
-      {
-        this->m_constraints.distribute_local_to_global(data.m_cell_rhs,
-                                                       data.m_local_dof_indices,
-						       system_rhs.base());
-      };
+      WorkStream::run(m_dof_handler.active_cell_iterators(), worker, copier,
+                      scratch_data, per_task_data);
+    }
+    else
+    {
+      // mpi mode
 
-    WorkStream::run(
-      m_dof_handler.active_cell_iterators(),
-      worker,
-      copier,
-      scratch_data,
-      per_task_data);
-          
-          
-      } else {
-          // mpi mode
-          
-          for (const auto &cell : m_dof_handler.active_cell_iterators())
-              if (cell->is_locally_owned())
-              {
-                  assemble_system_rhs_LBFGS_one_cell(cell, scratch_data, per_task_data);
-                  
-                  m_constraints.distribute_local_to_global(per_task_data.m_cell_rhs,
-                                                           per_task_data.m_local_dof_indices,
-                                                           system_rhs.base());
-              }
-          
+      for (const auto &cell : m_dof_handler.active_cell_iterators())
+        if (cell->is_locally_owned())
+        {
+          assemble_system_rhs_LBFGS_one_cell(cell, scratch_data, per_task_data);
 
-          /*  *  *  *   *   *   *   *   *  MPI  *   *   *   *   *   *   *   *   */
-          system_rhs.compress(VectorOperation::add);
-          /*  *  *  *   *   *   *   *   *  MPI  *   *   *   *   *   *   *   *   */
-      }
+          m_constraints.distribute_local_to_global(
+              per_task_data.m_cell_rhs, per_task_data.m_local_dof_indices,
+              system_rhs.base());
+        }
+
+      /*  *  *  *   *   *   *   *   *  MPI  *   *   *   *   *   *   *   *   */
+      system_rhs.compress(VectorOperation::add);
+      /*  *  *  *   *   *   *   *   *  MPI  *   *   *   *   *   *   *   *   */
+    }
 
     m_timer.leave_subsection(sectionName);
   }
 
   template <typename LATraits, typename Tria>
-  void PhaseFieldMonolithicSolve<LATraits, Tria>::assemble_system_rhs_LBFGS_one_cell(
-      const typename DoFHandler<dim>::active_cell_iterator &cell,
-      ScratchData_ASM_RHS_BFGS & scratch,
-      PerTaskData_ASM_RHS_BFGS & data) const
-{
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::
+      assemble_system_rhs_LBFGS_one_cell(
+          const typename DoFHandler<dim>::active_cell_iterator &cell,
+          ScratchData_ASM_RHS_BFGS &scratch, PerTaskData_ASM_RHS_BFGS &data) const
+  {
     data.reset();
     scratch.reset();
     scratch.m_fe_values.reinit(cell);
     cell->get_dof_indices(data.m_local_dof_indices);
-    
-    const auto& solution_previous_step_relevance = scratch.m_solution_previous_step.relevance();
-    
-    scratch.m_fe_values[m_u_fe]
-        .get_function_symmetric_gradients(solution_previous_step_relevance,
-                                          scratch.m_strain_previous_step_cell);
-    
-    scratch.m_fe_values[m_d_fe]
-        .get_function_values(solution_previous_step_relevance,
-                             scratch.m_phasefield_previous_step_cell);
-    
-    scratch.m_fe_values[m_t_fe]
-        .get_function_values(solution_previous_step_relevance,
-                             scratch.m_temperature_previous_step_cell);
-    
+
+    const auto &solution_previous_step_relevance =
+        scratch.m_solution_previous_step.relevance();
+
+    scratch.m_fe_values[m_u_fe].get_function_symmetric_gradients(
+        solution_previous_step_relevance, scratch.m_strain_previous_step_cell);
+
+    scratch.m_fe_values[m_d_fe].get_function_values(
+        solution_previous_step_relevance,
+        scratch.m_phasefield_previous_step_cell);
+
+    scratch.m_fe_values[m_t_fe].get_function_values(
+        solution_previous_step_relevance,
+        scratch.m_temperature_previous_step_cell);
+
     const std::vector<std::shared_ptr<const PointHistory<dim>>> lqph =
-    m_quadrature_point_history.get_data(cell);
+        m_quadrature_point_history.get_data(cell);
     Assert(lqph.size() == m_n_q_points, ExcInternalError());
-    
+
     const double time_ramp = (m_time.current() / m_time.end());
     std::vector<Tensor<1, dim>> rhs_values(m_n_q_points);
-    
-    right_hand_side(scratch.m_fe_values.get_quadrature_points(),
-                    rhs_values,
-                    m_parameters.m_x_component*1.0,
-                    m_parameters.m_y_component*1.0,
-                    m_parameters.m_z_component*1.0);
-    
+
+    right_hand_side(scratch.m_fe_values.get_quadrature_points(), rhs_values,
+                    m_parameters.m_x_component * 1.0,
+                    m_parameters.m_y_component * 1.0,
+                    m_parameters.m_z_component * 1.0);
+
     std::vector<double> heat_supply_values(m_n_q_points);
-    
-    heat_supply(scratch.m_fe_values.get_quadrature_points(),
-                heat_supply_values,
-                m_parameters.m_heat_supply*1.0);
-    
+
+    heat_supply(scratch.m_fe_values.get_quadrature_points(), heat_supply_values,
+                m_parameters.m_heat_supply * 1.0);
+
     const double delta_time = m_time.get_delta_t();
-    
-    for (const unsigned int q_point : scratch.m_fe_values.quadrature_point_indices())
+
+    for (const unsigned int q_point :
+         scratch.m_fe_values.quadrature_point_indices())
     {
-        for (const unsigned int k : scratch.m_fe_values.dof_indices())
+      for (const unsigned int k : scratch.m_fe_values.dof_indices())
+      {
+        const unsigned int k_group = m_fe.system_to_base_index(k).first.first;
+
+        if (k_group == m_u_dof)
         {
-            const unsigned int k_group = m_fe.system_to_base_index(k).first.first;
-            
-            if (k_group == m_u_dof)
-            {
-                scratch.m_Nx_disp[q_point][k] =
-                scratch.m_fe_values[m_u_fe].value(k, q_point);
-                scratch.m_grad_Nx_disp[q_point][k] =
-                scratch.m_fe_values[m_u_fe].gradient(k, q_point);
-                scratch.m_symm_grad_Nx_disp[q_point][k] =
-                symmetrize(scratch.m_grad_Nx_disp[q_point][k]);
-            }
-            else if (k_group == m_d_dof)
-            {
-                scratch.m_Nx_phasefield[q_point][k] =
-                scratch.m_fe_values[m_d_fe].value(k, q_point);
-                scratch.m_grad_Nx_phasefield[q_point][k] =
-                scratch.m_fe_values[m_d_fe].gradient(k, q_point);
-            }
-            else if (k_group == m_t_dof)
-            {
-                scratch.m_Nx_temperature[q_point][k] =
-                scratch.m_fe_values[m_t_fe].value(k, q_point);
-                scratch.m_grad_Nx_temperature[q_point][k] =
-                scratch.m_fe_values[m_t_fe].gradient(k, q_point);
-            }
-            else
-                Assert(k_group <= m_t_dof, ExcInternalError());
+          scratch.m_Nx_disp[q_point][k] =
+              scratch.m_fe_values[m_u_fe].value(k, q_point);
+          scratch.m_grad_Nx_disp[q_point][k] =
+              scratch.m_fe_values[m_u_fe].gradient(k, q_point);
+          scratch.m_symm_grad_Nx_disp[q_point][k] =
+              symmetrize(scratch.m_grad_Nx_disp[q_point][k]);
         }
-    }
-    
-    for (const unsigned int q_point : scratch.m_fe_values.quadrature_point_indices())
-    {
-        const double length_scale            = lqph[q_point]->get_length_scale();
-        // temperature-dependent critical energy release rate
-        const double gc_t                    = lqph[q_point]->get_critical_energy_release_rate();
-        const double eta                     = lqph[q_point]->get_viscosity();
-        const double history_strain_energy   = lqph[q_point]->get_history_max_positive_strain_energy();
-        const double current_positive_strain_energy = lqph[q_point]->get_current_positive_strain_energy();
-        const double heat_capacity           = lqph[q_point]->get_heat_capacity();
-        const double ref_t                   = lqph[q_point]->get_ref_temperature();
-        const double thermal_expansion       = lqph[q_point]->get_thermal_expansion_coeff();
-        const double lame_lambda             = lqph[q_point]->get_lame_lambda();
-        const double lame_mu                 = lqph[q_point]->get_lame_mu();
-        const bool   coupling_on_heat_eq     = lqph[q_point]->get_heat_coupling_flag();
-        
-        const double phasefield_value        = lqph[q_point]->get_phase_field_value();
-        const Tensor<1, dim> phasefield_grad = lqph[q_point]->get_phase_field_gradient();
-
-        double coupling_tensor_coeff = thermal_expansion
-            * (trace(Physics::Elasticity::StandardTensors<dim>::I)*lame_lambda + 2.0*lame_mu)
-	    * degradation_function(phasefield_value);
-        
-        if (!coupling_on_heat_eq)
-          coupling_tensor_coeff = 0.0;
-        
-        const SymmetricTensor<2, dim> ut_coupling_tensor
-        = coupling_tensor_coeff * Physics::Elasticity::StandardTensors<dim>::I;
-        
-        double history_value = history_strain_energy;
-        if (current_positive_strain_energy > history_strain_energy)
-            history_value = current_positive_strain_energy;
-        
-        const double temperature_value        = lqph[q_point]->get_temperature_value();
-        
-        // current total strain
-        const SymmetricTensor<2, dim> & current_strain = lqph[q_point]->get_strain();
-        // previous total strain
-        const SymmetricTensor<2, dim> & old_strain = scratch.m_strain_previous_step_cell[q_point];
-        
-        const std::vector<double>         &      N_phasefield = scratch.m_Nx_phasefield[q_point];
-        const std::vector<Tensor<1, dim>> & grad_N_phasefield = scratch.m_grad_Nx_phasefield[q_point];
-        const double                old_phasefield = scratch.m_phasefield_previous_step_cell[q_point];
-        
-        const std::vector<double>         &      N_temperature = scratch.m_Nx_temperature[q_point];
-        const std::vector<Tensor<1, dim>> & grad_N_temperature = scratch.m_grad_Nx_temperature[q_point];
-        const double                old_temperature = scratch.m_temperature_previous_step_cell[q_point];
-        
-        const SymmetricTensor<2, dim> & cauchy_stress = lqph[q_point]->get_cauchy_stress();
-        const Tensor<1, dim> & heat_flux = lqph[q_point]->get_heat_flux();
-        
-        const std::vector<Tensor<1,dim>> & N_disp = scratch.m_Nx_disp[q_point];
-        const std::vector<SymmetricTensor<2, dim>> & symm_grad_N_disp =
-        scratch.m_symm_grad_Nx_disp[q_point];
-        const double JxW = scratch.m_fe_values.JxW(q_point);
-        
-        const double phasefield_coeff_const = phasefield_coefficient_constant(m_parameters.m_phasefield_name);
-
-	const double phasefield_geo_derivative
-		   = phasefield_geometry_function_derivative(phasefield_value,
-							     m_parameters.m_phasefield_name);
-
-        SymmetricTensor<2, dim> symm_grad_Nx_i_x_C;
-        
-        for (const unsigned int i : scratch.m_fe_values.dof_indices())
+        else if (k_group == m_d_dof)
         {
-            const unsigned int i_group = m_fe.system_to_base_index(i).first.first;
-            
-            if (i_group == m_u_dof)
-            {
-                data.m_cell_rhs(i) += (symm_grad_N_disp[i] * cauchy_stress) * JxW;
-                
-                // contributions from the body force to right-hand side
-                data.m_cell_rhs(i) -= N_disp[i] * rhs_values[q_point] * JxW;
-            }
-            else if (i_group == m_d_dof)
-            {
-		data.m_cell_rhs(i) += (  2.0 * gc_t * length_scale / phasefield_coeff_const
-						    * grad_N_phasefield[i] * phasefield_grad
-				             +  (   gc_t / length_scale / phasefield_coeff_const
-						  * phasefield_geo_derivative
-						  + eta / delta_time  * (phasefield_value - old_phasefield)
-						  + degradation_function_derivative(phasefield_value)
-						  * history_value ) * N_phasefield[i]
-				       ) * JxW;
-            }
-            else if (i_group == m_t_dof)
-            {
-                data.m_cell_rhs(i) += (heat_capacity * N_temperature[i]
-                                       * (temperature_value - old_temperature) / ref_t) * JxW;
-                data.m_cell_rhs(i) -= (grad_N_temperature[i] * heat_flux * delta_time / ref_t) * JxW;
-                data.m_cell_rhs(i) -= N_temperature[i] * heat_supply_values[q_point] * delta_time /ref_t * JxW;
-                
-                // the mechanical-thermal coupling term
-                data.m_cell_rhs(i) += N_temperature[i]
-                * ut_coupling_tensor
-                * (current_strain - old_strain)
-                * JxW;
-                
-            }
-            else
-                Assert(i_group <= m_t_dof, ExcInternalError());
-        }  // i
-    }  // q_point
-    
+          scratch.m_Nx_phasefield[q_point][k] =
+              scratch.m_fe_values[m_d_fe].value(k, q_point);
+          scratch.m_grad_Nx_phasefield[q_point][k] =
+              scratch.m_fe_values[m_d_fe].gradient(k, q_point);
+        }
+        else if (k_group == m_t_dof)
+        {
+          scratch.m_Nx_temperature[q_point][k] =
+              scratch.m_fe_values[m_t_fe].value(k, q_point);
+          scratch.m_grad_Nx_temperature[q_point][k] =
+              scratch.m_fe_values[m_t_fe].gradient(k, q_point);
+        }
+        else
+          Assert(k_group <= m_t_dof, ExcInternalError());
+      }
+    }
+
+    for (const unsigned int q_point :
+         scratch.m_fe_values.quadrature_point_indices())
+    {
+      const double length_scale = lqph[q_point]->get_length_scale();
+      // temperature-dependent critical energy release rate
+      const double gc_t = lqph[q_point]->get_critical_energy_release_rate();
+      const double eta = lqph[q_point]->get_viscosity();
+      const double history_strain_energy =
+          lqph[q_point]->get_history_max_positive_strain_energy();
+      const double current_positive_strain_energy =
+          lqph[q_point]->get_current_positive_strain_energy();
+      const double heat_capacity = lqph[q_point]->get_heat_capacity();
+      const double ref_t = lqph[q_point]->get_ref_temperature();
+      const double thermal_expansion =
+          lqph[q_point]->get_thermal_expansion_coeff();
+      const double lame_lambda = lqph[q_point]->get_lame_lambda();
+      const double lame_mu = lqph[q_point]->get_lame_mu();
+      const bool coupling_on_heat_eq = lqph[q_point]->get_heat_coupling_flag();
+
+      const double phasefield_value = lqph[q_point]->get_phase_field_value();
+      const Tensor<1, dim> phasefield_grad =
+          lqph[q_point]->get_phase_field_gradient();
+
+      double coupling_tensor_coeff =
+          thermal_expansion *
+          (trace(Physics::Elasticity::StandardTensors<dim>::I) * lame_lambda +
+           2.0 * lame_mu) *
+          degradation_function(phasefield_value);
+
+      if (!coupling_on_heat_eq)
+        coupling_tensor_coeff = 0.0;
+
+      const SymmetricTensor<2, dim> ut_coupling_tensor =
+          coupling_tensor_coeff * Physics::Elasticity::StandardTensors<dim>::I;
+
+      double history_value = history_strain_energy;
+      if (current_positive_strain_energy > history_strain_energy)
+        history_value = current_positive_strain_energy;
+
+      const double temperature_value = lqph[q_point]->get_temperature_value();
+
+      // current total strain
+      const SymmetricTensor<2, dim> &current_strain = lqph[q_point]->get_strain();
+      // previous total strain
+      const SymmetricTensor<2, dim> &old_strain =
+          scratch.m_strain_previous_step_cell[q_point];
+
+      const std::vector<double> &N_phasefield = scratch.m_Nx_phasefield[q_point];
+      const std::vector<Tensor<1, dim>> &grad_N_phasefield =
+          scratch.m_grad_Nx_phasefield[q_point];
+      const double old_phasefield =
+          scratch.m_phasefield_previous_step_cell[q_point];
+
+      const std::vector<double> &N_temperature =
+          scratch.m_Nx_temperature[q_point];
+      const std::vector<Tensor<1, dim>> &grad_N_temperature =
+          scratch.m_grad_Nx_temperature[q_point];
+      const double old_temperature =
+          scratch.m_temperature_previous_step_cell[q_point];
+
+      const SymmetricTensor<2, dim> &cauchy_stress =
+          lqph[q_point]->get_cauchy_stress();
+      const Tensor<1, dim> &heat_flux = lqph[q_point]->get_heat_flux();
+
+      const std::vector<Tensor<1, dim>> &N_disp = scratch.m_Nx_disp[q_point];
+      const std::vector<SymmetricTensor<2, dim>> &symm_grad_N_disp =
+          scratch.m_symm_grad_Nx_disp[q_point];
+      const double JxW = scratch.m_fe_values.JxW(q_point);
+
+      const double phasefield_coeff_const =
+          phasefield_coefficient_constant(m_parameters.m_phasefield_name);
+
+      const double phasefield_geo_derivative =
+          phasefield_geometry_function_derivative(phasefield_value,
+                                                  m_parameters.m_phasefield_name);
+
+      SymmetricTensor<2, dim> symm_grad_Nx_i_x_C;
+
+      for (const unsigned int i : scratch.m_fe_values.dof_indices())
+      {
+        const unsigned int i_group = m_fe.system_to_base_index(i).first.first;
+
+        if (i_group == m_u_dof)
+        {
+          data.m_cell_rhs(i) += (symm_grad_N_disp[i] * cauchy_stress) * JxW;
+
+          // contributions from the body force to right-hand side
+          data.m_cell_rhs(i) -= N_disp[i] * rhs_values[q_point] * JxW;
+        }
+        else if (i_group == m_d_dof)
+        {
+          data.m_cell_rhs(i) +=
+              (2.0 * gc_t * length_scale / phasefield_coeff_const *
+                   grad_N_phasefield[i] * phasefield_grad +
+               (gc_t / length_scale / phasefield_coeff_const *
+                    phasefield_geo_derivative +
+                eta / delta_time * (phasefield_value - old_phasefield) +
+                degradation_function_derivative(phasefield_value) *
+                    history_value) *
+                   N_phasefield[i]) *
+              JxW;
+        }
+        else if (i_group == m_t_dof)
+        {
+          data.m_cell_rhs(i) += (heat_capacity * N_temperature[i] *
+                                 (temperature_value - old_temperature) / ref_t) *
+                                JxW;
+          data.m_cell_rhs(i) -=
+              (grad_N_temperature[i] * heat_flux * delta_time / ref_t) * JxW;
+          data.m_cell_rhs(i) -= N_temperature[i] * heat_supply_values[q_point] *
+                                delta_time / ref_t * JxW;
+
+          // the mechanical-thermal coupling term
+          data.m_cell_rhs(i) += N_temperature[i] * ut_coupling_tensor *
+                                (current_strain - old_strain) * JxW;
+        }
+        else
+          Assert(i_group <= m_t_dof, ExcInternalError());
+      } // i
+    } // q_point
+
     // if there is surface pressure, this surface pressure always applied to the
     // reference configuration
     const unsigned int face_pressure_id = 100;
     const double p0 = 0.0;
-    
-    for (const auto &face : cell->face_iterators()) {
-        if (face->at_boundary() && face->boundary_id() == face_pressure_id)
+
+    for (const auto &face : cell->face_iterators())
+    {
+      if (face->at_boundary() && face->boundary_id() == face_pressure_id)
+      {
+        scratch.m_fe_face_values.reinit(cell, face);
+
+        for (const unsigned int f_q_point :
+             scratch.m_fe_face_values.quadrature_point_indices())
         {
-            scratch.m_fe_face_values.reinit(cell, face);
-            
-            for (const unsigned int f_q_point : scratch.m_fe_face_values.quadrature_point_indices())
+          const Tensor<1, dim> &N =
+              scratch.m_fe_face_values.normal_vector(f_q_point);
+
+          const double pressure = p0 * time_ramp;
+          const Tensor<1, dim> traction = pressure * N;
+
+          for (const unsigned int i : scratch.m_fe_values.dof_indices())
+          {
+            const unsigned int i_group = m_fe.system_to_base_index(i).first.first;
+
+            if (i_group == m_u_dof)
             {
-                const Tensor<1, dim> &N = scratch.m_fe_face_values.normal_vector(f_q_point);
-                
-                const double         pressure  = p0 * time_ramp;
-                const Tensor<1, dim> traction  = pressure * N;
-                
-                for (const unsigned int i : scratch.m_fe_values.dof_indices())
-                {
-                    const unsigned int i_group = m_fe.system_to_base_index(i).first.first;
-                    
-                    if (i_group == m_u_dof)
-                    {
-                        const unsigned int component_i = m_fe.system_to_component_index(i).first;
-                        const double Ni = scratch.m_fe_face_values.shape_value(i, f_q_point);
-                        const double JxW = scratch.m_fe_face_values.JxW(f_q_point);
-                        data.m_cell_rhs(i) -= (Ni * traction[component_i]) * JxW;
-                    }
-                }
+              const unsigned int component_i =
+                  m_fe.system_to_component_index(i).first;
+              const double Ni =
+                  scratch.m_fe_face_values.shape_value(i, f_q_point);
+              const double JxW = scratch.m_fe_face_values.JxW(f_q_point);
+              data.m_cell_rhs(i) -= (Ni * traction[component_i]) * JxW;
             }
+          }
         }
+      }
     }
-    
+
     // surface heat flux (Neumann BC)
     const unsigned int face_flux_id = 100;
     const double h0 = 0.0;
-    
-    for (const auto &face : cell->face_iterators()){
-        if (face->at_boundary() && face->boundary_id() == face_flux_id)
+
+    for (const auto &face : cell->face_iterators())
+    {
+      if (face->at_boundary() && face->boundary_id() == face_flux_id)
+      {
+        scratch.m_fe_face_values.reinit(cell, face);
+
+        for (const unsigned int f_q_point :
+             scratch.m_fe_face_values.quadrature_point_indices())
         {
-            scratch.m_fe_face_values.reinit(cell, face);
-            
-            for (const unsigned int f_q_point : scratch.m_fe_face_values.quadrature_point_indices())
+          const double flux = h0 * time_ramp;
+
+          for (const unsigned int i : scratch.m_fe_values.dof_indices())
+          {
+            const unsigned int i_group = m_fe.system_to_base_index(i).first.first;
+
+            if (i_group == m_t_dof)
             {
-                const double         flux  = h0 * time_ramp;
-                
-                for (const unsigned int i : scratch.m_fe_values.dof_indices())
-                {
-                    const unsigned int i_group = m_fe.system_to_base_index(i).first.first;
-                    
-                    if (i_group == m_t_dof)
-                    {
-                        const double Ni = scratch.m_fe_face_values.shape_value(i, f_q_point);
-                        const double JxW = scratch.m_fe_face_values.JxW(f_q_point);
-                        data.m_cell_rhs(i) -= Ni * flux * JxW;
-                    }
-                }
+              const double Ni =
+                  scratch.m_fe_face_values.shape_value(i, f_q_point);
+              const double JxW = scratch.m_fe_face_values.JxW(f_q_point);
+              data.m_cell_rhs(i) -= Ni * flux * JxW;
             }
+          }
         }
+      }
     }
   }
 
   template <typename LATraits, typename Tria>
   void PhaseFieldMonolithicSolve<LATraits, Tria>::assemble_system_B0_one_cell(
       const typename DoFHandler<dim>::active_cell_iterator &cell,
-      ScratchData_ASM & scratch,
-      PerTaskData_ASM & data) const
+      ScratchData_ASM &scratch, PerTaskData_ASM &data) const
   {
     data.reset();
     scratch.reset();
@@ -5252,128 +5030,138 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
     cell->get_dof_indices(data.m_local_dof_indices);
 
     const std::vector<std::shared_ptr<const PointHistory<dim>>> lqph =
-      m_quadrature_point_history.get_data(cell);
+        m_quadrature_point_history.get_data(cell);
     Assert(lqph.size() == m_n_q_points, ExcInternalError());
 
     const double delta_time = m_time.get_delta_t();
 
-    for (const unsigned int q_point : scratch.m_fe_values.quadrature_point_indices())
+    for (const unsigned int q_point :
+         scratch.m_fe_values.quadrature_point_indices())
+    {
+      for (const unsigned int k : scratch.m_fe_values.dof_indices())
       {
-        for (const unsigned int k : scratch.m_fe_values.dof_indices())
-          {
-            const unsigned int k_group = m_fe.system_to_base_index(k).first.first;
+        const unsigned int k_group = m_fe.system_to_base_index(k).first.first;
 
-            if (k_group == m_u_dof)
-              {
-                scratch.m_Nx_disp[q_point][k] =
-                  scratch.m_fe_values[m_u_fe].value(k, q_point);
-                scratch.m_grad_Nx_disp[q_point][k] =
-                  scratch.m_fe_values[m_u_fe].gradient(k, q_point);
-                scratch.m_symm_grad_Nx_disp[q_point][k] =
-                  symmetrize(scratch.m_grad_Nx_disp[q_point][k]);
-              }
-            else if (k_group == m_d_dof)
-              {
-		scratch.m_Nx_phasefield[q_point][k] =
-		  scratch.m_fe_values[m_d_fe].value(k, q_point);
-		scratch.m_grad_Nx_phasefield[q_point][k] =
-		  scratch.m_fe_values[m_d_fe].gradient(k, q_point);
-              }
-            else if (k_group == m_t_dof)
-              {
-		scratch.m_Nx_temperature[q_point][k] =
-		  scratch.m_fe_values[m_t_fe].value(k, q_point);
-		scratch.m_grad_Nx_temperature[q_point][k] =
-		  scratch.m_fe_values[m_t_fe].gradient(k, q_point);
-              }
-            else
-              Assert(k_group <= m_t_dof, ExcInternalError());
-          }
+        if (k_group == m_u_dof)
+        {
+          scratch.m_Nx_disp[q_point][k] =
+              scratch.m_fe_values[m_u_fe].value(k, q_point);
+          scratch.m_grad_Nx_disp[q_point][k] =
+              scratch.m_fe_values[m_u_fe].gradient(k, q_point);
+          scratch.m_symm_grad_Nx_disp[q_point][k] =
+              symmetrize(scratch.m_grad_Nx_disp[q_point][k]);
+        }
+        else if (k_group == m_d_dof)
+        {
+          scratch.m_Nx_phasefield[q_point][k] =
+              scratch.m_fe_values[m_d_fe].value(k, q_point);
+          scratch.m_grad_Nx_phasefield[q_point][k] =
+              scratch.m_fe_values[m_d_fe].gradient(k, q_point);
+        }
+        else if (k_group == m_t_dof)
+        {
+          scratch.m_Nx_temperature[q_point][k] =
+              scratch.m_fe_values[m_t_fe].value(k, q_point);
+          scratch.m_grad_Nx_temperature[q_point][k] =
+              scratch.m_fe_values[m_t_fe].gradient(k, q_point);
+        }
+        else
+          Assert(k_group <= m_t_dof, ExcInternalError());
       }
+    }
 
-    for (const unsigned int q_point : scratch.m_fe_values.quadrature_point_indices())
-      {
-	const double length_scale            = lqph[q_point]->get_length_scale();
-	// temperature-dependent critical energy release rate
-	const double gc_t                    = lqph[q_point]->get_critical_energy_release_rate();
-	const double eta                     = lqph[q_point]->get_viscosity();
-	const double history_strain_energy   = lqph[q_point]->get_history_max_positive_strain_energy();
-	const double current_positive_strain_energy = lqph[q_point]->get_current_positive_strain_energy();
-        // degraded thermal conductivity
-	const double kappa_d                 = lqph[q_point]->get_thermal_conductivity();
-	const double heat_capacity           = lqph[q_point]->get_heat_capacity();
-        const double ref_t                   = lqph[q_point]->get_ref_temperature();
+    for (const unsigned int q_point :
+         scratch.m_fe_values.quadrature_point_indices())
+    {
+      const double length_scale = lqph[q_point]->get_length_scale();
+      // temperature-dependent critical energy release rate
+      const double gc_t = lqph[q_point]->get_critical_energy_release_rate();
+      const double eta = lqph[q_point]->get_viscosity();
+      const double history_strain_energy =
+          lqph[q_point]->get_history_max_positive_strain_energy();
+      const double current_positive_strain_energy =
+          lqph[q_point]->get_current_positive_strain_energy();
+      // degraded thermal conductivity
+      const double kappa_d = lqph[q_point]->get_thermal_conductivity();
+      const double heat_capacity = lqph[q_point]->get_heat_capacity();
+      const double ref_t = lqph[q_point]->get_ref_temperature();
 
-	double history_value = history_strain_energy;
-	if (current_positive_strain_energy > history_strain_energy)
-	  history_value = current_positive_strain_energy;
+      double history_value = history_strain_energy;
+      if (current_positive_strain_energy > history_strain_energy)
+        history_value = current_positive_strain_energy;
 
-	const double phasefield_value = lqph[q_point]->get_phase_field_value();
+      const double phasefield_value = lqph[q_point]->get_phase_field_value();
 
-        const std::vector<double>         &      N_phasefield = scratch.m_Nx_phasefield[q_point];
-        const std::vector<Tensor<1, dim>> & grad_N_phasefield = scratch.m_grad_Nx_phasefield[q_point];
+      const std::vector<double> &N_phasefield = scratch.m_Nx_phasefield[q_point];
+      const std::vector<Tensor<1, dim>> &grad_N_phasefield =
+          scratch.m_grad_Nx_phasefield[q_point];
 
-        const std::vector<double>         &      N_temperature = scratch.m_Nx_temperature[q_point];
-        const std::vector<Tensor<1, dim>> & grad_N_temperature = scratch.m_grad_Nx_temperature[q_point];
+      const std::vector<double> &N_temperature =
+          scratch.m_Nx_temperature[q_point];
+      const std::vector<Tensor<1, dim>> &grad_N_temperature =
+          scratch.m_grad_Nx_temperature[q_point];
 
-        const SymmetricTensor<4, dim> & mechanical_C  = lqph[q_point]->get_mechanical_C();
+      const SymmetricTensor<4, dim> &mechanical_C =
+          lqph[q_point]->get_mechanical_C();
 
-        const std::vector<SymmetricTensor<2, dim>> & symm_grad_N_disp =
+      const std::vector<SymmetricTensor<2, dim>> &symm_grad_N_disp =
           scratch.m_symm_grad_Nx_disp[q_point];
-        const double JxW = scratch.m_fe_values.JxW(q_point);
+      const double JxW = scratch.m_fe_values.JxW(q_point);
 
-        const double phasefield_coeff_const = phasefield_coefficient_constant(m_parameters.m_phasefield_name);
+      const double phasefield_coeff_const =
+          phasefield_coefficient_constant(m_parameters.m_phasefield_name);
 
-	const double phasefield_geo_2nd_order_derivative
-		   = phasefield_geometry_function_2nd_order_derivative(phasefield_value,
-								       m_parameters.m_phasefield_name);
+      const double phasefield_geo_2nd_order_derivative =
+          phasefield_geometry_function_2nd_order_derivative(
+              phasefield_value, m_parameters.m_phasefield_name);
 
-        SymmetricTensor<2, dim> symm_grad_Nx_i_x_C;
+      SymmetricTensor<2, dim> symm_grad_Nx_i_x_C;
 
-        for (const unsigned int i : scratch.m_fe_values.dof_indices())
+      for (const unsigned int i : scratch.m_fe_values.dof_indices())
+      {
+        const unsigned int i_group = m_fe.system_to_base_index(i).first.first;
+
+        if (i_group == m_u_dof)
+        {
+          symm_grad_Nx_i_x_C = symm_grad_N_disp[i] * mechanical_C;
+        }
+
+        for (const unsigned int j : scratch.m_fe_values.dof_indices())
+        {
+          const unsigned int j_group = m_fe.system_to_base_index(j).first.first;
+
+          if ((i_group == j_group) && (i_group == m_u_dof))
           {
-            const unsigned int i_group = m_fe.system_to_base_index(i).first.first;
-
-            if (i_group == m_u_dof)
-              {
-                symm_grad_Nx_i_x_C = symm_grad_N_disp[i] * mechanical_C;
-              }
-
-            for (const unsigned int j : scratch.m_fe_values.dof_indices())
-              {
-                const unsigned int j_group = m_fe.system_to_base_index(j).first.first;
-
-                if ((i_group == j_group) && (i_group == m_u_dof))
-                  {
-                    data.m_cell_matrix(i, j) += symm_grad_Nx_i_x_C * symm_grad_N_disp[j] * JxW;
-                  }
-                else if ((i_group == j_group) && (i_group == m_d_dof))
-                  {
-                    data.m_cell_matrix(i, j) += (  (   gc_t/length_scale/phasefield_coeff_const
-                    			             * phasefield_geo_2nd_order_derivative
-                    				     + eta/delta_time
-                    				     + degradation_function_2nd_order_derivative(phasefield_value)
-                    				     * history_value  )
-                    			          * N_phasefield[i] * N_phasefield[j]
-                    				  + 2.0 / phasefield_coeff_const * gc_t * length_scale
-                    			          * grad_N_phasefield[i] * grad_N_phasefield[j]
-                    			        ) * JxW;
-
-                  }
-                else if ((i_group == j_group) && (i_group == m_t_dof))
-                  {
-                    data.m_cell_matrix(i, j) += (  heat_capacity
-                	                         * N_temperature[i] * N_temperature[j]
-						 + kappa_d
-						 * grad_N_temperature[i] * grad_N_temperature[j] * delta_time
-					        ) / ref_t * JxW;
-                  }
-                else
-                  Assert((i_group <= m_t_dof) && (j_group <= m_t_dof),
-                         ExcInternalError());
-              } // j
-          }  // i
-      }  // q_point
+            data.m_cell_matrix(i, j) +=
+                symm_grad_Nx_i_x_C * symm_grad_N_disp[j] * JxW;
+          }
+          else if ((i_group == j_group) && (i_group == m_d_dof))
+          {
+            data.m_cell_matrix(i, j) +=
+                ((gc_t / length_scale / phasefield_coeff_const *
+                      phasefield_geo_2nd_order_derivative +
+                  eta / delta_time +
+                  degradation_function_2nd_order_derivative(phasefield_value) *
+                      history_value) *
+                     N_phasefield[i] * N_phasefield[j] +
+                 2.0 / phasefield_coeff_const * gc_t * length_scale *
+                     grad_N_phasefield[i] * grad_N_phasefield[j]) *
+                JxW;
+          }
+          else if ((i_group == j_group) && (i_group == m_t_dof))
+          {
+            data.m_cell_matrix(i, j) +=
+                (heat_capacity * N_temperature[i] * N_temperature[j] +
+                 kappa_d * grad_N_temperature[i] * grad_N_temperature[j] *
+                     delta_time) /
+                ref_t * JxW;
+          }
+          else
+            Assert((i_group <= m_t_dof) && (j_group <= m_t_dof),
+                   ExcInternalError());
+        } // j
+      } // i
+    } // q_point
   }
 
   template <typename LATraits, typename Tria>
@@ -5381,53 +5169,50 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
   {
     m_logfile << "\t\tUpdate history variable" << std::endl;
 
-      for (const auto &cell : m_triangulation.active_cell_iterators())
-      {
-          // skip cells owned by other ranks in mpi mode
-          if constexpr (is_mpi)
-              if (!cell->is_locally_owned())
-                  continue;
-          std::vector<std::shared_ptr< PointHistory<dim>>> lqph =
+    for (const auto &cell : m_triangulation.active_cell_iterators())
+    {
+      // skip cells owned by other ranks in mpi mode
+      if constexpr (is_mpi)
+        if (!cell->is_locally_owned())
+          continue;
+      std::vector<std::shared_ptr<PointHistory<dim>>> lqph =
           m_quadrature_point_history.get_data(cell);
-          Assert(lqph.size() == m_n_q_points, ExcInternalError());
-          
-          for (unsigned int q_point = 0; q_point < m_n_q_points; ++q_point)
-          {
-              lqph[q_point]->update_history_variable();
-          }
+      Assert(lqph.size() == m_n_q_points, ExcInternalError());
+
+      for (unsigned int q_point = 0; q_point < m_n_q_points; ++q_point)
+      {
+        lqph[q_point]->update_history_variable();
       }
+    }
   }
 
   template <typename LATraits, typename Tria>
-  double PhaseFieldMonolithicSolve<LATraits, Tria>::line_search_stepsize_gradient_based(const BVector & BFGS_p_vector,
-				                                             const BVector & solution_delta,
-                                                                                        unsigned int& iSmallSteps)
+  double
+  PhaseFieldMonolithicSolve<LATraits, Tria>::line_search_stepsize_gradient_based(
+      const BVector &BFGS_p_vector, const BVector &solution_delta,
+      unsigned int &iSmallSteps)
   {
-      BVector g_old(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
-      g_old.initialize();
-      g_old.base() = m_system_rhs.base(); 
-      
+    BVector g_old(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
+    g_old.initialize();
+    g_old.base() = m_system_rhs.base();
+
     // BFGS_p_vector is the search direction
-      BVector solution_delta_trial(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
-      solution_delta_trial.initialize();
-      solution_delta_trial.base() = solution_delta.base();
+    BVector solution_delta_trial(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
+    solution_delta_trial.initialize();
+    solution_delta_trial.base() = solution_delta.base();
     // take a full step size 1.0
     solution_delta_trial.add(1.0, BFGS_p_vector);
 
-      
-      solution_delta_trial.updateRelevance();
-      
-      
-      
+    solution_delta_trial.updateRelevance();
+
     update_qph_incremental(solution_delta_trial, m_solution, false);
 
     BVector g_new(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
-      g_new.initialize();
+    g_new.initialize();
     assemble_system_rhs_LBFGS_parallel(m_solution, g_new);
-      
-      
+
     BVector y_old(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
-      y_old.initialize();
+    y_old.initialize();
 
     y_old.base() = g_new.base() - g_old.base();
 
@@ -5441,75 +5226,78 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
 
     unsigned int ls_max = 50;
 
-      unsigned int i = 1;
-      
+    unsigned int i = 1;
+
     for (; i <= ls_max; ++i)
+    {
+      delta_alpha_new =
+          -delta_alpha_old * (g_new * BFGS_p_vector) / (y_old * BFGS_p_vector);
+      alpha += delta_alpha_new;
+
+      if (std::fabs(delta_alpha_new) < 1.0e-5)
+        break;
+
+      if (i == ls_max)
       {
-	delta_alpha_new = -delta_alpha_old
-	                * (g_new * BFGS_p_vector)/(y_old * BFGS_p_vector);
-	alpha += delta_alpha_new;
-          
-
-	if (std::fabs(delta_alpha_new) < 1.0e-5)
-	  break;
-
-        if (i == ls_max)
-          {
-            alpha = 1.0;
-            break;
-          }
-
-        g_old = g_new;
-
-        // BFGS_p_vector is the search direction
-        solution_delta_trial = solution_delta;
-        solution_delta_trial.add(alpha, BFGS_p_vector);
-          
-          solution_delta_trial.updateRelevance();
-
-          
-        update_qph_incremental(solution_delta_trial, m_solution, false);
-        assemble_system_rhs_LBFGS_parallel(m_solution, g_new);
-          
-          
-        y_old.base() = g_new.base() - g_old.base();
-
-        delta_alpha_old = delta_alpha_new;
+        alpha = 1.0;
+        break;
       }
 
-      const double smallStepThreshold   = 1.0e-3;
-      const unsigned int allowedAtempts = 3;
-      
-      if (alpha < smallStepThreshold){
-          const double alpha_tmp = alpha;
-          if(iSmallSteps++ < allowedAtempts){
-              alpha = smallStepThreshold;
-          } else{
-              alpha = 1.0;
-              iSmallSteps = 0;
-          }
-          m_logfile << i << "¬" << alpha_tmp << std::flush;
-      } else {
-          if(iSmallSteps)
-          {
-              m_logfile << "«" << std::flush;
-              iSmallSteps = 0;
-          }
-          m_logfile << i << (i == ls_max ? "•" : "") << std::flush;
-      }
+      g_old = g_new;
 
-      
+      // BFGS_p_vector is the search direction
+      solution_delta_trial = solution_delta;
+      solution_delta_trial.add(alpha, BFGS_p_vector);
+
+      solution_delta_trial.updateRelevance();
+
+      update_qph_incremental(solution_delta_trial, m_solution, false);
+      assemble_system_rhs_LBFGS_parallel(m_solution, g_new);
+
+      y_old.base() = g_new.base() - g_old.base();
+
+      delta_alpha_old = delta_alpha_new;
+    }
+
+    const double smallStepThreshold = 1.0e-3;
+    const unsigned int allowedAtempts = 3;
+
+    if (alpha < smallStepThreshold)
+    {
+      const double alpha_tmp = alpha;
+      if (iSmallSteps++ < allowedAtempts)
+      {
+        alpha = smallStepThreshold;
+      }
+      else
+      {
+        alpha = 1.0;
+        iSmallSteps = 0;
+      }
+      m_logfile << i << "¬" << alpha_tmp << std::flush;
+    }
+    else
+    {
+      if (iSmallSteps)
+      {
+        m_logfile << "«" << std::flush;
+        iSmallSteps = 0;
+      }
+      m_logfile << i << (i == ls_max ? "•" : "") << std::flush;
+    }
+
     return alpha;
   }
 
   template <typename LATraits, typename Tria>
-  double PhaseFieldMonolithicSolve<LATraits, Tria>::line_search_stepsize_strong_wolfe(const double phi_0,
-				                                           const double phi_0_prime,
-				                                           const BVector & BFGS_p_vector,
-				                                           const BVector & solution_delta)
+  double
+  PhaseFieldMonolithicSolve<LATraits, Tria>::line_search_stepsize_strong_wolfe(
+      const double phi_0, const double phi_0_prime, const BVector &BFGS_p_vector,
+      const BVector &solution_delta)
   {
-    //AssertThrow(phi_0_prime < 0,
-    //            ExcMessage("The derivative of phi at alpha = 0 should be negative!"));
+    // AssertThrow(phi_0_prime < 0,
+    //             ExcMessage("The derivative of phi at alpha = 0 should be
+    //             negative!"));
 
     // Some line search parameters
     const double c1 = 0.0001;
@@ -5528,46 +5316,45 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
 
     unsigned int i = 0;
     for (; i < max_iter; ++i)
+    {
+      current_phi_phi_prime =
+          calculate_phi_and_phi_prime(alpha, BFGS_p_vector, solution_delta);
+      phi = current_phi_phi_prime.first;
+      phi_prime = current_phi_phi_prime.second;
+
+      if ((phi > (phi_0 + c1 * alpha * phi_0_prime)) || (i > 0 && phi > phi_old))
       {
-	current_phi_phi_prime = calculate_phi_and_phi_prime(alpha, BFGS_p_vector, solution_delta);
-	phi = current_phi_phi_prime.first;
-	phi_prime = current_phi_phi_prime.second;
-
-	if (   ( phi > (phi_0 + c1 * alpha * phi_0_prime) )
-	    || ( i > 0 && phi > phi_old ) )
-	  {
-	    return line_search_zoom_strong_wolfe(phi_old, phi_prime_old, alpha_old,
-						 phi,     phi_prime,     alpha,
-						 phi_0,   phi_0_prime,   BFGS_p_vector,
-						 c1,      c2,            max_iter, solution_delta);
-	  }
-
-	if (std::fabs(phi_prime) <= c2 * std::fabs(phi_0_prime))
-	  {
-	    return alpha;
-	  }
-
-	if (phi_prime >= 0)
-	  {
-	    return line_search_zoom_strong_wolfe(phi,     phi_prime,     alpha,
-						 phi_old, phi_prime_old, alpha_old,
-						 phi_0,   phi_0_prime,   BFGS_p_vector,
-						 c1,      c2,            max_iter, solution_delta);
-	  }
-
-	phi_old = phi;
-	phi_prime_old = phi_prime;
-	alpha_old = alpha;
-
-	alpha = std::min(2.0*alpha, alpha_max);
-
-	//AssertThrow(alpha < alpha_max,
-	//	    ExcMessage("alpha is bigger than alpha_max, line search failed!"));
+        return line_search_zoom_strong_wolfe(
+            phi_old, phi_prime_old, alpha_old, phi, phi_prime, alpha, phi_0,
+            phi_0_prime, BFGS_p_vector, c1, c2, max_iter, solution_delta);
       }
 
-    //AssertThrow(i < max_iter,
-    //            ExcMessage("max number attempts arrived, line search failed!"));
-    // Instead of terminating the program, we can just take a full step.
+      if (std::fabs(phi_prime) <= c2 * std::fabs(phi_0_prime))
+      {
+        return alpha;
+      }
+
+      if (phi_prime >= 0)
+      {
+        return line_search_zoom_strong_wolfe(
+            phi, phi_prime, alpha, phi_old, phi_prime_old, alpha_old, phi_0,
+            phi_0_prime, BFGS_p_vector, c1, c2, max_iter, solution_delta);
+      }
+
+      phi_old = phi;
+      phi_prime_old = phi_prime;
+      alpha_old = alpha;
+
+      alpha = std::min(2.0 * alpha, alpha_max);
+
+      // AssertThrow(alpha < alpha_max,
+      //      ExcMessage("alpha is bigger than alpha_max, line search failed!"));
+    }
+
+    // AssertThrow(i < max_iter,
+    //             ExcMessage("max number attempts arrived, line search
+    //             failed!"));
+    //  Instead of terminating the program, we can just take a full step.
     if (i == max_iter)
       alpha = 1.0;
 
@@ -5575,11 +5362,11 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
   }
 
   template <typename LATraits, typename Tria>
-  double PhaseFieldMonolithicSolve<LATraits, Tria>::
-    line_search_zoom_strong_wolfe(double phi_low, double phi_low_prime, double alpha_low,
-				  double phi_high, double phi_high_prime, double alpha_high,
-				  double phi_0, double phi_0_prime, const BVector & BFGS_p_vector,
-				  double c1, double c2, unsigned int max_iter, const BVector & solution_delta)
+  double PhaseFieldMonolithicSolve<LATraits, Tria>::line_search_zoom_strong_wolfe(
+      double phi_low, double phi_low_prime, double alpha_low, double phi_high,
+      double phi_high_prime, double alpha_high, double phi_0, double phi_0_prime,
+      const BVector &BFGS_p_vector, double c1, double c2, unsigned int max_iter,
+      const BVector &solution_delta)
   {
     double alpha = 0;
     std::pair<double, double> current_phi_phi_prime;
@@ -5587,43 +5374,43 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
 
     unsigned int i = 0;
     for (; i < max_iter; ++i)
+    {
+      // a simple bisection is faster than cubic interpolation
+      alpha = 0.5 * (alpha_low + alpha_high);
+      // alpha = line_search_interpolation_cubic(alpha_low, phi_low,
+      // phi_low_prime,           alpha_high, phi_high, phi_high_prime);
+      current_phi_phi_prime =
+          calculate_phi_and_phi_prime(alpha, BFGS_p_vector, solution_delta);
+      phi = current_phi_phi_prime.first;
+      phi_prime = current_phi_phi_prime.second;
+
+      if ((phi > phi_0 + c1 * alpha * phi_0_prime) || (phi > phi_low))
       {
-	// a simple bisection is faster than cubic interpolation
-	alpha = 0.5 * (alpha_low + alpha_high);
-	//alpha = line_search_interpolation_cubic(alpha_low, phi_low, phi_low_prime,
-	//					alpha_high, phi_high, phi_high_prime);
-	current_phi_phi_prime = calculate_phi_and_phi_prime(alpha, BFGS_p_vector, solution_delta);
-	phi = current_phi_phi_prime.first;
-	phi_prime = current_phi_phi_prime.second;
-
-	if (   (phi > phi_0 + c1 * alpha * phi_0_prime)
-	    || (phi > phi_low) )
-	  {
-	    alpha_high = alpha;
-	    phi_high = phi;
-	    phi_high_prime = phi_prime;
-	  }
-	else
-	  {
-	    if (std::fabs(phi_prime) <= c2 * std::fabs(phi_0_prime))
-	      {
-		//if (alpha < 1.0e-3)
-		//  alpha = 1.0e-3;
-		return alpha;
-	      }
-
-	    if (phi_prime * (alpha_high - alpha_low) >= 0.0)
-	      {
-		alpha_high = alpha_low;
-		phi_high_prime = phi_low_prime;
-		phi_high = phi_low;
-	      }
-
-	    alpha_low = alpha;
-	    phi_low_prime = phi_prime;
-	    phi_low = phi;
-	  }
+        alpha_high = alpha;
+        phi_high = phi;
+        phi_high_prime = phi_prime;
       }
+      else
+      {
+        if (std::fabs(phi_prime) <= c2 * std::fabs(phi_0_prime))
+        {
+          // if (alpha < 1.0e-3)
+          //   alpha = 1.0e-3;
+          return alpha;
+        }
+
+        if (phi_prime * (alpha_high - alpha_low) >= 0.0)
+        {
+          alpha_high = alpha_low;
+          phi_high_prime = phi_low_prime;
+          phi_high = phi_low;
+        }
+
+        alpha_low = alpha;
+        phi_low_prime = phi_prime;
+        phi_low = phi;
+      }
+    }
 
     if (alpha < 1.0e-3)
       alpha = 1.0;
@@ -5635,9 +5422,10 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
   }
 
   template <typename LATraits, typename Tria>
-  double PhaseFieldMonolithicSolve<LATraits, Tria>::line_search_stepsize_residual_projection(const double f0,
-				                                                  const BVector & BFGS_p_vector,
-				                                                  const BVector & solution_delta)
+  double PhaseFieldMonolithicSolve<LATraits, Tria>::
+      line_search_stepsize_residual_projection(const double f0,
+                                               const BVector &BFGS_p_vector,
+                                               const BVector &solution_delta)
   {
     // We want to find an alpha such that |f(alpha)| <= eta * |f(0)|
     // This value is suggested by Abaqus line search process
@@ -5653,45 +5441,46 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
     double sample_point = 0.0;
 
     if (std::fabs(f1) <= threshold)
-      {
-	//m_logfile << "f0 = " << f0 << std::endl;
-	//m_logfile << "f1 = " << f1 << std::endl;
-        return 1.0;
-      }
+    {
+      // m_logfile << "f0 = " << f0 << std::endl;
+      // m_logfile << "f1 = " << f1 << std::endl;
+      return 1.0;
+    }
 
     // f0 and f1 have opposite signs
     if (f0 * f1 <= 0.0)
-      {
-	// there exists an alpha in [0, 1] such that p^T * r(alpha) = 0
-	// we can do a bisection search
-	alpha = binary_search(0.0, 1.0, f0, f1, threshold,
-			      BFGS_p_vector, solution_delta);
-	return alpha;
-      }
+    {
+      // there exists an alpha in [0, 1] such that p^T * r(alpha) = 0
+      // we can do a bisection search
+      alpha = binary_search(0.0, 1.0, f0, f1, threshold, BFGS_p_vector,
+                            solution_delta);
+      return alpha;
+    }
     // f0 and f1 have the same sign
     else
+    {
+      for (unsigned int i = 1; i < n_sample_points; ++i)
       {
-	for (unsigned int i = 1; i < n_sample_points; ++i)
-	  {
-	    sample_point = 1.0 - i * 1.0/n_sample_points;
-	    f_alpha = calculate_phi_prime(sample_point, BFGS_p_vector, solution_delta);
-	    if (std::fabs(f_alpha) <= threshold)
-	      {
-		//m_logfile << "f0 = " << f0 << std::endl;
-		//m_logfile << "f1 = " << f_alpha << std::endl;
-	        return sample_point;
-	      }
+        sample_point = 1.0 - i * 1.0 / n_sample_points;
+        f_alpha =
+            calculate_phi_prime(sample_point, BFGS_p_vector, solution_delta);
+        if (std::fabs(f_alpha) <= threshold)
+        {
+          // m_logfile << "f0 = " << f0 << std::endl;
+          // m_logfile << "f1 = " << f_alpha << std::endl;
+          return sample_point;
+        }
 
-	    if (f0 * f_alpha <= 0.0)
-	      {
-		// there exists an alpha such that p^T * r(alpha) = 0
-		// we can do a bisection search
-		alpha = binary_search(0.0, sample_point, f0, f_alpha, threshold,
-				      BFGS_p_vector, solution_delta);
-		return alpha;
-	      }
-	  }
+        if (f0 * f_alpha <= 0.0)
+        {
+          // there exists an alpha such that p^T * r(alpha) = 0
+          // we can do a bisection search
+          alpha = binary_search(0.0, sample_point, f0, f_alpha, threshold,
+                                BFGS_p_vector, solution_delta);
+          return alpha;
+        }
       }
+    }
 
     // if the code reaches here, it means that the line search failed
     // to find an alpha such that |f(alpha)| <= eta * |f(0)|
@@ -5699,42 +5488,42 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
   }
 
   template <typename LATraits, typename Tria>
-  double PhaseFieldMonolithicSolve<LATraits, Tria>::binary_search(double a, double b,
-						       double fa, double fb,
-						       const double threshold,
-						       const BVector & BFGS_p_vector,
-						       const BVector & solution_delta)
+  double PhaseFieldMonolithicSolve<LATraits, Tria>::binary_search(
+      double a, double b, double fa, double fb, const double threshold,
+      const BVector &BFGS_p_vector, const BVector &solution_delta)
   {
-    double m = 0.5* (a + b);
+    double m = 0.5 * (a + b);
     double fm = calculate_phi_prime(m, BFGS_p_vector, solution_delta);
 
-    while (std::fabs(fm) > threshold )
+    while (std::fabs(fm) > threshold)
+    {
+      if (fm * fa <= 0)
       {
-	if (fm * fa <= 0)
-	  {
-	    b = m;
-	    fb = fm;
-	  }
-	else
-	  {
-	    a = m;
-	    fa = fm;
-	  }
-
-	m = 0.5* (a + b);
-	fm = calculate_phi_prime(m, BFGS_p_vector, solution_delta);
+        b = m;
+        fb = fm;
+      }
+      else
+      {
+        a = m;
+        fa = fm;
       }
 
-    (void) fb;
+      m = 0.5 * (a + b);
+      fm = calculate_phi_prime(m, BFGS_p_vector, solution_delta);
+    }
+
+    (void)fb;
     return m;
   }
 
   template <typename LATraits, typename Tria>
-  double PhaseFieldMonolithicSolve<LATraits, Tria>::
-    line_search_interpolation_cubic(const double alpha_0, const double phi_0, const double phi_0_prime,
-  			            const double alpha_1, const double phi_1, const double phi_1_prime)
+  double
+  PhaseFieldMonolithicSolve<LATraits, Tria>::line_search_interpolation_cubic(
+      const double alpha_0, const double phi_0, const double phi_0_prime,
+      const double alpha_1, const double phi_1, const double phi_1_prime)
   {
-    const double d1 = phi_0_prime + phi_1_prime - 3.0 * (phi_0 - phi_1) / (alpha_0 - alpha_1);
+    const double d1 =
+        phi_0_prime + phi_1_prime - 3.0 * (phi_0 - phi_1) / (alpha_0 - alpha_1);
 
     const double temp = d1 * d1 - phi_0_prime * phi_1_prime;
 
@@ -5749,44 +5538,42 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
 
     const double d2 = sign * std::sqrt(temp);
 
-    const double alpha = alpha_1 - (alpha_1 - alpha_0)
-	               * (phi_1_prime + d2 - d1) / (phi_1_prime - phi_0_prime + 2*d2);
+    const double alpha = alpha_1 - (alpha_1 - alpha_0) * (phi_1_prime + d2 - d1) /
+                                       (phi_1_prime - phi_0_prime + 2 * d2);
 
-    if (    (alpha_1 > alpha_0)
-	 && (alpha > alpha_1 || alpha < alpha_0))
+    if ((alpha_1 > alpha_0) && (alpha > alpha_1 || alpha < alpha_0))
       return 0.5 * (alpha_0 + alpha_1);
 
-    if (    (alpha_0 > alpha_1)
-	 && (alpha > alpha_0 || alpha < alpha_1))
+    if ((alpha_0 > alpha_1) && (alpha > alpha_0 || alpha < alpha_1))
       return 0.5 * (alpha_0 + alpha_1);
 
     return alpha;
   }
 
   template <typename LATraits, typename Tria>
-  std::pair<double, double> PhaseFieldMonolithicSolve<LATraits, Tria>::
-    calculate_phi_and_phi_prime(const double alpha,
-				const BVector & BFGS_p_vector,
-				const BVector & solution_delta)
+  std::pair<double, double>
+  PhaseFieldMonolithicSolve<LATraits, Tria>::calculate_phi_and_phi_prime(
+      const double alpha, const BVector &BFGS_p_vector,
+      const BVector &solution_delta)
   {
-    // the first component is phi(alpha), the second component is phi_prime(alpha),
+    // the first component is phi(alpha), the second component is
+    // phi_prime(alpha),
     std::pair<double, double> phi_values;
 
-        BVector solution_delta_trial(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
-        solution_delta_trial.initialize();
-        solution_delta_trial.base() = solution_delta.base();
+    BVector solution_delta_trial(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
+    solution_delta_trial.initialize();
+    solution_delta_trial.base() = solution_delta.base();
     solution_delta_trial.add(alpha, BFGS_p_vector);
 
-        solution_delta_trial.updateRelevance();
+    solution_delta_trial.updateRelevance();
 
-        
     update_qph_incremental(solution_delta_trial, m_solution, false);
 
-        BVector system_rhs(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
-        system_rhs.initialize();
+    BVector system_rhs(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
+    system_rhs.initialize();
     assemble_system_rhs_LBFGS_parallel(m_solution, system_rhs);
-        
-    //m_constraints.condense(system_rhs);
+
+    // m_constraints.condense(system_rhs);
 
     phi_values.first = calculate_energy_functional();
     phi_values.second = system_rhs * BFGS_p_vector;
@@ -5794,42 +5581,40 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
   }
 
   template <typename LATraits, typename Tria>
-  double PhaseFieldMonolithicSolve<LATraits, Tria>::
-    calculate_phi_prime(const double alpha,
-			const BVector & BFGS_p_vector,
-			const BVector & solution_delta)
+  double PhaseFieldMonolithicSolve<LATraits, Tria>::calculate_phi_prime(
+      const double alpha, const BVector &BFGS_p_vector,
+      const BVector &solution_delta)
   {
     // phi_prime(alpha) =  p^T * r(alpha)
     double phi_prime;
 
-        BVector solution_delta_trial(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
-        solution_delta_trial.initialize();
-        solution_delta_trial.base() = solution_delta.base();
+    BVector solution_delta_trial(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
+    solution_delta_trial.initialize();
+    solution_delta_trial.base() = solution_delta.base();
     solution_delta_trial.add(alpha, BFGS_p_vector);
 
-        solution_delta_trial.updateRelevance();
+    solution_delta_trial.updateRelevance();
 
-        
     update_qph_incremental(solution_delta_trial, m_solution, false);
 
-//    BVector system_rhs(m_dofs_per_block);
-        BVector system_rhs(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
-        system_rhs.initialize();
+    //    BVector system_rhs(m_dofs_per_block);
+    BVector system_rhs(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
+    system_rhs.initialize();
     assemble_system_rhs_LBFGS_parallel(m_solution, system_rhs);
-        
-        
-    //m_constraints.condense(system_rhs);
 
-    //phi_prime = system_rhs * BFGS_p_vector;
+    // m_constraints.condense(system_rhs);
 
-//    BVector error_res(m_dofs_per_block);
-        BVector error_res(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
-        error_res.initialize();
+    // phi_prime = system_rhs * BFGS_p_vector;
 
-//        error_res.copyAndRemoveCst(m_system_rhs, m_constraints, m_dof_handler);
-//        the following operation is the same to the former one
-        error_res.base() = m_system_rhs.base();
-        m_constraints.set_zero(error_res.base());
+    //    BVector error_res(m_dofs_per_block);
+    BVector error_res(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
+    error_res.initialize();
+
+    //        error_res.copyAndRemoveCst(m_system_rhs, m_constraints,
+    //        m_dof_handler); the following operation is the same to the former
+    //        one
+    error_res.base() = m_system_rhs.base();
+    m_constraints.set_zero(error_res.base());
 
     phi_prime = error_res.l2_norm();
 
@@ -5837,19 +5622,18 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
   }
 
   template <typename LATraits, typename Tria>
-  void PhaseFieldMonolithicSolve<LATraits, Tria>::LBFGS_B0(BVector & LBFGS_r_vector,
-						const BVector & LBFGS_q_vector)
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::LBFGS_B0(
+      BVector &LBFGS_r_vector, const BVector &LBFGS_q_vector)
   {
-      const std::string sectionName = "Solve B0";
-      m_timer.enter_subsection(sectionName);
-      
-      
-      LBFGS_r_vector = 0.0;
-      assemble_system_B0();
-      
-      m_solver.solve(LBFGS_r_vector, LBFGS_q_vector, m_tangent_matrix);
-      LBFGS_r_vector.updateRelevance();
-      m_timer.leave_subsection(sectionName);
+    const std::string sectionName = "Solve B0";
+    m_timer.enter_subsection(sectionName);
+
+    LBFGS_r_vector = 0.0;
+    assemble_system_B0();
+
+    m_solver.solve(LBFGS_r_vector, LBFGS_q_vector, m_tangent_matrix);
+    LBFGS_r_vector.updateRelevance();
+    m_timer.leave_subsection(sectionName);
   }
 
   template <typename LATraits, typename Tria>
@@ -5873,14 +5657,13 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
   }
 
   template <typename LATraits, typename Tria>
-  void PhaseFieldMonolithicSolve<LATraits, Tria>::
-  solve_nonlinear_timestep_LBFGS(BVector & solution_delta,
-				 BVector & LBFGS_update_refine)
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::solve_nonlinear_timestep_LBFGS(
+      BVector &solution_delta, BVector &LBFGS_update_refine)
   {
-      unsigned int iSmallSteps = 0;
+    unsigned int iSmallSteps = 0;
     BVector LBFGS_update(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
-      LBFGS_update.initialize();
-//    LBFGS_update = 0.0;
+    LBFGS_update.initialize();
+    //    LBFGS_update = 0.0;
 
     m_error_residual.reset();
     m_error_residual_0.reset();
@@ -5895,16 +5678,14 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
     unsigned int LBFGS_iteration = 0;
 
     BVector LBFGS_r_vector(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
-      LBFGS_r_vector.initialize();
+    LBFGS_r_vector.initialize();
     BVector LBFGS_y_vector(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
-      LBFGS_y_vector.initialize();
+    LBFGS_y_vector.initialize();
     BVector LBFGS_q_vector(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
-      LBFGS_q_vector.initialize();
+    LBFGS_q_vector.initialize();
     BVector LBFGS_s_vector(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
-      LBFGS_s_vector.initialize();
-    std::list<std::pair< std::pair<BVector,
-                                   BVector>,
-                         double>> LBFGS_vector_list;
+    LBFGS_s_vector.initialize();
+    std::list<std::pair<std::pair<BVector, BVector>, double>> LBFGS_vector_list;
 
     const unsigned int LBFGS_m = m_parameters.m_LBFGS_m;
     std::list<double> LBFGS_alpha_list;
@@ -5913,369 +5694,354 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
     double LBFGS_beta = 0.0;
     double rho = 0.0;
 
-    for (; LBFGS_iteration < m_parameters.m_max_iterations_LBFGS; ++LBFGS_iteration)
+    for (; LBFGS_iteration < m_parameters.m_max_iterations_LBFGS;
+         ++LBFGS_iteration)
+    {
+      if (m_parameters.m_output_iteration_history)
+        m_logfile << '\t' << '\t' << std::setw(2) << LBFGS_iteration << ' '
+                  << std::flush;
+
+      make_constraints(LBFGS_iteration);
+
+      // At the first step, we simply distribute the inhomogeneous part of
+      // the constraints
+      if (LBFGS_iteration == 0)
       {
-	if (m_parameters.m_output_iteration_history)
-	  m_logfile << '\t' << '\t' << std::setw(2) << LBFGS_iteration << ' '
-                    << std::flush;
+        // use the solution from the previous solve on the
+        // refined mesh as initial guess
+        LBFGS_update = LBFGS_update_refine;
 
-        make_constraints(LBFGS_iteration);
-
-        // At the first step, we simply distribute the inhomogeneous part of
-        // the constraints
-        if (LBFGS_iteration == 0)
-          {
-            // use the solution from the previous solve on the
-            // refined mesh as initial guess
-            LBFGS_update = LBFGS_update_refine;
-
-              // distribute and update relevance
-              LBFGS_update.distributeCst(m_constraints);
-            solution_delta += LBFGS_update;
-              solution_delta.updateRelevance();
-              
-            if (m_parameters.m_output_iteration_history)
-              {
-                m_logfile << " --- " << std::flush;
-                m_logfile << " --- " << std::flush;
-              }
-              
-              m_solution.updateRelevance();
-              update_qph_incremental(solution_delta, m_solution, false);
-            if (m_parameters.m_output_iteration_history)
-              {
-                m_logfile << " ---  |" << std::flush;
-                m_logfile << std::endl;
-              }
-            continue;
-          }
-        else if (LBFGS_iteration == 1)
-          {
-	    // Calculate the residual vector r. NOTICE that in the context of
-	    // BFGS, this r is the gradient of the energy functional (objective function),
-	    // NOT the negative gradient of the energy functional
-
-              assemble_system_rhs_LBFGS_parallel(m_solution, m_system_rhs);
-              
-              
-
-	    // We cannot simply zero out the dofs that are constrained, since we might
-	    // have hanging node constraints. In this case, we need to modify the RHS
-	    // as C^T * b, which C contains entries of 0.5 (x_3 = 0.5*x_1 + 0.5*x_2)
-	    //for (unsigned int i = 0; i < m_dof_handler.n_dofs(); ++i)
-	      //if (m_constraints.is_constrained(i))
-		//m_system_rhs(i) = 0.0;
-
-	    // if m_constraints has inhomogeneity, we cannot call m_constraints.condense(m_system_rhs),
-	    // since the m_system_matrix needs to be provided to modify the RHS properly. However, this
-	    // error will not be detected in the release mode and only will be detected on the debug mode
-	    // if we use assemble_system_rhs_LBFGS_parallel, then condense() is not necessary
-	    //m_constraints.condense(m_system_rhs);
-          }
-	if (m_parameters.m_output_iteration_history)
-	  {
-            m_logfile << " --- " << std::flush;
-            m_logfile << " --- " << std::flush;
-            m_logfile << " --- " << std::flush;
-	  }
-
-        get_error_residual(m_error_residual);
-        if (LBFGS_iteration == 1)
-          m_error_residual_0 = m_error_residual;
-
-        m_error_residual_norm = m_error_residual;
-        // For three-point bending problem and 3D problem, we use absolute residual
-        // for convergence test
-        if (m_parameters.m_relative_residual)
-          m_error_residual_norm.normalize(m_error_residual_0);
-
-        if (LBFGS_iteration > 1 && m_error_update_norm.m_u <= m_parameters.m_tol_u_incr
-                                && m_error_residual_norm.m_u <= m_parameters.m_tol_u_residual
-			        && m_error_update_norm.m_d <= m_parameters.m_tol_d_incr
-			        && m_error_residual_norm.m_d <= m_parameters.m_tol_d_residual
-			        && m_error_update_norm.m_t <= m_parameters.m_tol_t_incr
-			        && m_error_residual_norm.m_t <= m_parameters.m_tol_t_residual
-				)
-          {
-            if (m_parameters.m_output_iteration_history)
-              {
-		m_logfile << " | ";
-		m_logfile << " CONVERGED! " << std::fixed << std::setprecision(3) << std::setw(7)
-			  << std::scientific
-		      << "    ----    "
-		      << "  " << m_error_residual_norm.m_norm
-		      << "  " << m_error_residual_norm.m_u
-		      << "  " << m_error_residual_norm.m_d
-		      << "  " << m_error_residual_norm.m_t
-		      << "  " << m_error_update_norm.m_norm
-		      << "  " << m_error_update_norm.m_u
-		      << "  " << m_error_update_norm.m_d
-		      << "  " << m_error_update_norm.m_t
-		      << "  " << std::endl;
-
-		m_logfile << '\t' << '\t';
-		for (unsigned int i = 0; i < 140; ++i)
-		  m_logfile << '_';
-		m_logfile << std::endl;
-              }
-
-            m_logfile << "\t\tConvergence is reached after "
-        	      << LBFGS_iteration << " L-BFGS iterations."<< std::endl;
-
-            m_logfile << "\t\tResidual information of convergence:" << std::endl;
-
-            if (m_parameters.m_relative_residual)
-              {
-		m_logfile << "\t\t\tRelative residual of disp. equation: "
-			  << m_error_residual_norm.m_u << std::endl;
-
-		m_logfile << "\t\t\tAbsolute residual of disp. equation: "
-			  << m_error_residual_norm.m_u * m_error_residual_0.m_u << std::endl;
-
-		m_logfile << "\t\t\tRelative residual of phasefield equation: "
-			  << m_error_residual_norm.m_d << std::endl;
-
-		m_logfile << "\t\t\tAbsolute residual of phasefield equation: "
-			  << m_error_residual_norm.m_d * m_error_residual_0.m_d << std::endl;
-
-		m_logfile << "\t\t\tRelative residual of temperature equation: "
-			  << m_error_residual_norm.m_t << std::endl;
-
-		m_logfile << "\t\t\tAbsolute residual of temperature equation: "
-			  << m_error_residual_norm.m_t * m_error_residual_0.m_t << std::endl;
-
-		m_logfile << "\t\t\tRelative increment of disp.: "
-			  << m_error_update_norm.m_u << std::endl;
-
-		m_logfile << "\t\t\tAbsolute increment of disp.: "
-			  << m_error_update_norm.m_u * m_error_update_0.m_u << std::endl;
-
-		m_logfile << "\t\t\tRelative increment of phasefield: "
-			  << m_error_update_norm.m_d << std::endl;
-
-		m_logfile << "\t\t\tAbsolute increment of phasefield: "
-			  << m_error_update_norm.m_d * m_error_update_0.m_d << std::endl;
-
-		m_logfile << "\t\t\tRelative increment of temperature: "
-			  << m_error_update_norm.m_t << std::endl;
-
-		m_logfile << "\t\t\tAbsolute increment of temperature: "
-			  << m_error_update_norm.m_t * m_error_update_0.m_t << std::endl;
-              }
-            else
-              {
-		m_logfile << "\t\t\tAbsolute residual of disp. equation: "
-			  << m_error_residual_norm.m_u << std::endl;
-
-		m_logfile << "\t\t\tAbsolute residual of phasefield equation: "
-			  << m_error_residual_norm.m_d << std::endl;
-
-		m_logfile << "\t\t\tAbsolute residual of temperature equation: "
-			  << m_error_residual_norm.m_t << std::endl;
-
-		m_logfile << "\t\t\tAbsolute increment of disp.: "
-			  << m_error_update_norm.m_u << std::endl;
-
-		m_logfile << "\t\t\tAbsolute increment of phasefield: "
-			  << m_error_update_norm.m_d << std::endl;
-
-		m_logfile << "\t\t\tAbsolute increment of temperature: "
-			  << m_error_update_norm.m_t << std::endl;
-              }
-
-            break;
-          }
-
-        // LBFGS algorithm
-        LBFGS_q_vector = m_system_rhs;
-          
-          
-          
-        LBFGS_alpha_list.clear();
-        for (auto itr = LBFGS_vector_list.begin(); itr != LBFGS_vector_list.end(); ++itr)
-          {
-            LBFGS_s_vector = (itr->first).first;
-            LBFGS_y_vector = (itr->first).second;
-            rho = itr->second;
-
-            const double alpha = rho * (LBFGS_s_vector * LBFGS_q_vector);
-            LBFGS_alpha_list.push_back(alpha);
-
-            LBFGS_q_vector.add(-alpha, LBFGS_y_vector);
-          }
-/*
-        double scale_gamma = 0.0;
-        if (LBFGS_iteration == 1)
-          {
-            scale_gamma = 1.0;
-          }
-        else
-          {
-            LBFGS_s_vector = LBFGS_vector_list.front().first.first;
-            LBFGS_y_vector = LBFGS_vector_list.front().first.second;
-            scale_gamma = (LBFGS_s_vector * LBFGS_y_vector)/(LBFGS_y_vector * LBFGS_y_vector);
-          }
-
-        LBFGS_q_vector *= scale_gamma;
-        LBFGS_r_vector = LBFGS_q_vector;
-*/
-          
-          
-        LBFGS_B0(LBFGS_r_vector,
-		 LBFGS_q_vector);
-          
-          
-          
-
-        for (auto itr = LBFGS_vector_list.rbegin(); itr != LBFGS_vector_list.rend(); ++itr)
-          {
-            LBFGS_s_vector = (itr->first).first;
-            LBFGS_y_vector = (itr->first).second;
-            rho = itr->second;
-
-            LBFGS_beta = rho * (LBFGS_y_vector * LBFGS_r_vector);
-
-            const double alpha = LBFGS_alpha_list.back();
-            LBFGS_alpha_list.pop_back();
-
-            LBFGS_r_vector.add(alpha - LBFGS_beta, LBFGS_s_vector);
-          }
-
-        LBFGS_r_vector *= -1.0; // this is the p_vector (search direction)
-
-          // distribute and update relevance
-          LBFGS_r_vector.distributeCst(m_constraints);
-          
-        // We need a line search algorithm to decide line_search_parameter
-          
-        line_search_parameter = line_search_stepsize_gradient_based(LBFGS_r_vector,
-        							    solution_delta, iSmallSteps);
-          
-          // Note: to avoid round-off errors during synchronization from different ranks
-          if constexpr(is_mpi) {
-              line_search_parameter = std::round(line_search_parameter * 1e6) / 1e6;
-              line_search_parameter = Utilities::MPI::broadcast(*m_mpiInfo.mpiCommPtr(), line_search_parameter, /*root=*/0);
-          }
-          
-          
-          
-          
-        // const double phi_0 = calculate_energy_functional();
-        // const double phi_0_prime = m_system_rhs * LBFGS_r_vector;
-/*
-        BlockVector<double> error_res(m_dofs_per_block);
-
-        for (unsigned int i = 0; i < m_dof_handler.n_dofs(); ++i)
-          if (!m_constraints.is_constrained(i))
-            error_res(i) = m_system_rhs(i);
-
-        const double phi_0_prime = error_res.l2_norm();
-*/
-/*
-        line_search_parameter = line_search_stepsize_strong_wolfe(phi_0,
-						                  phi_0_prime,
-								  LBFGS_r_vector,
-						                  solution_delta);
-*/
-
-        // phi_0_prime is p^T * r (dot product between residual and search direction)
-        // LBFGS_r_vector is the search direction
-        //line_search_parameter = line_search_stepsize_residual_projection(phi_0_prime,
-	//								 LBFGS_r_vector,
-	//								 solution_delta);
-
-        // line_search_parameter = 1.0;
-        LBFGS_r_vector *= line_search_parameter;
-          LBFGS_r_vector.updateRelevance();
-        LBFGS_update = LBFGS_r_vector;
-          LBFGS_update.updateRelevance();
-
-          
-              
-          
-          
-        get_error_update(LBFGS_update, m_error_update);
-        if (LBFGS_iteration == 1)
-          m_error_update_0 = m_error_update;
-
-        m_error_update_norm = m_error_update;
-        // For three-point bending problem and the sphere inclusion problem,
-        // we use absolute residual for convergence test
-        if (m_parameters.m_relative_residual)
-          m_error_update_norm.normalize(m_error_update_0);
-
+        // distribute and update relevance
+        LBFGS_update.distributeCst(m_constraints);
         solution_delta += LBFGS_update;
-          solution_delta.updateRelevance();
-          
-          
-          
-          update_qph_incremental(solution_delta, m_solution, false);
+        solution_delta.updateRelevance();
 
-        LBFGS_y_vector = m_system_rhs;
-        LBFGS_y_vector *= -1.0;
-          
+        if (m_parameters.m_output_iteration_history)
+        {
+          m_logfile << " --- " << std::flush;
+          m_logfile << " --- " << std::flush;
+        }
 
-          assemble_system_rhs_LBFGS_parallel(m_solution, m_system_rhs);
-          
-         
-        // if we use assemble_system_rhs_LBFGS_parallel, then condense() is not necessary
-        //m_constraints.condense(m_system_rhs);
-        LBFGS_y_vector += m_system_rhs;
-          
-         
-          
-        LBFGS_s_vector = LBFGS_update;
-/*
+        m_solution.updateRelevance();
+        update_qph_incremental(solution_delta, m_solution, false);
+        if (m_parameters.m_output_iteration_history)
+        {
+          m_logfile << " ---  |" << std::flush;
+          m_logfile << std::endl;
+        }
+        continue;
+      }
+      else if (LBFGS_iteration == 1)
+      {
+        // Calculate the residual vector r. NOTICE that in the context of
+        // BFGS, this r is the gradient of the energy functional (objective
+        // function), NOT the negative gradient of the energy functional
+
+        assemble_system_rhs_LBFGS_parallel(m_solution, m_system_rhs);
+
+        // We cannot simply zero out the dofs that are constrained, since we might
+        // have hanging node constraints. In this case, we need to modify the RHS
+        // as C^T * b, which C contains entries of 0.5 (x_3 = 0.5*x_1 + 0.5*x_2)
+        // for (unsigned int i = 0; i < m_dof_handler.n_dofs(); ++i)
+        // if (m_constraints.is_constrained(i))
+        // m_system_rhs(i) = 0.0;
+
+        // if m_constraints has inhomogeneity, we cannot call
+        // m_constraints.condense(m_system_rhs), since the m_system_matrix needs
+        // to be provided to modify the RHS properly. However, this error will not
+        // be detected in the release mode and only will be detected on the debug
+        // mode if we use assemble_system_rhs_LBFGS_parallel, then condense() is
+        // not necessary
+        // m_constraints.condense(m_system_rhs);
+      }
+      if (m_parameters.m_output_iteration_history)
+      {
+        m_logfile << " --- " << std::flush;
+        m_logfile << " --- " << std::flush;
+        m_logfile << " --- " << std::flush;
+      }
+
+      get_error_residual(m_error_residual);
+      if (LBFGS_iteration == 1)
+        m_error_residual_0 = m_error_residual;
+
+      m_error_residual_norm = m_error_residual;
+      // For three-point bending problem and 3D problem, we use absolute residual
+      // for convergence test
+      if (m_parameters.m_relative_residual)
+        m_error_residual_norm.normalize(m_error_residual_0);
+
+      if (LBFGS_iteration > 1 &&
+          m_error_update_norm.m_u <= m_parameters.m_tol_u_incr &&
+          m_error_residual_norm.m_u <= m_parameters.m_tol_u_residual &&
+          m_error_update_norm.m_d <= m_parameters.m_tol_d_incr &&
+          m_error_residual_norm.m_d <= m_parameters.m_tol_d_residual &&
+          m_error_update_norm.m_t <= m_parameters.m_tol_t_incr &&
+          m_error_residual_norm.m_t <= m_parameters.m_tol_t_residual)
+      {
+        if (m_parameters.m_output_iteration_history)
+        {
+          m_logfile << " | ";
+          m_logfile << " CONVERGED! " << std::fixed << std::setprecision(3)
+                    << std::setw(7) << std::scientific << "    ----    " << "  "
+                    << m_error_residual_norm.m_norm << "  "
+                    << m_error_residual_norm.m_u << "  "
+                    << m_error_residual_norm.m_d << "  "
+                    << m_error_residual_norm.m_t << "  "
+                    << m_error_update_norm.m_norm << "  "
+                    << m_error_update_norm.m_u << "  " << m_error_update_norm.m_d
+                    << "  " << m_error_update_norm.m_t << "  " << std::endl;
+
+          m_logfile << '\t' << '\t';
+          for (unsigned int i = 0; i < 140; ++i)
+            m_logfile << '_';
+          m_logfile << std::endl;
+        }
+
+        m_logfile << "\t\tConvergence is reached after " << LBFGS_iteration
+                  << " L-BFGS iterations." << std::endl;
+
+        m_logfile << "\t\tResidual information of convergence:" << std::endl;
+
+        if (m_parameters.m_relative_residual)
+        {
+          m_logfile << "\t\t\tRelative residual of disp. equation: "
+                    << m_error_residual_norm.m_u << std::endl;
+
+          m_logfile << "\t\t\tAbsolute residual of disp. equation: "
+                    << m_error_residual_norm.m_u * m_error_residual_0.m_u
+                    << std::endl;
+
+          m_logfile << "\t\t\tRelative residual of phasefield equation: "
+                    << m_error_residual_norm.m_d << std::endl;
+
+          m_logfile << "\t\t\tAbsolute residual of phasefield equation: "
+                    << m_error_residual_norm.m_d * m_error_residual_0.m_d
+                    << std::endl;
+
+          m_logfile << "\t\t\tRelative residual of temperature equation: "
+                    << m_error_residual_norm.m_t << std::endl;
+
+          m_logfile << "\t\t\tAbsolute residual of temperature equation: "
+                    << m_error_residual_norm.m_t * m_error_residual_0.m_t
+                    << std::endl;
+
+          m_logfile << "\t\t\tRelative increment of disp.: "
+                    << m_error_update_norm.m_u << std::endl;
+
+          m_logfile << "\t\t\tAbsolute increment of disp.: "
+                    << m_error_update_norm.m_u * m_error_update_0.m_u
+                    << std::endl;
+
+          m_logfile << "\t\t\tRelative increment of phasefield: "
+                    << m_error_update_norm.m_d << std::endl;
+
+          m_logfile << "\t\t\tAbsolute increment of phasefield: "
+                    << m_error_update_norm.m_d * m_error_update_0.m_d
+                    << std::endl;
+
+          m_logfile << "\t\t\tRelative increment of temperature: "
+                    << m_error_update_norm.m_t << std::endl;
+
+          m_logfile << "\t\t\tAbsolute increment of temperature: "
+                    << m_error_update_norm.m_t * m_error_update_0.m_t
+                    << std::endl;
+        }
+        else
+        {
+          m_logfile << "\t\t\tAbsolute residual of disp. equation: "
+                    << m_error_residual_norm.m_u << std::endl;
+
+          m_logfile << "\t\t\tAbsolute residual of phasefield equation: "
+                    << m_error_residual_norm.m_d << std::endl;
+
+          m_logfile << "\t\t\tAbsolute residual of temperature equation: "
+                    << m_error_residual_norm.m_t << std::endl;
+
+          m_logfile << "\t\t\tAbsolute increment of disp.: "
+                    << m_error_update_norm.m_u << std::endl;
+
+          m_logfile << "\t\t\tAbsolute increment of phasefield: "
+                    << m_error_update_norm.m_d << std::endl;
+
+          m_logfile << "\t\t\tAbsolute increment of temperature: "
+                    << m_error_update_norm.m_t << std::endl;
+        }
+
+        break;
+      }
+
+      // LBFGS algorithm
+      LBFGS_q_vector = m_system_rhs;
+
+      LBFGS_alpha_list.clear();
+      for (auto itr = LBFGS_vector_list.begin(); itr != LBFGS_vector_list.end();
+           ++itr)
+      {
+        LBFGS_s_vector = (itr->first).first;
+        LBFGS_y_vector = (itr->first).second;
+        rho = itr->second;
+
+        const double alpha = rho * (LBFGS_s_vector * LBFGS_q_vector);
+        LBFGS_alpha_list.push_back(alpha);
+
+        LBFGS_q_vector.add(-alpha, LBFGS_y_vector);
+      }
+      /*
+              double scale_gamma = 0.0;
+              if (LBFGS_iteration == 1)
+                {
+                  scale_gamma = 1.0;
+                }
+              else
+                {
+                  LBFGS_s_vector = LBFGS_vector_list.front().first.first;
+                  LBFGS_y_vector = LBFGS_vector_list.front().first.second;
+                  scale_gamma = (LBFGS_s_vector * LBFGS_y_vector)/(LBFGS_y_vector
+         * LBFGS_y_vector);
+                }
+
+              LBFGS_q_vector *= scale_gamma;
+              LBFGS_r_vector = LBFGS_q_vector;
+      */
+
+      LBFGS_B0(LBFGS_r_vector, LBFGS_q_vector);
+
+      for (auto itr = LBFGS_vector_list.rbegin(); itr != LBFGS_vector_list.rend();
+           ++itr)
+      {
+        LBFGS_s_vector = (itr->first).first;
+        LBFGS_y_vector = (itr->first).second;
+        rho = itr->second;
+
+        LBFGS_beta = rho * (LBFGS_y_vector * LBFGS_r_vector);
+
+        const double alpha = LBFGS_alpha_list.back();
+        LBFGS_alpha_list.pop_back();
+
+        LBFGS_r_vector.add(alpha - LBFGS_beta, LBFGS_s_vector);
+      }
+
+      LBFGS_r_vector *= -1.0; // this is the p_vector (search direction)
+
+      // distribute and update relevance
+      LBFGS_r_vector.distributeCst(m_constraints);
+
+      // We need a line search algorithm to decide line_search_parameter
+
+      line_search_parameter = line_search_stepsize_gradient_based(
+          LBFGS_r_vector, solution_delta, iSmallSteps);
+
+      // Note: to avoid round-off errors during synchronization from different
+      // ranks
+      if constexpr (is_mpi)
+      {
+        line_search_parameter = std::round(line_search_parameter * 1e6) / 1e6;
+        line_search_parameter = Utilities::MPI::broadcast(
+            *m_mpiInfo.mpiCommPtr(), line_search_parameter, /*root=*/0);
+      }
+
+      // const double phi_0 = calculate_energy_functional();
+      // const double phi_0_prime = m_system_rhs * LBFGS_r_vector;
+      /*
+              BlockVector<double> error_res(m_dofs_per_block);
+
+              for (unsigned int i = 0; i < m_dof_handler.n_dofs(); ++i)
+                if (!m_constraints.is_constrained(i))
+                  error_res(i) = m_system_rhs(i);
+
+              const double phi_0_prime = error_res.l2_norm();
+      */
+      /*
+              line_search_parameter = line_search_stepsize_strong_wolfe(phi_0,
+                                                                        phi_0_prime,
+                                                                        LBFGS_r_vector,
+                                                                        solution_delta);
+      */
+
+      // phi_0_prime is p^T * r (dot product between residual and search
+      // direction) LBFGS_r_vector is the search direction
+      // line_search_parameter =
+      // line_search_stepsize_residual_projection(phi_0_prime,                 LBFGS_r_vector,
+      //                 solution_delta);
+
+      // line_search_parameter = 1.0;
+      LBFGS_r_vector *= line_search_parameter;
+      LBFGS_r_vector.updateRelevance();
+      LBFGS_update = LBFGS_r_vector;
+      LBFGS_update.updateRelevance();
+
+      get_error_update(LBFGS_update, m_error_update);
+      if (LBFGS_iteration == 1)
+        m_error_update_0 = m_error_update;
+
+      m_error_update_norm = m_error_update;
+      // For three-point bending problem and the sphere inclusion problem,
+      // we use absolute residual for convergence test
+      if (m_parameters.m_relative_residual)
+        m_error_update_norm.normalize(m_error_update_0);
+
+      solution_delta += LBFGS_update;
+      solution_delta.updateRelevance();
+
+      update_qph_incremental(solution_delta, m_solution, false);
+
+      LBFGS_y_vector = m_system_rhs;
+      LBFGS_y_vector *= -1.0;
+
+      assemble_system_rhs_LBFGS_parallel(m_solution, m_system_rhs);
+
+      // if we use assemble_system_rhs_LBFGS_parallel, then condense() is not
+      // necessary
+      // m_constraints.condense(m_system_rhs);
+      LBFGS_y_vector += m_system_rhs;
+
+      LBFGS_s_vector = LBFGS_update;
+      /*
+              if (LBFGS_iteration > LBFGS_m)
+                LBFGS_vector_list.pop_back();
+
+              rho = 1.0 / (LBFGS_y_vector * LBFGS_s_vector);
+
+              LBFGS_vector_list.push_front(std::make_pair(std::make_pair(LBFGS_s_vector,
+                                                                         LBFGS_y_vector),
+                                                          rho));
+      */
+      const double g_norm = m_system_rhs.l2_norm();
+
+      const double yxs = LBFGS_y_vector * LBFGS_s_vector;
+
+      const double sxs = LBFGS_s_vector * LBFGS_s_vector;
+
+      if (yxs / sxs >= 1.0e-6 * g_norm)
+      {
         if (LBFGS_iteration > LBFGS_m)
           LBFGS_vector_list.pop_back();
 
-        rho = 1.0 / (LBFGS_y_vector * LBFGS_s_vector);
+        rho = 1.0 / yxs;
 
-        LBFGS_vector_list.push_front(std::make_pair(std::make_pair(LBFGS_s_vector,
-								   LBFGS_y_vector),
-						    rho));
-*/
-        const double g_norm = m_system_rhs.l2_norm();
-
-        const double yxs = LBFGS_y_vector * LBFGS_s_vector;
-
-        const double sxs = LBFGS_s_vector * LBFGS_s_vector;
-
-        if (yxs/sxs >= 1.0e-6 * g_norm)
-          {
-	    if (LBFGS_iteration > LBFGS_m)
-	      LBFGS_vector_list.pop_back();
-
-	    rho = 1.0 / yxs;
-
-	    LBFGS_vector_list.push_front(std::make_pair(std::make_pair(LBFGS_s_vector,
-								       LBFGS_y_vector),
-							rho));
-          }
-
-        if (m_parameters.m_output_iteration_history)
-          {
-	    const double energy_functional = calculate_energy_functional();
-
-	    m_logfile << " | " << std::fixed << std::setprecision(3) << std::setw(1)
-		      << std::scientific
-		      << "" << line_search_parameter
-		      << std::fixed << std::setprecision(6) << std::setw(1)
-					<< std::scientific
-		      << "  " << energy_functional
-		      << std::fixed << std::setprecision(3) << std::setw(1)
-					<< std::scientific
-		      << "  " << m_error_residual_norm.m_norm
-		      << "  " << m_error_residual_norm.m_u
-		      << "  " << m_error_residual_norm.m_d
-		      << "  " << m_error_residual_norm.m_t
-		      << "  " << m_error_update_norm.m_norm
-		      << "  " << m_error_update_norm.m_u
-		      << "  " << m_error_update_norm.m_d
-		      << "  " << m_error_update_norm.m_t
-		      << "  " << std::endl;
-          }
+        LBFGS_vector_list.push_front(
+            std::make_pair(std::make_pair(LBFGS_s_vector, LBFGS_y_vector), rho));
       }
+
+      if (m_parameters.m_output_iteration_history)
+      {
+        const double energy_functional = calculate_energy_functional();
+
+        m_logfile << " | " << std::fixed << std::setprecision(3) << std::setw(1)
+                  << std::scientific << "" << line_search_parameter << std::fixed
+                  << std::setprecision(6) << std::setw(1) << std::scientific
+                  << "  " << energy_functional << std::fixed
+                  << std::setprecision(3) << std::setw(1) << std::scientific
+                  << "  " << m_error_residual_norm.m_norm << "  "
+                  << m_error_residual_norm.m_u << "  "
+                  << m_error_residual_norm.m_d << "  "
+                  << m_error_residual_norm.m_t << "  "
+                  << m_error_update_norm.m_norm << "  " << m_error_update_norm.m_u
+                  << "  " << m_error_update_norm.m_d << "  "
+                  << m_error_update_norm.m_t << "  " << std::endl;
+      }
+    }
 
     AssertThrow(LBFGS_iteration < m_parameters.m_max_iterations_LBFGS,
                 ExcMessage("No convergence in L-BFGS nonlinear solver!"));
@@ -6284,27 +6050,25 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
   template <typename LATraits, typename Tria>
   void PhaseFieldMonolithicSolve<LATraits, Tria>::output_results() const
   {
-      const std::string sectionName = "Output results";
+    const std::string sectionName = "Output results";
     m_timer.enter_subsection(sectionName);
 
-      m_output.output(m_time.get_timestep(),
-                      m_parameters.m_poly_degree,
-                      m_parameters.resultsDir,
-                      m_parameters.m_type_linear_solver,
-                      m_solution,
-                      m_quadrature_point_history);
-    
+    m_output.output(m_time.get_timestep(), m_parameters.m_poly_degree,
+                    m_parameters.resultsDir, m_parameters.m_type_linear_solver,
+                    m_solution, m_quadrature_point_history);
+
     m_timer.leave_subsection(sectionName);
   }
 
   template <typename LATraits, typename Tria>
-  void PhaseFieldMonolithicSolve<LATraits, Tria>::calculate_reaction_force(unsigned int face_ID)
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::calculate_reaction_force(
+      unsigned int face_ID)
   {
-      const std::string sectionName = "Calculate reaction force";
+    const std::string sectionName = "Calculate reaction force";
     m_timer.enter_subsection(sectionName);
 
-    BVector       system_rhs(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
-      system_rhs.initialize();
+    BVector system_rhs(m_mpiInfo, m_blocks_desc, /*relevance=*/false);
+    system_rhs.initialize();
 
     Vector<double> cell_rhs(m_dofs_per_cell);
     std::vector<types::global_dof_index> local_dof_indices(m_dofs_per_cell);
@@ -6312,7 +6076,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
     const double time_ramp = (m_time.current() / m_time.end());
     std::vector<Tensor<1, dim>> rhs_values(m_n_q_points);
     const UpdateFlags uf_cell(update_values | update_gradients |
-			      update_quadrature_points | update_JxW_values);
+                              update_quadrature_points | update_JxW_values);
     const UpdateFlags uf_face(update_values | update_normal_vectors |
                               update_JxW_values);
 
@@ -6320,174 +6084,174 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
     FEFaceValues<dim> fe_face_values(m_fe, m_qf_face, uf_face);
 
     // shape function values for displacement field
-    std::vector<std::vector<Tensor<1, dim>>>
-      Nx(m_qf_cell.size(), std::vector<Tensor<1, dim>>(m_dofs_per_cell));
-    std::vector<std::vector<Tensor<2, dim>>>
-      grad_Nx(m_qf_cell.size(), std::vector<Tensor<2, dim>>(m_dofs_per_cell));
-    std::vector<std::vector<SymmetricTensor<2, dim>>>
-      symm_grad_Nx(m_qf_cell.size(), std::vector<SymmetricTensor<2, dim>>(m_dofs_per_cell));
+    std::vector<std::vector<Tensor<1, dim>>> Nx(
+        m_qf_cell.size(), std::vector<Tensor<1, dim>>(m_dofs_per_cell));
+    std::vector<std::vector<Tensor<2, dim>>> grad_Nx(
+        m_qf_cell.size(), std::vector<Tensor<2, dim>>(m_dofs_per_cell));
+    std::vector<std::vector<SymmetricTensor<2, dim>>> symm_grad_Nx(
+        m_qf_cell.size(), std::vector<SymmetricTensor<2, dim>>(m_dofs_per_cell));
 
-      for (const auto &cell : m_dof_handler.active_cell_iterators())
-      {
-          // skip cells owned by other ranks in mpi mode
-          if constexpr (is_mpi)
-              if (!cell->is_locally_owned())
-                  continue;
-          
-          // if calculate_reaction_force() is defined as const, then
-          // we also need to put a const in std::shared_ptr,
-          // that is, std::shared_ptr<const PointHistory<dim>>
-          const std::vector<std::shared_ptr< PointHistory<dim>>> lqph =
+    for (const auto &cell : m_dof_handler.active_cell_iterators())
+    {
+      // skip cells owned by other ranks in mpi mode
+      if constexpr (is_mpi)
+        if (!cell->is_locally_owned())
+          continue;
+
+      // if calculate_reaction_force() is defined as const, then
+      // we also need to put a const in std::shared_ptr,
+      // that is, std::shared_ptr<const PointHistory<dim>>
+      const std::vector<std::shared_ptr<PointHistory<dim>>> lqph =
           m_quadrature_point_history.get_data(cell);
-          Assert(lqph.size() == m_n_q_points, ExcInternalError());
-          cell_rhs = 0.0;
-          fe_values.reinit(cell);
-          right_hand_side(fe_values.get_quadrature_points(),
-                          rhs_values,
-                          m_parameters.m_x_component*1.0,
-                          m_parameters.m_y_component*1.0,
-                          m_parameters.m_z_component*1.0);
-          
-          for (const unsigned int q_point : fe_values.quadrature_point_indices())
+      Assert(lqph.size() == m_n_q_points, ExcInternalError());
+      cell_rhs = 0.0;
+      fe_values.reinit(cell);
+      right_hand_side(fe_values.get_quadrature_points(), rhs_values,
+                      m_parameters.m_x_component * 1.0,
+                      m_parameters.m_y_component * 1.0,
+                      m_parameters.m_z_component * 1.0);
+
+      for (const unsigned int q_point : fe_values.quadrature_point_indices())
+      {
+        for (const unsigned int k : fe_values.dof_indices())
+        {
+          const unsigned int k_group = m_fe.system_to_base_index(k).first.first;
+
+          if (k_group == m_u_dof)
           {
-              for (const unsigned int k : fe_values.dof_indices())
-              {
-                  const unsigned int k_group = m_fe.system_to_base_index(k).first.first;
-                  
-                  if (k_group == m_u_dof)
-                  {
-                      Nx[q_point][k] = fe_values[m_u_fe].value(k, q_point);
-                      grad_Nx[q_point][k] = fe_values[m_u_fe].gradient(k, q_point);
-                      symm_grad_Nx[q_point][k] = symmetrize(grad_Nx[q_point][k]);
-                  }
-              }
+            Nx[q_point][k] = fe_values[m_u_fe].value(k, q_point);
+            grad_Nx[q_point][k] = fe_values[m_u_fe].gradient(k, q_point);
+            symm_grad_Nx[q_point][k] = symmetrize(grad_Nx[q_point][k]);
           }
-          
-          for (const unsigned int q_point : fe_values.quadrature_point_indices())
+        }
+      }
+
+      for (const unsigned int q_point : fe_values.quadrature_point_indices())
+      {
+        const SymmetricTensor<2, dim> &cauchy_stress =
+            lqph[q_point]->get_cauchy_stress();
+
+        const std::vector<Tensor<1, dim>> &N = Nx[q_point];
+        const std::vector<SymmetricTensor<2, dim>> &symm_grad_N =
+            symm_grad_Nx[q_point];
+        const double JxW = fe_values.JxW(q_point);
+
+        for (const unsigned int i : fe_values.dof_indices())
+        {
+          const unsigned int i_group = m_fe.system_to_base_index(i).first.first;
+
+          if (i_group == m_u_dof)
           {
-              const SymmetricTensor<2, dim> & cauchy_stress = lqph[q_point]->get_cauchy_stress();
-              
-              const std::vector<Tensor<1,dim>> & N = Nx[q_point];
-              const std::vector<SymmetricTensor<2, dim>> & symm_grad_N = symm_grad_Nx[q_point];
-              const double JxW = fe_values.JxW(q_point);
-              
-              for (const unsigned int i : fe_values.dof_indices())
-              {
-                  const unsigned int i_group = m_fe.system_to_base_index(i).first.first;
-                  
-                  if (i_group == m_u_dof)
-                  {
-                      cell_rhs(i) -= (symm_grad_N[i] * cauchy_stress) * JxW;
-                      // contributions from the body force to right-hand side
-                      cell_rhs(i) += N[i] * rhs_values[q_point] * JxW;
-                  }
-              }
+            cell_rhs(i) -= (symm_grad_N[i] * cauchy_stress) * JxW;
+            // contributions from the body force to right-hand side
+            cell_rhs(i) += N[i] * rhs_values[q_point] * JxW;
           }
-          
-          // if there is surface pressure, this surface pressure always applied to the
-          // reference configuration
-          const unsigned int face_pressure_id = 100;
-          const double p0 = 0.0;
-          
-          for (const auto &face : cell->face_iterators())
+        }
+      }
+
+      // if there is surface pressure, this surface pressure always applied to the
+      // reference configuration
+      const unsigned int face_pressure_id = 100;
+      const double p0 = 0.0;
+
+      for (const auto &face : cell->face_iterators())
+      {
+        if (face->at_boundary() && face->boundary_id() == face_pressure_id)
+        {
+          fe_face_values.reinit(cell, face);
+
+          for (const unsigned int f_q_point :
+               fe_face_values.quadrature_point_indices())
           {
-              if (face->at_boundary() && face->boundary_id() == face_pressure_id)
+            const Tensor<1, dim> &N = fe_face_values.normal_vector(f_q_point);
+
+            const double pressure = p0 * time_ramp;
+            const Tensor<1, dim> traction = pressure * N;
+
+            for (const unsigned int i : fe_values.dof_indices())
+            {
+              const unsigned int i_group =
+                  m_fe.system_to_base_index(i).first.first;
+
+              if (i_group == m_u_dof)
               {
-                  fe_face_values.reinit(cell, face);
-                  
-                  for (const unsigned int f_q_point : fe_face_values.quadrature_point_indices())
-                  {
-                      const Tensor<1, dim> &N = fe_face_values.normal_vector(f_q_point);
-                      
-                      const double         pressure  = p0 * time_ramp;
-                      const Tensor<1, dim> traction  = pressure * N;
-                      
-                      for (const unsigned int i : fe_values.dof_indices())
-                      {
-                          const unsigned int i_group = m_fe.system_to_base_index(i).first.first;
-                          
-                          if (i_group == m_u_dof)
-                          {
-                              const unsigned int component_i = m_fe.system_to_component_index(i).first;
-                              const double Ni = fe_face_values.shape_value(i, f_q_point);
-                              const double JxW = fe_face_values.JxW(f_q_point);
-                              cell_rhs(i) += (Ni * traction[component_i]) * JxW;
-                          }
-                      }
-                  }
+                const unsigned int component_i =
+                    m_fe.system_to_component_index(i).first;
+                const double Ni = fe_face_values.shape_value(i, f_q_point);
+                const double JxW = fe_face_values.JxW(f_q_point);
+                cell_rhs(i) += (Ni * traction[component_i]) * JxW;
               }
+            }
           }
-          
-          cell->get_dof_indices(local_dof_indices);
-//          for (const unsigned int i : fe_values.dof_indices())
-//              system_rhs(local_dof_indices[i]) += cell_rhs(i);
-          // compatible for mpi / serial
-          system_rhs.add(local_dof_indices, cell_rhs);
-      } // for (const auto &cell : m_dof_handler.active_cell_iterators())
+        }
+      }
+
+      cell->get_dof_indices(local_dof_indices);
+      //          for (const unsigned int i : fe_values.dof_indices())
+      //              system_rhs(local_dof_indices[i]) += cell_rhs(i);
+      // compatible for mpi / serial
+      system_rhs.add(local_dof_indices, cell_rhs);
+    } // for (const auto &cell : m_dof_handler.active_cell_iterators())
 
     // The difference between the above assembled system_rhs and m_system_rhs
     // is that m_system_rhs is condensed by the m_constraints, which zero out
     // the rhs values associated with the constrained DOFs and modify the rhs
     // values associated with the unconstrained DOFs.
 
-      std::vector< types::global_dof_index > mapping;
-      std::set<types::boundary_id> boundary_ids;
-      boundary_ids.insert(face_ID);
-      
-      
-      std::vector<double> reaction_force(dim, 0.0);
-      
-      if constexpr (!is_mpi)
+    std::vector<types::global_dof_index> mapping;
+    std::set<types::boundary_id> boundary_ids;
+    boundary_ids.insert(face_ID);
+
+    std::vector<double> reaction_force(dim, 0.0);
+
+    if constexpr (!is_mpi)
+    {
+      DoFTools::map_dof_to_boundary_indices(m_dof_handler, boundary_ids, mapping);
+      const std::size_t nDoFsOnDisp = (*m_blocks_desc.dofsPerBlockPtr())[m_u_dof];
+      for (unsigned int i = 0; i < nDoFsOnDisp; ++i)
       {
-          DoFTools::map_dof_to_boundary_indices(m_dof_handler,
-                                                boundary_ids,
-                                                mapping);
-          const std::size_t nDoFsOnDisp = (*m_blocks_desc.dofsPerBlockPtr())[m_u_dof];
-          for (unsigned int i = 0; i < nDoFsOnDisp; ++i)
-          {
-              if (mapping[i] != numbers::invalid_dof_index)
-              {
-                  reaction_force[i % dim] += system_rhs.block(m_u_dof)(i);
-              }
-          }
-      } else {
-          // finalize distributed assembly (accumulate contributions to owners)
-          system_rhs.compress(VectorOperation::add);
-          
-          // only loop over locally owned dofs
-          const IndexSet& owned = m_dof_handler.locally_owned_dofs();
-          
-          for (unsigned int d = 0; d < dim; ++d)
-          {
-              ComponentMask comp_mask(m_fe.n_components(), false);
-              comp_mask.set(m_u_fe.first_vector_component + d, true);
-              
-              const IndexSet boundary_comp =
-              DoFTools::extract_boundary_dofs(m_dof_handler,
-                                              comp_mask,
-                                              boundary_ids);
-              
-              // owned ∩ boundary_comp
-              const IndexSet owned_boundary = owned & boundary_comp;
-              
-              double reaction_force_comp = 0.0;
-              for (auto i = owned_boundary.begin(); i != owned_boundary.end(); ++i)
-              {
-                  reaction_force_comp += system_rhs(*i);
-              }
-              
-              // sychronize results
-              reaction_force[d] = Utilities::MPI::sum(reaction_force_comp,
-                                                      *m_mpiInfo.mpiCommPtr());
-          }
+        if (mapping[i] != numbers::invalid_dof_index)
+        {
+          reaction_force[i % dim] += system_rhs.block(m_u_dof)(i);
+        }
       }
-      
+    }
+    else
+    {
+      // finalize distributed assembly (accumulate contributions to owners)
+      system_rhs.compress(VectorOperation::add);
+
+      // only loop over locally owned dofs
+      const IndexSet &owned = m_dof_handler.locally_owned_dofs();
+
+      for (unsigned int d = 0; d < dim; ++d)
+      {
+        ComponentMask comp_mask(m_fe.n_components(), false);
+        comp_mask.set(m_u_fe.first_vector_component + d, true);
+
+        const IndexSet boundary_comp = DoFTools::extract_boundary_dofs(
+            m_dof_handler, comp_mask, boundary_ids);
+
+        // owned ∩ boundary_comp
+        const IndexSet owned_boundary = owned & boundary_comp;
+
+        double reaction_force_comp = 0.0;
+        for (auto i = owned_boundary.begin(); i != owned_boundary.end(); ++i)
+        {
+          reaction_force_comp += system_rhs(*i);
+        }
+
+        // sychronize results
+        reaction_force[d] =
+            Utilities::MPI::sum(reaction_force_comp, *m_mpiInfo.mpiCommPtr());
+      }
+    }
+
     for (unsigned int i = 0; i < dim; i++)
-      m_logfile << "\t\tReaction force in direction " << i << " on boundary ID " << face_ID
-                << " = "
-		<< std::fixed << std::setprecision(3) << std::setw(1)
-                << std::scientific
-		<< reaction_force[i] << std::endl;
+      m_logfile << "\t\tReaction force in direction " << i << " on boundary ID "
+                << face_ID << " = " << std::fixed << std::setprecision(3)
+                << std::setw(1) << std::scientific << reaction_force[i]
+                << std::endl;
 
     std::pair<double, std::vector<double>> time_force;
     time_force.first = m_time.current();
@@ -6500,62 +6264,57 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
   template <typename LATraits, typename Tria>
   void PhaseFieldMonolithicSolve<LATraits, Tria>::write_history_data()
   {
-      if constexpr (is_mpi)
-      {
-          if (!m_mpiInfo.isRankEqualsTo(0))
-              return;
-      }
-    m_logfile << "\t\tWrite history data ... \n"<<std::endl;
+    if constexpr (is_mpi)
+    {
+      if (!m_mpiInfo.isRankEqualsTo(0))
+        return;
+    }
+    m_logfile << "\t\tWrite history data ... \n" << std::endl;
 
-      // only rank 0 commits writing operation
-      if (m_mpiInfo.rank() != 0)
-            return;
-      
-    std::ofstream myfile_reaction_force (m_parameters.histDir + "Reaction_force.hist");
+    // only rank 0 commits writing operation
+    if (m_mpiInfo.rank() != 0)
+      return;
+
+    std::ofstream myfile_reaction_force(m_parameters.histDir +
+                                        "Reaction_force.hist");
     if (myfile_reaction_force.is_open())
     {
       myfile_reaction_force << 0.0 << "\t";
       if (dim == 2)
-	myfile_reaction_force << 0.0 << "\t"
-	       << 0.0 << std::endl;
+        myfile_reaction_force << 0.0 << "\t" << 0.0 << std::endl;
       if (dim == 3)
-	myfile_reaction_force << 0.0 << "\t"
-	       << 0.0 << "\t"
-	       << 0.0 << std::endl;
+        myfile_reaction_force << 0.0 << "\t" << 0.0 << "\t" << 0.0 << std::endl;
 
-      for (auto const & time_force : m_history_reaction_force)
-	{
-	  myfile_reaction_force << time_force.first << "\t";
-	  if (dim == 2)
-	    myfile_reaction_force << time_force.second[0] << "\t"
-	           << time_force.second[1] << std::endl;
-	  if (dim == 3)
-	    myfile_reaction_force << time_force.second[0] << "\t"
-	           << time_force.second[1] << "\t"
-		   << time_force.second[2] << std::endl;
-	}
+      for (auto const &time_force : m_history_reaction_force)
+      {
+        myfile_reaction_force << time_force.first << "\t";
+        if (dim == 2)
+          myfile_reaction_force << time_force.second[0] << "\t"
+                                << time_force.second[1] << std::endl;
+        if (dim == 3)
+          myfile_reaction_force << time_force.second[0] << "\t"
+                                << time_force.second[1] << "\t"
+                                << time_force.second[2] << std::endl;
+      }
       myfile_reaction_force.close();
     }
     else
       m_logfile << "Unable to open file";
 
-    std::ofstream myfile_energy (m_parameters.histDir + "Energy.hist");
+    std::ofstream myfile_energy(m_parameters.histDir + "Energy.hist");
     if (myfile_energy.is_open())
     {
       myfile_energy << std::fixed << std::setprecision(10) << std::scientific
-                    << 0.0 << "\t"
-                    << 0.0 << "\t"
-	            << 0.0 << "\t"
-	            << 0.0 << std::endl;
+                    << 0.0 << "\t" << 0.0 << "\t" << 0.0 << "\t" << 0.0
+                    << std::endl;
 
-      for (auto const & time_energy : m_history_energy)
-	{
-	  myfile_energy << std::fixed << std::setprecision(10) << std::scientific
-	                << time_energy.first     << "\t"
-                        << time_energy.second[0] << "\t"
-	                << time_energy.second[1] << "\t"
-		        << time_energy.second[2] << std::endl;
-	}
+      for (auto const &time_energy : m_history_energy)
+      {
+        myfile_energy << std::fixed << std::setprecision(10) << std::scientific
+                      << time_energy.first << "\t" << time_energy.second[0]
+                      << "\t" << time_energy.second[1] << "\t"
+                      << time_energy.second[2] << std::endl;
+      }
       myfile_energy.close();
     }
     else
@@ -6563,43 +6322,44 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
   }
 
   template <typename LATraits, typename Tria>
-  double PhaseFieldMonolithicSolve<LATraits, Tria>::calculate_energy_functional() const
+  double
+  PhaseFieldMonolithicSolve<LATraits, Tria>::calculate_energy_functional() const
   {
     double energy_functional = 0.0;
 
     FEValues<dim> fe_values(m_fe, m_qf_cell, update_JxW_values);
 
     for (const auto &cell : m_dof_handler.active_cell_iterators())
-      {
-          // skip cells owned by other ranks in mpi mode
-          if constexpr (is_mpi)
-              if (!cell->is_locally_owned())
-                  continue;
-          
-        fe_values.reinit(cell);
-
-        const std::vector<std::shared_ptr<const PointHistory<dim>>> lqph =
-          m_quadrature_point_history.get_data(cell);
-        Assert(lqph.size() == m_n_q_points, ExcInternalError());
-
-        for (unsigned int q_point = 0; q_point < m_n_q_points; ++q_point)
-          {
-            const double JxW = fe_values.JxW(q_point);
-            energy_functional += lqph[q_point]->get_total_strain_energy() * JxW;
-            energy_functional += lqph[q_point]->get_crack_energy_dissipation() * JxW;
-          }
-      }
-
-      // sync energy_functional with all ranks
+    {
+      // skip cells owned by other ranks in mpi mode
       if constexpr (is_mpi)
-          energy_functional = Utilities::MPI::sum(energy_functional,
-                                                  *m_mpiInfo.mpiCommPtr());
+        if (!cell->is_locally_owned())
+          continue;
+
+      fe_values.reinit(cell);
+
+      const std::vector<std::shared_ptr<const PointHistory<dim>>> lqph =
+          m_quadrature_point_history.get_data(cell);
+      Assert(lqph.size() == m_n_q_points, ExcInternalError());
+
+      for (unsigned int q_point = 0; q_point < m_n_q_points; ++q_point)
+      {
+        const double JxW = fe_values.JxW(q_point);
+        energy_functional += lqph[q_point]->get_total_strain_energy() * JxW;
+        energy_functional += lqph[q_point]->get_crack_energy_dissipation() * JxW;
+      }
+    }
+
+    // sync energy_functional with all ranks
+    if constexpr (is_mpi)
+      energy_functional =
+          Utilities::MPI::sum(energy_functional, *m_mpiInfo.mpiCommPtr());
     return energy_functional;
   }
 
   template <typename LATraits, typename Tria>
-  std::pair<double, double>
-    PhaseFieldMonolithicSolve<LATraits, Tria>::calculate_total_strain_energy_and_crack_energy_dissipation() const
+  std::pair<double, double> PhaseFieldMonolithicSolve<LATraits, Tria>::
+      calculate_total_strain_energy_and_crack_energy_dissipation() const
   {
     double total_strain_energy = 0.0;
     double crack_energy_dissipation = 0.0;
@@ -6607,806 +6367,846 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
     FEValues<dim> fe_values(m_fe, m_qf_cell, update_JxW_values);
 
     for (const auto &cell : m_dof_handler.active_cell_iterators())
-      {
-          
-          // skip cells owned by other ranks in mpi mode
-          if constexpr (is_mpi)
-              if (!cell->is_locally_owned())
-                  continue;
-        fe_values.reinit(cell);
+    {
 
-        const std::vector<std::shared_ptr<const PointHistory<dim>>> lqph =
+      // skip cells owned by other ranks in mpi mode
+      if constexpr (is_mpi)
+        if (!cell->is_locally_owned())
+          continue;
+      fe_values.reinit(cell);
+
+      const std::vector<std::shared_ptr<const PointHistory<dim>>> lqph =
           m_quadrature_point_history.get_data(cell);
-        Assert(lqph.size() == m_n_q_points, ExcInternalError());
+      Assert(lqph.size() == m_n_q_points, ExcInternalError());
 
-        for (unsigned int q_point = 0; q_point < m_n_q_points; ++q_point)
-          {
-            const double JxW = fe_values.JxW(q_point);
-            total_strain_energy += lqph[q_point]->get_total_strain_energy() * JxW;
-            crack_energy_dissipation += lqph[q_point]->get_crack_energy_dissipation() * JxW;
-          }
+      for (unsigned int q_point = 0; q_point < m_n_q_points; ++q_point)
+      {
+        const double JxW = fe_values.JxW(q_point);
+        total_strain_energy += lqph[q_point]->get_total_strain_energy() * JxW;
+        crack_energy_dissipation +=
+            lqph[q_point]->get_crack_energy_dissipation() * JxW;
       }
+    }
 
-      // sync total_strain_energy and crack_energy_dissipation with all ranks
-      if constexpr (is_mpi) {
-          total_strain_energy = Utilities::MPI::sum(total_strain_energy,
-                                                    *m_mpiInfo.mpiCommPtr());
-          crack_energy_dissipation = Utilities::MPI::sum(crack_energy_dissipation,
-                                                         *m_mpiInfo.mpiCommPtr());
-      }
-      
+    // sync total_strain_energy and crack_energy_dissipation with all ranks
+    if constexpr (is_mpi)
+    {
+      total_strain_energy =
+          Utilities::MPI::sum(total_strain_energy, *m_mpiInfo.mpiCommPtr());
+      crack_energy_dissipation =
+          Utilities::MPI::sum(crack_energy_dissipation, *m_mpiInfo.mpiCommPtr());
+    }
+
     return std::make_pair(total_strain_energy, crack_energy_dissipation);
   }
 
-#if ENABLE_REPARTITION==0
-template <typename LATraits, typename Tria>
-void PhaseFieldMonolithicSolve<LATraits, Tria>
-::repartition(BVector & solution_next_step,
-              const typename LATraits::VectorBlock& /*old_history_variable_field_L2*/,
-              const typename LATraits::VectorBlock& /*old_history_variable_field_L2_rele*/)
-{}
-#else
-template <typename LATraits, typename Tria>
-void PhaseFieldMonolithicSolve<LATraits, Tria>
-::repartition(BVector & solution_next_step,
-              const typename LATraits::VectorBlock& old_history_variable_field_L2,
-              const typename LATraits::VectorBlock& old_history_variable_field_L2_rele)
-{
+  #if ENABLE_REPARTITION == 0
+  template <typename LATraits, typename Tria>
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::repartition(
+      BVector &solution_next_step,
+      const typename LATraits::VectorBlock & /*old_history_variable_field_L2*/,
+      const typename LATraits::VectorBlock
+          & /*old_history_variable_field_L2_rele*/)
+  {
+  }
+  #else
+  template <typename LATraits, typename Tria>
+  void PhaseFieldMonolithicSolve<LATraits, Tria>::repartition(
+      BVector &solution_next_step,
+      const typename LATraits::VectorBlock &old_history_variable_field_L2,
+      const typename LATraits::VectorBlock &old_history_variable_field_L2_rele)
+  {
     if constexpr (std::is_same_v<Tria, DTria<2>> ||
                   std::is_same_v<Tria, DTria<3>>)
     {
-        
-        const std::string sectionName = "Repartition";
-        m_timer.enter_subsection(sectionName);
-        
-        const unsigned int nOwnedCells = m_triangulation.n_locally_owned_active_cells();
-        const unsigned int max = Utilities::MPI::max(nOwnedCells,
-                                                     *m_mpiInfo.mpiCommPtr());
-        const unsigned int min = Utilities::MPI::min(nOwnedCells,
-                                                     *m_mpiInfo.mpiCommPtr());
-        
-        const double ratio = (double) max/min;
-        const bool will_repartition = (ratio > m_parameters.m_repartition_ratio);
-        
-        
-        m_logfile << "\t\twill repartition: " << will_repartition << " [ "<< ratio << ", " << m_parameters.m_repartition_ratio << " ] "  <<  std::endl;
-        m_logfile << "\t\t\tmax/min: " << ((double)max/min) << std::endl;
+
+      const std::string sectionName = "Repartition";
+      m_timer.enter_subsection(sectionName);
+
+      const unsigned int nOwnedCells =
+          m_triangulation.n_locally_owned_active_cells();
+      const unsigned int max =
+          Utilities::MPI::max(nOwnedCells, *m_mpiInfo.mpiCommPtr());
+      const unsigned int min =
+          Utilities::MPI::min(nOwnedCells, *m_mpiInfo.mpiCommPtr());
+
+      const double ratio = (double)max / min;
+      const bool will_repartition = (ratio > m_parameters.m_repartition_ratio);
+
+      m_logfile << "\t\twill repartition: " << will_repartition << " [ " << ratio
+                << ", " << m_parameters.m_repartition_ratio << " ] " << std::endl;
+      m_logfile << "\t\t\tmax/min: " << ((double)max / min) << std::endl;
+      m_logfile << "\t\t\tmax n owned cells: " << max << std::endl;
+      m_logfile << "\t\t\tmin n owned cells: " << min << std::endl << std::endl;
+
+      if (!will_repartition)
+      {
+        m_timer.leave_subsection(sectionName);
+        return;
+      }
+
+      for (const auto &cell : m_triangulation.active_cell_iterators())
+      {
+        if constexpr (is_mpi)
+        {
+          if (!cell->is_locally_owned())
+            continue;
+        }
+        cell->clear_refine_flag();
+      }
+
+      using VecType = typename BVector::VecType;
+      using VecBType = typename LATraits::VectorBlock;
+
+      std::vector<VecType> old_solutions;
+      std::vector<VecType> old_solutions_rele;
+      old_solutions.reserve(2);
+
+      old_solutions.emplace_back(solution_next_step.base());
+      old_solutions.emplace_back(m_solution.base());
+
+      // history variable field L2 projection
+      DoFHandler<dim> dof_handler_L2(m_triangulation);
+      FE_DGQ<dim> fe_L2(m_parameters.m_poly_degree); // Discontinuous Galerkin
+      dof_handler_L2.distribute_dofs(fe_L2);
+      AffineConstraints<double> constraints;
+      constraints.clear();
+      if constexpr (is_mpi)
+      {
+        const IndexSet &owned_L2 = dof_handler_L2.locally_owned_dofs();
+        const IndexSet relevant_L2 =
+            DoFTools::extract_locally_relevant_dofs(dof_handler_L2);
+
+        VersionAdapter::cstReinit(constraints, owned_L2, relevant_L2,
+                                  *m_mpiInfo.mpiCommPtr());
+
+        DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
+
+        constraints.make_consistent_in_parallel(owned_L2, relevant_L2,
+                                                *m_mpiInfo.mpiCommPtr());
+      }
+      else
+      {
+        DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
+      }
+      constraints.close();
+
+      if constexpr (is_mpi)
+      {
+        old_solutions_rele.reserve(2);
+        old_solutions_rele.emplace_back();
+        old_solutions_rele.emplace_back();
+        old_solutions_rele[0].reinit(*m_blocks_desc.ownedPartitionPtr(),
+                                     *m_blocks_desc.relevantPartitionPtr(),
+                                     *m_mpiInfo.mpiCommPtr());
+        old_solutions_rele[1].reinit(*m_blocks_desc.ownedPartitionPtr(),
+                                     *m_blocks_desc.relevantPartitionPtr(),
+                                     *m_mpiInfo.mpiCommPtr());
+
+        old_solutions_rele[0] = old_solutions[0];
+        old_solutions_rele[1] = old_solutions[1];
+
+        old_solutions_rele[0].update_ghost_values();
+        old_solutions_rele[1].update_ghost_values();
+      }
+
+      m_triangulation.prepare_coarsening_and_refinement();
+
+      using SolTransBlockVector =
+          typename SolutionTransferSelector<dim, VecType, is_mpi>::type;
+      using SolTransVector =
+          typename SolutionTransferSelector<dim, VecBType, is_mpi>::type;
+
+      SolTransBlockVector solution_transfer(m_dof_handler);
+      SolTransVector solution_transfer_history_variable(dof_handler_L2);
+
+      if constexpr (is_mpi)
+      {
+  #if DEAL_II_VERSION_GTE(9, 7, 0)
+        solution_transfer.prepare_for_coarsening_and_refinement(
+            old_solutions_rele);
+
+        solution_transfer_history_variable.prepare_for_coarsening_and_refinement(
+            old_history_variable_field_L2_rele);
+  #else
+
+        std::vector<const VecType *> old_solutions_ptrs = {
+            &old_solutions_rele[0], &old_solutions_rele[1]};
+
+        solution_transfer.prepare_for_coarsening_and_refinement(
+            old_solutions_ptrs);
+        solution_transfer_history_variable.prepare_for_coarsening_and_refinement(
+            old_history_variable_field_L2_rele);
+  #endif
+      }
+      else
+      {
+        solution_transfer.prepare_for_coarsening_and_refinement(old_solutions);
+
+        solution_transfer_history_variable.prepare_for_coarsening_and_refinement(
+            old_history_variable_field_L2);
+      }
+
+      m_logfile << "\t\trepartitioning...." << std::endl;
+      m_triangulation.repartition();
+      m_logfile << "\t\trepartitioninged, data transferring...." << std::endl;
+
+      set_bcs_id();
+
+      setup_system();
+
+      m_logfile << "\t\tset up system" << std::endl;
+
+      dof_handler_L2.distribute_dofs(fe_L2);
+      constraints.clear();
+      if constexpr (is_mpi)
+      {
+        const IndexSet &owned_L2 = dof_handler_L2.locally_owned_dofs();
+        const IndexSet relevant_L2 =
+            DoFTools::extract_locally_relevant_dofs(dof_handler_L2);
+
+        VersionAdapter::cstReinit(constraints, owned_L2, relevant_L2,
+                                  *m_mpiInfo.mpiCommPtr());
+
+        DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
+
+        constraints.make_consistent_in_parallel(owned_L2, relevant_L2,
+                                                *m_mpiInfo.mpiCommPtr());
+      }
+      else
+      {
+        DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
+      }
+      constraints.close();
+
+      std::vector<VecType> tmp_solutions(2);
+      if constexpr (is_mpi)
+      {
+        // target vectors should have info about ghost cells
+        tmp_solutions[0].reinit(*m_blocks_desc.ownedPartitionPtr(),
+                                *m_mpiInfo.mpiCommPtr());
+        tmp_solutions[1].reinit(*m_blocks_desc.ownedPartitionPtr(),
+                                *m_mpiInfo.mpiCommPtr());
+      }
+      else
+      {
+        tmp_solutions[0].reinit(*m_blocks_desc.dofsPerBlockPtr());
+        tmp_solutions[1].reinit(*m_blocks_desc.dofsPerBlockPtr());
+      }
+
+      solution_next_step.initialize();
+
+      VecBType new_history_variable_field_L2;
+      VecBType new_history_variable_field_L2_rele;
+      if constexpr (is_mpi)
+      {
+        const IndexSet relevant_dofs =
+            DoFTools::extract_locally_relevant_dofs(dof_handler_L2);
+
+        new_history_variable_field_L2.reinit(dof_handler_L2.locally_owned_dofs(),
+                                             *m_mpiInfo.mpiCommPtr());
+        new_history_variable_field_L2_rele.reinit(
+            dof_handler_L2.locally_owned_dofs(), relevant_dofs,
+            *m_mpiInfo.mpiCommPtr());
+      }
+      else
+      {
+        new_history_variable_field_L2.reinit(dof_handler_L2.n_dofs());
+      }
+
+      m_logfile << "\t\ttransferring solutions" << std::endl;
+  #if DEAL_II_VERSION_GTE(9, 7, 0)
+      solution_transfer.interpolate(tmp_solutions);
+  #else
+      // If an older version of dealII is used, for example, 9.4.0, interpolate()
+      // needs to use the following interface.
+      if constexpr (is_mpi)
+      {
+        std::vector<VecType *> tmp_solutions_ptrs = {&tmp_solutions[0],
+                                                     &tmp_solutions[1]};
+        solution_transfer.interpolate(tmp_solutions_ptrs);
+      }
+      else
+        solution_transfer.interpolate(old_solutions, tmp_solutions);
+  #endif
+      m_logfile << "\t\tsolutions transferred" << std::endl;
+
+      m_logfile << "\t\ttransferring H" << std::endl;
+  #if DEAL_II_VERSION_GTE(9, 7, 0)
+      solution_transfer_history_variable.interpolate(
+          new_history_variable_field_L2);
+  #else
+      // If an older version of dealII is used, for example, 9.4.0, interpolate()
+      // needs to use the following interface.
+      if constexpr (is_mpi)
+      {
+        solution_transfer_history_variable.interpolate(
+            new_history_variable_field_L2);
+      }
+      else
+        solution_transfer_history_variable.interpolate(
+            old_history_variable_field_L2, new_history_variable_field_L2);
+  #endif
+      m_logfile << "\t\tH transferred" << std::endl;
+
+      solution_next_step.base() = tmp_solutions[0];
+      m_solution.base() = tmp_solutions[1];
+
+      // make sure the projected solutions still satisfy
+      // hanging node constraints
+
+      // distribute and update relevance
+      solution_next_step.distributeCst(m_constraints); // ghost cells updated
+      m_solution.distributeCst(m_constraints);         // ghost cells updated
+      constraints.distribute(new_history_variable_field_L2);
+
+      if constexpr (is_mpi)
+      {
+        new_history_variable_field_L2_rele = new_history_variable_field_L2;
+        new_history_variable_field_L2_rele.update_ghost_values();
+      }
+
+      m_logfile << "\t\tupdate H into QPnts" << std::endl;
+      // new_history_variable_field_L2 contains the history variable projected
+      // onto the newly refined mesh
+      FEValues<dim> fe_values(fe_L2, m_qf_cell,
+                              update_values | update_gradients |
+                                  update_quadrature_points | update_JxW_values);
+
+      for (const auto &cell : dof_handler_L2.active_cell_iterators())
+      {
+        if constexpr (is_mpi)
+        {
+          if (!cell->is_locally_owned())
+            continue;
+        }
+        fe_values.reinit(cell);
+
+        const std::vector<std::shared_ptr<PointHistory<dim>>> lqph =
+            m_quadrature_point_history.get_data(cell);
+
+        std::vector<double> history_variable_values_cell(m_n_q_points);
+
+        fe_values.get_function_values(new_history_variable_field_L2_rele,
+                                      history_variable_values_cell);
+
+        for (unsigned int q_point : fe_values.quadrature_point_indices())
+        {
+          lqph[q_point]->assign_history_variable(
+              history_variable_values_cell[q_point]);
+        }
+      }
+
+      {
+
+        const unsigned int nOwnedCells =
+            m_triangulation.n_locally_owned_active_cells();
+        const unsigned int max =
+            Utilities::MPI::max(nOwnedCells, *m_mpiInfo.mpiCommPtr());
+        const unsigned int min =
+            Utilities::MPI::min(nOwnedCells, *m_mpiInfo.mpiCommPtr());
+        m_logfile << "\t\trepartitioned: " << std::endl;
         m_logfile << "\t\t\tmax n owned cells: " << max << std::endl;
         m_logfile << "\t\t\tmin n owned cells: " << min << std::endl << std::endl;
-        
-        
-        if(!will_repartition)
-        {
-            m_timer.leave_subsection(sectionName);
-            return;
-        }
-        
-        
-        
-        for (const auto &cell : m_triangulation.active_cell_iterators())
-        {
-            if constexpr (is_mpi) {
-                if (!cell->is_locally_owned()) continue;
-            }
-            cell->clear_refine_flag();
-        }
-        
-        
-        
-        using VecType  = typename BVector::VecType;
-        using VecBType = typename LATraits::VectorBlock;
-        
-        
-        std::vector<VecType> old_solutions;
-        std::vector<VecType> old_solutions_rele;
-        old_solutions.reserve(2);
-        
-        old_solutions.emplace_back(solution_next_step.base());
-        old_solutions.emplace_back(m_solution.base());
-        
-        // history variable field L2 projection
-        DoFHandler<dim> dof_handler_L2(m_triangulation);
-        FE_DGQ<dim>     fe_L2(m_parameters.m_poly_degree); //Discontinuous Galerkin
-        dof_handler_L2.distribute_dofs(fe_L2);
-        AffineConstraints<double> constraints;
-        constraints.clear();
-        if constexpr (is_mpi)
-        {
-            const IndexSet& owned_L2 = dof_handler_L2.locally_owned_dofs();
-            const IndexSet relevant_L2 = DoFTools::extract_locally_relevant_dofs(dof_handler_L2);
-            
-            VersionAdapter::cstReinit(constraints,
-                                      owned_L2,
-                                      relevant_L2,
-                                      *m_mpiInfo.mpiCommPtr());
-            
-            DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
-            
-            constraints.make_consistent_in_parallel(owned_L2,
-                                                    relevant_L2,
-                                                    *m_mpiInfo.mpiCommPtr());
-        } else {
-            DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
-        }
-        constraints.close();
-        
-        
-        if constexpr(is_mpi) {
-            old_solutions_rele.reserve(2);
-            old_solutions_rele.emplace_back();
-            old_solutions_rele.emplace_back();
-            old_solutions_rele[0].reinit(*m_blocks_desc.ownedPartitionPtr(),
-                                         *m_blocks_desc.relevantPartitionPtr(),
-                                         *m_mpiInfo.mpiCommPtr());
-            old_solutions_rele[1].reinit(*m_blocks_desc.ownedPartitionPtr(),
-                                         *m_blocks_desc.relevantPartitionPtr(),
-                                         *m_mpiInfo.mpiCommPtr());
-            
-            old_solutions_rele[0] = old_solutions[0];
-            old_solutions_rele[1] = old_solutions[1];
-            
-            
-            old_solutions_rele[0].update_ghost_values();
-            old_solutions_rele[1].update_ghost_values();
-        }
-        
-        m_triangulation.prepare_coarsening_and_refinement();
+      }
 
-        
-        using SolTransBlockVector = typename SolutionTransferSelector<dim, VecType, is_mpi>::type;
-        using SolTransVector = typename SolutionTransferSelector<dim, VecBType, is_mpi>::type;
-        
-        SolTransBlockVector solution_transfer(m_dof_handler);
-        SolTransVector solution_transfer_history_variable(dof_handler_L2);
-        
-        if constexpr (is_mpi) {
-#  if DEAL_II_VERSION_GTE(9, 7, 0)
-            solution_transfer.prepare_for_coarsening_and_refinement(old_solutions_rele);
-            
-            solution_transfer_history_variable.prepare_for_coarsening_and_refinement(old_history_variable_field_L2_rele);
-#  else
-            
-            std::vector<const VecType*> old_solutions_ptrs = {
-                &old_solutions_rele[0],
-                &old_solutions_rele[1]};
-            
-            solution_transfer.prepare_for_coarsening_and_refinement(old_solutions_ptrs);
-            solution_transfer_history_variable.prepare_for_coarsening_and_refinement(old_history_variable_field_L2_rele);
-#  endif
-        } else {
-            solution_transfer.prepare_for_coarsening_and_refinement(old_solutions);
-            
-            solution_transfer_history_variable.prepare_for_coarsening_and_refinement(old_history_variable_field_L2);
-        }
-        
-        
-        
-        m_logfile << "\t\trepartitioning...." << std::endl;
-        m_triangulation.repartition();
-        m_logfile << "\t\trepartitioninged, data transferring...." << std::endl;
-        
-        
-        set_bcs_id();
-        
-        setup_system();
-        
-        m_logfile << "\t\tset up system" << std::endl;
-        
-        
-        
-        dof_handler_L2.distribute_dofs(fe_L2);
-        constraints.clear();
-        if constexpr (is_mpi)
-        {
-            const IndexSet& owned_L2 = dof_handler_L2.locally_owned_dofs();
-            const IndexSet relevant_L2 = DoFTools::extract_locally_relevant_dofs(dof_handler_L2);
-            
-            VersionAdapter::cstReinit(constraints,
-                                      owned_L2,
-                                      relevant_L2,
-                                      *m_mpiInfo.mpiCommPtr());
-            
-            DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
-            
-            constraints.make_consistent_in_parallel(owned_L2,
-                                                    relevant_L2,
-                                                    *m_mpiInfo.mpiCommPtr());
-        } else {
-            DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
-        }
-        constraints.close();
-        
-        
-        std::vector<VecType> tmp_solutions(2);
-        if constexpr (is_mpi) {
-            // target vectors should have info about ghost cells
-            tmp_solutions[0].reinit(*m_blocks_desc.ownedPartitionPtr(),
-                                    *m_mpiInfo.mpiCommPtr());
-            tmp_solutions[1].reinit(*m_blocks_desc.ownedPartitionPtr(),
-                                    *m_mpiInfo.mpiCommPtr());
-        } else {
-            tmp_solutions[0].reinit(*m_blocks_desc.dofsPerBlockPtr());
-            tmp_solutions[1].reinit(*m_blocks_desc.dofsPerBlockPtr());
-        }
-        
-        solution_next_step.initialize();
-
-        VecBType new_history_variable_field_L2;
-        VecBType new_history_variable_field_L2_rele;
-        if constexpr (is_mpi)
-        {
-            const IndexSet relevant_dofs = DoFTools::extract_locally_relevant_dofs(dof_handler_L2);
-            
-            new_history_variable_field_L2.reinit(dof_handler_L2.locally_owned_dofs(),
-                                                 *m_mpiInfo.mpiCommPtr());
-            new_history_variable_field_L2_rele.reinit(dof_handler_L2.locally_owned_dofs(),
-                                                      relevant_dofs,
-                                                      *m_mpiInfo.mpiCommPtr());
-        } else {
-            new_history_variable_field_L2.reinit(dof_handler_L2.n_dofs());
-        }
-        
-        m_logfile << "\t\ttransferring solutions" << std::endl;
-#  if DEAL_II_VERSION_GTE(9, 7, 0)
-        solution_transfer.interpolate(tmp_solutions);
-#  else
-        // If an older version of dealII is used, for example, 9.4.0, interpolate()
-        // needs to use the following interface.
-        if constexpr (is_mpi){
-            std::vector<VecType*> tmp_solutions_ptrs = { &tmp_solutions[0],
-                &tmp_solutions[1]
-            };
-            solution_transfer.interpolate(tmp_solutions_ptrs);
-        } else
-            solution_transfer.interpolate(old_solutions, tmp_solutions);
-#  endif
-        m_logfile << "\t\tsolutions transferred" << std::endl;
-       
-        m_logfile << "\t\ttransferring H" << std::endl;
-#  if DEAL_II_VERSION_GTE(9, 7, 0)
-        solution_transfer_history_variable.interpolate(new_history_variable_field_L2);
-#  else
-        // If an older version of dealII is used, for example, 9.4.0, interpolate()
-        // needs to use the following interface.
-        if constexpr (is_mpi){
-            solution_transfer_history_variable.interpolate(new_history_variable_field_L2);
-        } else
-            solution_transfer_history_variable.interpolate(old_history_variable_field_L2, new_history_variable_field_L2);
-#  endif
-        m_logfile << "\t\tH transferred" << std::endl;
-        
-
-        
-        
-        solution_next_step.base()   = tmp_solutions[0];
-        m_solution.base()           = tmp_solutions[1];
-        
-        
-        
-        // make sure the projected solutions still satisfy
-        // hanging node constraints
-        
-        // distribute and update relevance
-        solution_next_step.distributeCst(m_constraints); // ghost cells updated
-        m_solution.distributeCst(m_constraints);        // ghost cells updated
-        constraints.distribute(new_history_variable_field_L2);
-        
-        
-        if constexpr (is_mpi) {
-            new_history_variable_field_L2_rele = new_history_variable_field_L2;
-            new_history_variable_field_L2_rele.update_ghost_values();
-        }
-        
-        m_logfile << "\t\tupdate H into QPnts" << std::endl;
-        // new_history_variable_field_L2 contains the history variable projected
-        // onto the newly refined mesh
-        FEValues<dim> fe_values(fe_L2,
-                                m_qf_cell,
-                                update_values | update_gradients |
-                                update_quadrature_points | update_JxW_values);
-        
-        for (const auto &cell : dof_handler_L2.active_cell_iterators())
-        {
-            if constexpr (is_mpi){
-                if (!cell->is_locally_owned()) continue;
-            }
-            fe_values.reinit(cell);
-            
-            const std::vector<std::shared_ptr<PointHistory<dim>>> lqph =
-            m_quadrature_point_history.get_data(cell);
-            
-            std::vector<double> history_variable_values_cell(m_n_q_points);
-            
-            fe_values.get_function_values(
-                                          new_history_variable_field_L2_rele, history_variable_values_cell);
-            
-            for (unsigned int q_point : fe_values.quadrature_point_indices())
-            {
-                lqph[q_point]->assign_history_variable(history_variable_values_cell[q_point]);
-            }
-        }
-        
-        {
-        
-            const unsigned int nOwnedCells = m_triangulation.n_locally_owned_active_cells();
-            const unsigned int max = Utilities::MPI::max(nOwnedCells,
-                                                         *m_mpiInfo.mpiCommPtr());
-            const unsigned int min = Utilities::MPI::min(nOwnedCells,
-                                                         *m_mpiInfo.mpiCommPtr());
-            m_logfile << "\t\trepartitioned: "  << std::endl;
-            m_logfile << "\t\t\tmax n owned cells: " << max << std::endl;
-            m_logfile << "\t\t\tmin n owned cells: " << min << std::endl << std::endl;
-            
-        }
-        
-        m_timer.leave_subsection(sectionName);
+      m_timer.leave_subsection(sectionName);
     }
-}
-#endif
+  }
+  #endif
 
-
-
-template <typename LATraits, typename Tria>
-bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transfer(BVector & solution_delta,
-                                                                                   BVector & LBFGS_update_refine)
-{
+  template <typename LATraits, typename Tria>
+  bool PhaseFieldMonolithicSolve<LATraits, Tria>::
+      local_refine_and_solution_transfer(BVector &solution_delta,
+                                         BVector &LBFGS_update_refine)
+  {
     // This is the solution at (n+1) obtained from the old (coarse) mesh
     BVector solution_next_step(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
     solution_next_step.initialize();
     solution_next_step.base() = m_solution.base() + solution_delta.base();
     solution_next_step.updateRelevance();
-    
+
     bool mesh_is_same = true;
     bool cell_refine_flag = true;
-    
+
     unsigned int material_id;
     double length_scale;
     double cell_length;
-    
+
     // target H-vectors to avoid recalculating
-    using VecType  = typename BVector::VecType;
+    using VecType = typename BVector::VecType;
     using VecBType = typename LATraits::VectorBlock;
-    
+
     VecBType new_history_variable_field_L2;
     VecBType new_history_variable_field_L2_rele;
-    
-    while(cell_refine_flag)
+
+    while (cell_refine_flag)
     {
-        cell_refine_flag = false;
+      cell_refine_flag = false;
 
-        std::vector<types::global_dof_index> local_dof_indices(m_fe.dofs_per_cell);
-        for (const auto &cell : m_dof_handler.active_cell_iterators())
+      std::vector<types::global_dof_index> local_dof_indices(m_fe.dofs_per_cell);
+      for (const auto &cell : m_dof_handler.active_cell_iterators())
+      {
+        if constexpr (is_mpi)
         {
-            if constexpr (is_mpi) {
-                if (!cell->is_locally_owned()) continue;
-            }
-            
-            cell->get_dof_indices(local_dof_indices);
-            
-            for (unsigned int i = 0; i< m_fe.dofs_per_cell; ++i)
+          if (!cell->is_locally_owned())
+            continue;
+        }
+
+        cell->get_dof_indices(local_dof_indices);
+
+        for (unsigned int i = 0; i < m_fe.dofs_per_cell; ++i)
+        {
+          const unsigned int comp_i = m_fe.system_to_component_index(i).first;
+          if (comp_i == m_d_component) // phasefield component
+          {
+            if (solution_next_step.relevance()(local_dof_indices[i]) >
+                m_parameters.m_phasefield_refine_threshold)
             {
-                const unsigned int comp_i = m_fe.system_to_component_index(i).first;
-                if (comp_i == m_d_component) //phasefield component
+              material_id = cell->material_id();
+              length_scale = m_material_data[material_id][2];
+              if (dim == 2)
+                cell_length = std::sqrt(cell->measure());
+              else
+                cell_length = std::cbrt(cell->measure());
+              if (cell_length >
+                  length_scale * m_parameters.m_allowed_max_h_l_ratio)
+              {
+                if (cell->level() < m_parameters.m_max_allowed_refinement_level)
                 {
-                    if (  solution_next_step.relevance()(local_dof_indices[i])
-                        > m_parameters.m_phasefield_refine_threshold )
-                    {
-                        material_id = cell->material_id();
-                        length_scale = m_material_data[material_id][2];
-                        if (dim == 2)
-                            cell_length = std::sqrt(cell->measure());
-                        else
-                            cell_length = std::cbrt(cell->measure());
-                        if (  cell_length
-                            > length_scale * m_parameters.m_allowed_max_h_l_ratio )
-                        {
-                            if (cell->level() < m_parameters.m_max_allowed_refinement_level)
-                            {
-                                cell->set_refine_flag();
-                                break;
-                            }
-                        }
-                    }
+                  cell->set_refine_flag();
+                  break;
                 }
+              }
             }
+          }
+        }
+      }
+
+      for (const auto &cell : m_dof_handler.active_cell_iterators())
+      {
+        if constexpr (is_mpi)
+        {
+          if (!cell->is_locally_owned())
+            continue;
+          ;
         }
 
-        for (const auto &cell : m_dof_handler.active_cell_iterators())
+        if (cell->refine_flag_set())
         {
-            if constexpr (is_mpi) {
-                if (!cell->is_locally_owned()) continue;;
-            }
-            
-            if (cell->refine_flag_set())
-            {
-                cell_refine_flag = true;
-                break;
-            }
+          cell_refine_flag = true;
+          break;
         }
-        
+      }
+
+      if constexpr (is_mpi)
+      {
+        // accumulate local flag over all ranks
+        const unsigned int local_flag = cell_refine_flag ? 1u : 0u;
+        const unsigned int global_flag =
+            Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
+        cell_refine_flag = (global_flag > 0u);
+      }
+
+      // if any cell is refined, we need to project the solution
+      // to the newly refined mesh
+      if (cell_refine_flag)
+      {
+
+        mesh_is_same = false;
+
+        std::vector<VecType> old_solutions;
+        std::vector<VecType> old_solutions_rele;
+        old_solutions.reserve(2);
+
+        old_solutions.emplace_back(solution_next_step.base());
+        old_solutions.emplace_back(m_solution.base());
+
+        // history variable field L2 projection
+        DoFHandler<dim> dof_handler_L2(m_triangulation);
+        FE_DGQ<dim> fe_L2(m_parameters.m_poly_degree); // Discontinuous Galerkin
+        dof_handler_L2.distribute_dofs(fe_L2);
+        AffineConstraints<double> constraints;
+        constraints.clear();
+        // Since we use discontinuous Lagrange polynomials as shape functions
+        // we don't need to worry about enforcing continuity of the history
+        // variable at hanging nodes.
+        /*
+        if constexpr (is_mpi)
+        {
+            const IndexSet& owned_L2 = dof_handler_L2.locally_owned_dofs();
+            const IndexSet relevant_L2 =
+        DoFTools::extract_locally_relevant_dofs(dof_handler_L2);
+
+            VersionAdapter::cstReinit(constraints,
+                                      owned_L2,
+                                      relevant_L2,
+                                      *m_mpiInfo.mpiCommPtr());
+
+            DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
+
+            constraints.make_consistent_in_parallel(owned_L2,
+                                                    relevant_L2,
+                                                    *m_mpiInfo.mpiCommPtr());
+        } else {
+            DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
+        }
+        */
+        constraints.close();
+
+        VecBType old_history_variable_field_L2;
+        VecBType old_history_variable_field_L2_rele;
 
         if constexpr (is_mpi)
         {
-            // accumulate local flag over all ranks
-            const unsigned int local_flag = cell_refine_flag ? 1u : 0u;
-            const unsigned int global_flag =
-                Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
-            cell_refine_flag = (global_flag > 0u);
+          old_history_variable_field_L2.reinit(
+              dof_handler_L2.locally_owned_dofs(), *m_mpiInfo.mpiCommPtr());
         }
-        
-        
-        // if any cell is refined, we need to project the solution
-        // to the newly refined mesh
-        if (cell_refine_flag)
+        else
         {
+          old_history_variable_field_L2.reinit(dof_handler_L2.n_dofs());
+        }
+        old_history_variable_field_L2 = 0.0;
 
-            
-            mesh_is_same = false;
-            
-            
-            std::vector<VecType> old_solutions;
-            std::vector<VecType> old_solutions_rele;
-            old_solutions.reserve(2);
-            
-            old_solutions.emplace_back(solution_next_step.base());
-            old_solutions.emplace_back(m_solution.base());
-            
-            // history variable field L2 projection
-            DoFHandler<dim> dof_handler_L2(m_triangulation);
-            FE_DGQ<dim>     fe_L2(m_parameters.m_poly_degree); //Discontinuous Galerkin
-            dof_handler_L2.distribute_dofs(fe_L2);
-            AffineConstraints<double> constraints;
-            constraints.clear();
-            //Since we use discontinuous Lagrange polynomials as shape functions
-            //we don't need to worry about enforcing continuity of the history variable
-            //at hanging nodes.
-            /*
-            if constexpr (is_mpi)
+        MappingQ<dim> mapping(m_parameters.m_poly_degree + 1);
+        VectorTools::project(
+            mapping, dof_handler_L2, constraints, m_qf_cell,
+            [&](const typename DoFHandler<dim>::active_cell_iterator &cell,
+                const unsigned int q) -> double
             {
-                const IndexSet& owned_L2 = dof_handler_L2.locally_owned_dofs();
-                const IndexSet relevant_L2 = DoFTools::extract_locally_relevant_dofs(dof_handler_L2);
-                
-                VersionAdapter::cstReinit(constraints,
-                                          owned_L2,
-                                          relevant_L2,
-                                          *m_mpiInfo.mpiCommPtr());
-                
-                DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
-                
-                constraints.make_consistent_in_parallel(owned_L2,
-                                                        relevant_L2,
-                                                        *m_mpiInfo.mpiCommPtr());
-            } else {
-                DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
-            }
-            */
-            constraints.close();
-            
-            
-            VecBType old_history_variable_field_L2;
-            VecBType old_history_variable_field_L2_rele;
-
-            if constexpr (is_mpi){
-                old_history_variable_field_L2.reinit(dof_handler_L2.locally_owned_dofs(), *m_mpiInfo.mpiCommPtr());
-            } else {
-                old_history_variable_field_L2.reinit(dof_handler_L2.n_dofs());
-            }
-            old_history_variable_field_L2 = 0.0;
-            
-            
-            MappingQ<dim> mapping(m_parameters.m_poly_degree + 1);
-            VectorTools::project(mapping,
-                                 dof_handler_L2,
-                                 constraints,
-                                 m_qf_cell,
-                                 [&] (const typename DoFHandler<dim>::active_cell_iterator & cell,
-                                      const unsigned int q) -> double
-                                 {
-                return m_quadrature_point_history.get_data(cell)[q]->get_history_max_positive_strain_energy();
-                
+              return m_quadrature_point_history.get_data(cell)[q]
+                  ->get_history_max_positive_strain_energy();
             },
-                                 old_history_variable_field_L2);
-            
-        
+            old_history_variable_field_L2);
 
-            if constexpr(is_mpi) {
-                old_history_variable_field_L2.compress(dealii::VectorOperation::insert);
-                old_solutions_rele.reserve(2);
-                old_solutions_rele.emplace_back();
-                old_solutions_rele.emplace_back();
-                old_solutions_rele[0].reinit(*m_blocks_desc.ownedPartitionPtr(),
-                                             *m_blocks_desc.relevantPartitionPtr(),
-                                             *m_mpiInfo.mpiCommPtr());
-                old_solutions_rele[1].reinit(*m_blocks_desc.ownedPartitionPtr(),
-                                             *m_blocks_desc.relevantPartitionPtr(),
-                                             *m_mpiInfo.mpiCommPtr());
-                
-                old_solutions_rele[0] = old_solutions[0];
-                old_solutions_rele[1] = old_solutions[1];
-                
-                
-                old_history_variable_field_L2_rele.reinit(dof_handler_L2.locally_owned_dofs(),
-                                                          DoFTools::extract_locally_relevant_dofs(dof_handler_L2),
-                                                          *m_mpiInfo.mpiCommPtr());
-                old_history_variable_field_L2_rele = old_history_variable_field_L2;
-                
-                old_solutions_rele[0].update_ghost_values();
-                old_solutions_rele[1].update_ghost_values();
-                
-                old_history_variable_field_L2_rele.update_ghost_values();
-            }
+        if constexpr (is_mpi)
+        {
+          old_history_variable_field_L2.compress(dealii::VectorOperation::insert);
+          old_solutions_rele.reserve(2);
+          old_solutions_rele.emplace_back();
+          old_solutions_rele.emplace_back();
+          old_solutions_rele[0].reinit(*m_blocks_desc.ownedPartitionPtr(),
+                                       *m_blocks_desc.relevantPartitionPtr(),
+                                       *m_mpiInfo.mpiCommPtr());
+          old_solutions_rele[1].reinit(*m_blocks_desc.ownedPartitionPtr(),
+                                       *m_blocks_desc.relevantPartitionPtr(),
+                                       *m_mpiInfo.mpiCommPtr());
 
-            m_triangulation.prepare_coarsening_and_refinement();
-            
-            using SolTransBlockVector = typename SolutionTransferSelector<dim, VecType, is_mpi>::type;
-            using SolTransVector = typename SolutionTransferSelector<dim, VecBType, is_mpi>::type;
-            
-            SolTransBlockVector solution_transfer(m_dof_handler);
-            SolTransVector solution_transfer_history_variable(dof_handler_L2);
+          old_solutions_rele[0] = old_solutions[0];
+          old_solutions_rele[1] = old_solutions[1];
 
-            if constexpr (is_mpi) {
-#  if DEAL_II_VERSION_GTE(9, 7, 0)
-                solution_transfer.prepare_for_coarsening_and_refinement(old_solutions_rele);
-                
-                solution_transfer_history_variable.prepare_for_coarsening_and_refinement(old_history_variable_field_L2_rele);
-#  else
-                
-                std::vector<const VecType*> old_solutions_ptrs = {
-                    &old_solutions_rele[0],
-                    &old_solutions_rele[1]};
-                
-                solution_transfer.prepare_for_coarsening_and_refinement(old_solutions_ptrs);
-                solution_transfer_history_variable.prepare_for_coarsening_and_refinement(old_history_variable_field_L2_rele);
-#  endif
-            } else {
-                solution_transfer.prepare_for_coarsening_and_refinement(old_solutions);
-                
-                solution_transfer_history_variable.prepare_for_coarsening_and_refinement(old_history_variable_field_L2);
-            }
-            
+          old_history_variable_field_L2_rele.reinit(
+              dof_handler_L2.locally_owned_dofs(),
+              DoFTools::extract_locally_relevant_dofs(dof_handler_L2),
+              *m_mpiInfo.mpiCommPtr());
+          old_history_variable_field_L2_rele = old_history_variable_field_L2;
 
-            m_triangulation.execute_coarsening_and_refinement();
-            m_logfile << "\t\trefinement executed." << std::endl;
+          old_solutions_rele[0].update_ghost_values();
+          old_solutions_rele[1].update_ghost_values();
 
-            set_bcs_id();
+          old_history_variable_field_L2_rele.update_ghost_values();
+        }
 
-            setup_system();
+        m_triangulation.prepare_coarsening_and_refinement();
 
-            solution_next_step.initialize();
+        using SolTransBlockVector =
+            typename SolutionTransferSelector<dim, VecType, is_mpi>::type;
+        using SolTransVector =
+            typename SolutionTransferSelector<dim, VecBType, is_mpi>::type;
 
-            
-            dof_handler_L2.distribute_dofs(fe_L2);
-            constraints.clear();
-            //Since we use discontinuous Lagrange polynomials as shape functions
-            //we don't need to worry about enforcing continuity of the history variable
-            //at hanging nodes.
-            /*
-            if constexpr (is_mpi)
-            {
-                const IndexSet& owned_L2 = dof_handler_L2.locally_owned_dofs();
-                const IndexSet relevant_L2 = DoFTools::extract_locally_relevant_dofs(dof_handler_L2);
-                
-                VersionAdapter::cstReinit(constraints,
-                                          owned_L2,
-                                          relevant_L2,
-                                          *m_mpiInfo.mpiCommPtr());
-                
-                DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
-                
-                constraints.make_consistent_in_parallel(owned_L2,
-                                                        relevant_L2,
-                                                        *m_mpiInfo.mpiCommPtr());
-            } else {
-                DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
-            }
-            */
-            constraints.close();
-            
-            
-            std::vector<VecType> tmp_solutions(2);
-            if constexpr (is_mpi) {
-                // target vectors should have info about ghost cells
-                tmp_solutions[0].reinit(*m_blocks_desc.ownedPartitionPtr(),
-                                        *m_mpiInfo.mpiCommPtr());
-                tmp_solutions[1].reinit(*m_blocks_desc.ownedPartitionPtr(),
-                                        *m_mpiInfo.mpiCommPtr());
-            } else {
-                tmp_solutions[0].reinit(*m_blocks_desc.dofsPerBlockPtr());
-                tmp_solutions[1].reinit(*m_blocks_desc.dofsPerBlockPtr());
-            }
+        SolTransBlockVector solution_transfer(m_dof_handler);
+        SolTransVector solution_transfer_history_variable(dof_handler_L2);
 
-            
-            if constexpr (is_mpi)
-            {
-                const IndexSet relevant_dofs = DoFTools::extract_locally_relevant_dofs(dof_handler_L2);
-                
-                new_history_variable_field_L2.reinit(dof_handler_L2.locally_owned_dofs(),
-                                                     *m_mpiInfo.mpiCommPtr());
-                new_history_variable_field_L2_rele.reinit(dof_handler_L2.locally_owned_dofs(),
-                                                     relevant_dofs,
-                                                     *m_mpiInfo.mpiCommPtr());
-            } else {
-                new_history_variable_field_L2.reinit(dof_handler_L2.n_dofs());
-            }
-            
-#  if DEAL_II_VERSION_GTE(9, 7, 0)
-            solution_transfer.interpolate(tmp_solutions);
-#  else
-            // If an older version of dealII is used, for example, 9.4.0, interpolate()
-            // needs to use the following interface.
-            if constexpr (is_mpi){
-                std::vector<VecType*> tmp_solutions_ptrs = { &tmp_solutions[0],
-                    &tmp_solutions[1]
-                };
-                solution_transfer.interpolate(tmp_solutions_ptrs);
-            } else
-                solution_transfer.interpolate(old_solutions, tmp_solutions);
-#  endif
-            
-#  if DEAL_II_VERSION_GTE(9, 7, 0)
-            solution_transfer_history_variable.interpolate(new_history_variable_field_L2);
-#  else
-            // If an older version of dealII is used, for example, 9.4.0, interpolate()
-            // needs to use the following interface.
-            if constexpr (is_mpi){
-                solution_transfer_history_variable.interpolate(new_history_variable_field_L2);
-            } else
-                solution_transfer_history_variable.interpolate(old_history_variable_field_L2, new_history_variable_field_L2);
-#  endif
+        if constexpr (is_mpi)
+        {
+  #if DEAL_II_VERSION_GTE(9, 7, 0)
+          solution_transfer.prepare_for_coarsening_and_refinement(
+              old_solutions_rele);
 
-            
-            
+          solution_transfer_history_variable
+              .prepare_for_coarsening_and_refinement(
+                  old_history_variable_field_L2_rele);
+  #else
 
-            solution_next_step.base()   = tmp_solutions[0];
-            m_solution.base()           = tmp_solutions[1];
+          std::vector<const VecType *> old_solutions_ptrs = {
+              &old_solutions_rele[0], &old_solutions_rele[1]};
 
+          solution_transfer.prepare_for_coarsening_and_refinement(
+              old_solutions_ptrs);
+          solution_transfer_history_variable
+              .prepare_for_coarsening_and_refinement(
+                  old_history_variable_field_L2_rele);
+  #endif
+        }
+        else
+        {
+          solution_transfer.prepare_for_coarsening_and_refinement(old_solutions);
 
-            
-            // make sure the projected solutions still satisfy
-            // hanging node constraints
+          solution_transfer_history_variable
+              .prepare_for_coarsening_and_refinement(
+                  old_history_variable_field_L2);
+        }
 
-            // distribute and update relevance
-            solution_next_step.distributeCst(m_constraints); // ghost cells updated
-            m_solution.distributeCst(m_constraints);        // ghost cells updated
-            //Since we use discontinuous Lagrange polynomials as shape functions
-            //we don't need to worry about enforcing continuity of the history variable
-            //at hanging nodes.
-            //constraints.distribute(new_history_variable_field_L2);
+        m_triangulation.execute_coarsening_and_refinement();
+        m_logfile << "\t\trefinement executed." << std::endl;
 
-            
-            if constexpr (is_mpi) {
-                new_history_variable_field_L2_rele = new_history_variable_field_L2;
-                new_history_variable_field_L2_rele.update_ghost_values();
-            }
+        set_bcs_id();
 
-            // new_history_variable_field_L2 contains the history variable projected
-            // onto the newly refined mesh
-            FEValues<dim> fe_values(fe_L2,
-                                    m_qf_cell,
-                                    update_values | update_gradients |
+        setup_system();
+
+        solution_next_step.initialize();
+
+        dof_handler_L2.distribute_dofs(fe_L2);
+        constraints.clear();
+        // Since we use discontinuous Lagrange polynomials as shape functions
+        // we don't need to worry about enforcing continuity of the history
+        // variable at hanging nodes.
+        /*
+        if constexpr (is_mpi)
+        {
+            const IndexSet& owned_L2 = dof_handler_L2.locally_owned_dofs();
+            const IndexSet relevant_L2 =
+        DoFTools::extract_locally_relevant_dofs(dof_handler_L2);
+
+            VersionAdapter::cstReinit(constraints,
+                                      owned_L2,
+                                      relevant_L2,
+                                      *m_mpiInfo.mpiCommPtr());
+
+            DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
+
+            constraints.make_consistent_in_parallel(owned_L2,
+                                                    relevant_L2,
+                                                    *m_mpiInfo.mpiCommPtr());
+        } else {
+            DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);
+        }
+        */
+        constraints.close();
+
+        std::vector<VecType> tmp_solutions(2);
+        if constexpr (is_mpi)
+        {
+          // target vectors should have info about ghost cells
+          tmp_solutions[0].reinit(*m_blocks_desc.ownedPartitionPtr(),
+                                  *m_mpiInfo.mpiCommPtr());
+          tmp_solutions[1].reinit(*m_blocks_desc.ownedPartitionPtr(),
+                                  *m_mpiInfo.mpiCommPtr());
+        }
+        else
+        {
+          tmp_solutions[0].reinit(*m_blocks_desc.dofsPerBlockPtr());
+          tmp_solutions[1].reinit(*m_blocks_desc.dofsPerBlockPtr());
+        }
+
+        if constexpr (is_mpi)
+        {
+          const IndexSet relevant_dofs =
+              DoFTools::extract_locally_relevant_dofs(dof_handler_L2);
+
+          new_history_variable_field_L2.reinit(
+              dof_handler_L2.locally_owned_dofs(), *m_mpiInfo.mpiCommPtr());
+          new_history_variable_field_L2_rele.reinit(
+              dof_handler_L2.locally_owned_dofs(), relevant_dofs,
+              *m_mpiInfo.mpiCommPtr());
+        }
+        else
+        {
+          new_history_variable_field_L2.reinit(dof_handler_L2.n_dofs());
+        }
+
+  #if DEAL_II_VERSION_GTE(9, 7, 0)
+        solution_transfer.interpolate(tmp_solutions);
+  #else
+        // If an older version of dealII is used, for example, 9.4.0,
+        // interpolate() needs to use the following interface.
+        if constexpr (is_mpi)
+        {
+          std::vector<VecType *> tmp_solutions_ptrs = {&tmp_solutions[0],
+                                                       &tmp_solutions[1]};
+          solution_transfer.interpolate(tmp_solutions_ptrs);
+        }
+        else
+          solution_transfer.interpolate(old_solutions, tmp_solutions);
+  #endif
+
+  #if DEAL_II_VERSION_GTE(9, 7, 0)
+        solution_transfer_history_variable.interpolate(
+            new_history_variable_field_L2);
+  #else
+        // If an older version of dealII is used, for example, 9.4.0,
+        // interpolate() needs to use the following interface.
+        if constexpr (is_mpi)
+        {
+          solution_transfer_history_variable.interpolate(
+              new_history_variable_field_L2);
+        }
+        else
+          solution_transfer_history_variable.interpolate(
+              old_history_variable_field_L2, new_history_variable_field_L2);
+  #endif
+
+        solution_next_step.base() = tmp_solutions[0];
+        m_solution.base() = tmp_solutions[1];
+
+        // make sure the projected solutions still satisfy
+        // hanging node constraints
+
+        // distribute and update relevance
+        solution_next_step.distributeCst(m_constraints); // ghost cells updated
+        m_solution.distributeCst(m_constraints);         // ghost cells updated
+        // Since we use discontinuous Lagrange polynomials as shape functions
+        // we don't need to worry about enforcing continuity of the history
+        // variable at hanging nodes.
+        // constraints.distribute(new_history_variable_field_L2);
+
+        if constexpr (is_mpi)
+        {
+          new_history_variable_field_L2_rele = new_history_variable_field_L2;
+          new_history_variable_field_L2_rele.update_ghost_values();
+        }
+
+        // new_history_variable_field_L2 contains the history variable projected
+        // onto the newly refined mesh
+        FEValues<dim> fe_values(fe_L2, m_qf_cell,
+                                update_values | update_gradients |
                                     update_quadrature_points | update_JxW_values);
-            
-            for (const auto &cell : dof_handler_L2.active_cell_iterators())
-            {
-                if constexpr (is_mpi){
-                    if (!cell->is_locally_owned()) continue;
-                }
-                fe_values.reinit(cell);
-                
-                const std::vector<std::shared_ptr<PointHistory<dim>>> lqph =
-                m_quadrature_point_history.get_data(cell);
-                
-                std::vector<double> history_variable_values_cell(m_n_q_points);
-                
-                fe_values.get_function_values(
-                                              new_history_variable_field_L2_rele, history_variable_values_cell);
-                
-                for (unsigned int q_point : fe_values.quadrature_point_indices())
-                {
-                    lqph[q_point]->assign_history_variable(history_variable_values_cell[q_point]);
-                }
-            }
 
-        } // if (cell_refine_flag)
+        for (const auto &cell : dof_handler_L2.active_cell_iterators())
+        {
+          if constexpr (is_mpi)
+          {
+            if (!cell->is_locally_owned())
+              continue;
+          }
+          fe_values.reinit(cell);
+
+          const std::vector<std::shared_ptr<PointHistory<dim>>> lqph =
+              m_quadrature_point_history.get_data(cell);
+
+          std::vector<double> history_variable_values_cell(m_n_q_points);
+
+          fe_values.get_function_values(new_history_variable_field_L2_rele,
+                                        history_variable_values_cell);
+
+          for (unsigned int q_point : fe_values.quadrature_point_indices())
+          {
+            lqph[q_point]->assign_history_variable(
+                history_variable_values_cell[q_point]);
+          }
+        }
+
+      } // if (cell_refine_flag)
     } // while(cell_refine_flag)
-    
+
     // calculate field variables for newly refined cells
     if (!mesh_is_same)
     {
-        repartition(solution_next_step,
-                    new_history_variable_field_L2,
-                    new_history_variable_field_L2_rele);
-        
-        BVector temp_solution_delta(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
-        BVector temp_previous_solution(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
-        temp_solution_delta.initialize();
-        temp_previous_solution.initialize();
-        
-        update_qph_incremental(temp_solution_delta, temp_previous_solution, false);
+      repartition(solution_next_step, new_history_variable_field_L2,
+                  new_history_variable_field_L2_rele);
 
-        
-        /* 
-         Note: The history variable has already been re-assigned. If H is re-updated by `update_history_field_step()` at the timestep 1, it will misuse a nonzero strain energy caused by temperature drop on the BCs set at timestep 0. This will result in unexpected crack initiations.
-         */
-//        update_history_field_step();
+      BVector temp_solution_delta(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
+      BVector temp_previous_solution(m_mpiInfo, m_blocks_desc,
+                                     /*relevance=*/true);
+      temp_solution_delta.initialize();
+      temp_previous_solution.initialize();
 
-        // initial guess for the resolve on the refined mesh
-        LBFGS_update_refine.base() = solution_next_step.base() - m_solution.base();
-        LBFGS_update_refine.updateRelevance();
-        
-        solution_delta.updateRelevance();
-        
+      update_qph_incremental(temp_solution_delta, temp_previous_solution, false);
 
+      /*
+       Note: The history variable has already been re-assigned. If H is re-updated
+       by `update_history_field_step()` at the timestep 1, it will misuse a
+       nonzero strain energy caused by temperature drop on the BCs set at timestep
+       0. This will result in unexpected crack initiations.
+       */
+      //        update_history_field_step();
+
+      // initial guess for the resolve on the refined mesh
+      LBFGS_update_refine.base() = solution_next_step.base() - m_solution.base();
+      LBFGS_update_refine.updateRelevance();
+
+      solution_delta.updateRelevance();
     }
 
     return mesh_is_same;
-}
+  }
 
   template <typename LATraits, typename Tria>
   void PhaseFieldMonolithicSolve<LATraits, Tria>::print_parameter_information()
   {
-      
-      m_logfile << Utilities::dealii_version_string() << std::endl << std::endl;
-      
-      
-      m_logfile << "\nDir: \t" << m_parameters.m_output_dir << std::endl
-      << "Type: \t" << m_parameters.m_mpi_type << std::endl
-      << "Log: \t" << m_parameters.m_logfile_name << std::endl << std::endl;
-      
-      
+
+    m_logfile << Utilities::dealii_version_string() << std::endl << std::endl;
+
+    m_logfile << "\nDir: \t" << m_parameters.m_output_dir << std::endl
+              << "Type: \t" << m_parameters.m_mpi_type << std::endl
+              << "Log: \t" << m_parameters.m_logfile_name << std::endl
+              << std::endl;
+
     m_logfile << "Scenario number = " << m_parameters.m_scenario << std::endl;
     m_logfile << "Log file = " << m_parameters.m_logfile_name << std::endl;
     m_logfile << "Write iteration history to log file? = " << std::boolalpha
-	      << m_parameters.m_output_iteration_history << std::endl;
+              << m_parameters.m_output_iteration_history << std::endl;
 
-    m_logfile << "Phase-field model type = " << m_parameters.m_phasefield_name << std::endl;
+    m_logfile << "Phase-field model type = " << m_parameters.m_phasefield_name
+              << std::endl;
 
-    m_logfile << "Does the heat equation contain the coupling term? = " << std::boolalpha
-	      << m_parameters.m_coupling_on_heat_eq << std::endl;
-    m_logfile << "Is the thermal conductivity degraded by phasefield? = " << std::boolalpha
-    	      << m_parameters.m_degrade_conductivity << std::endl;
+    m_logfile << "Does the heat equation contain the coupling term? = "
+              << std::boolalpha << m_parameters.m_coupling_on_heat_eq
+              << std::endl;
+    m_logfile << "Is the thermal conductivity degraded by phasefield? = "
+              << std::boolalpha << m_parameters.m_degrade_conductivity
+              << std::endl;
 
     if (dim == 2)
-      {
-	if (m_parameters.m_plane_stress)
-	  m_logfile << "2D plane-stress case" << std::endl;
-	else
-	  m_logfile << "2D plane-strain case" << std::endl;
-      }
+    {
+      if (m_parameters.m_plane_stress)
+        m_logfile << "2D plane-stress case" << std::endl;
+      else
+        m_logfile << "2D plane-strain case" << std::endl;
+    }
 
-    m_logfile << "Nonlinear solver type = " << m_parameters.m_type_nonlinear_solver << std::endl;
-    m_logfile << "Linear solver type = " << m_parameters.m_type_linear_solver << std::endl;
+    m_logfile << "Nonlinear solver type = "
+              << m_parameters.m_type_nonlinear_solver << std::endl;
+    m_logfile << "Linear solver type = " << m_parameters.m_type_linear_solver
+              << std::endl;
 
     if (m_parameters.m_type_linear_solver == "CG")
-      {
-	m_logfile << "\tCG tolerance for inverse K_uu = "
-	          << m_parameters.m_cg_u_tol << std::endl;
-	m_logfile << "\tCG tolerance for inverse K_dd = "
-		  << m_parameters.m_cg_d_tol << std::endl;
-	m_logfile << "\tCG tolerance for inverse K_TT = "
-		  << m_parameters.m_cg_t_tol << std::endl;
-      }
+    {
+      m_logfile << "\tCG tolerance for inverse K_uu = " << m_parameters.m_cg_u_tol
+                << std::endl;
+      m_logfile << "\tCG tolerance for inverse K_dd = " << m_parameters.m_cg_d_tol
+                << std::endl;
+      m_logfile << "\tCG tolerance for inverse K_TT = " << m_parameters.m_cg_t_tol
+                << std::endl;
+    }
 
-    m_logfile << "Mesh refinement strategy = " << m_parameters.m_refinement_strategy << std::endl;
+    m_logfile << "Mesh refinement strategy = "
+              << m_parameters.m_refinement_strategy << std::endl;
 
     if (m_parameters.m_refinement_strategy == "adaptive-refine")
-      {
-	m_logfile << "\tMaximum adaptive refinement times allowed in each step = "
-		  << m_parameters.m_max_adaptive_refine_times << std::endl;
-	m_logfile << "\tMaximum allowed cell refinement level = "
-		  << m_parameters.m_max_allowed_refinement_level << std::endl;
-	m_logfile << "\tPhasefield-based refinement threshold value = "
-		  << m_parameters.m_phasefield_refine_threshold << std::endl;
-      }
+    {
+      m_logfile << "\tMaximum adaptive refinement times allowed in each step = "
+                << m_parameters.m_max_adaptive_refine_times << std::endl;
+      m_logfile << "\tMaximum allowed cell refinement level = "
+                << m_parameters.m_max_allowed_refinement_level << std::endl;
+      m_logfile << "\tPhasefield-based refinement threshold value = "
+                << m_parameters.m_phasefield_refine_threshold << std::endl;
+    }
 
     m_logfile << "L-BFGS_m = " << m_parameters.m_LBFGS_m << std::endl;
-    m_logfile << "Global refinement times = " << m_parameters.m_global_refine_times << std::endl;
-    m_logfile << "Local prerefinement times = " <<m_parameters. m_local_prerefine_times << std::endl;
-    m_logfile << "Allowed maximum h/l ratio = " << m_parameters.m_allowed_max_h_l_ratio << std::endl;
-    m_logfile << "total number of material types = " << m_parameters.m_total_material_regions << std::endl;
-    m_logfile << "material data file name = " << m_parameters.m_material_file_name << std::endl;
+    m_logfile << "Global refinement times = "
+              << m_parameters.m_global_refine_times << std::endl;
+    m_logfile << "Local prerefinement times = "
+              << m_parameters.m_local_prerefine_times << std::endl;
+    m_logfile << "Allowed maximum h/l ratio = "
+              << m_parameters.m_allowed_max_h_l_ratio << std::endl;
+    m_logfile << "total number of material types = "
+              << m_parameters.m_total_material_regions << std::endl;
+    m_logfile << "material data file name = " << m_parameters.m_material_file_name
+              << std::endl;
     if (m_parameters.m_reaction_force_face_id >= 0)
-      m_logfile << "Calculate reaction forces on Face ID = " << m_parameters.m_reaction_force_face_id << std::endl;
+      m_logfile << "Calculate reaction forces on Face ID = "
+                << m_parameters.m_reaction_force_face_id << std::endl;
     else
       m_logfile << "No need to calculate reaction forces." << std::endl;
 
@@ -7416,32 +7216,31 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
       m_logfile << "Absolute residual for convergence." << std::endl;
 
     m_logfile << "Body force = (" << m_parameters.m_x_component << ", "
-                                  << m_parameters.m_y_component << ", "
-	                          << m_parameters.m_z_component << ") (N/m^3)"
-				  << std::endl;
+              << m_parameters.m_y_component << ", " << m_parameters.m_z_component
+              << ") (N/m^3)" << std::endl;
     m_logfile << "Heat supply = " << m_parameters.m_heat_supply << " (Watt/m^3)"
-	      << std::endl;
-    m_logfile << "Reference temperature = " << m_parameters.m_ref_temperature << " (K)"
-	      << std::endl;
+              << std::endl;
+    m_logfile << "Reference temperature = " << m_parameters.m_ref_temperature
+              << " (K)" << std::endl;
 
     m_logfile << "End time = " << m_parameters.m_end_time << std::endl;
-    m_logfile << "Time data file name = " << m_parameters.m_time_file_name << std::endl;
+    m_logfile << "Time data file name = " << m_parameters.m_time_file_name
+              << std::endl;
   }
 
   template <typename LATraits, typename Tria>
   void PhaseFieldMonolithicSolve<LATraits, Tria>::run()
   {
-      
+
     print_parameter_information();
 
-    read_material_data(m_parameters.m_config_dir 
-                       + m_parameters.m_material_file_name,
+    read_material_data(m_parameters.m_config_dir +
+                           m_parameters.m_material_file_name,
                        m_parameters.m_total_material_regions);
 
     std::vector<std::array<double, 4>> time_table;
 
-    read_time_data(m_parameters.m_config_dir 
-                   + m_parameters.m_time_file_name,
+    read_time_data(m_parameters.m_config_dir + m_parameters.m_time_file_name,
                    time_table);
 
     make_grid();
@@ -7454,267 +7253,286 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
 
     m_time.increment(time_table);
 
-    while(m_time.current() < m_time.end() + m_time.get_delta_t()*1.0e-6)
+    while (m_time.current() < m_time.end() + m_time.get_delta_t() * 1.0e-6)
+    {
+      m_logfile << std::endl
+                << "Timestep " << m_time.get_timestep() << " @ "
+                << m_time.current() << 's' << std::endl;
+
+      bool mesh_is_same = false;
+
+      // initial guess for the resolve on the refined mesh
+      BVector LBFGS_update_refine(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
+      LBFGS_update_refine.initialize();
+
+      // local adaptive mesh refinement loop
+      unsigned int adp_refine_iteration = 0;
+      for (; adp_refine_iteration < m_parameters.m_max_adaptive_refine_times + 1;
+           ++adp_refine_iteration)
       {
-	m_logfile << std::endl
-		  << "Timestep " << m_time.get_timestep() << " @ " << m_time.current()
-		  << 's' << std::endl;
+        if (m_parameters.m_refinement_strategy == "adaptive-refine")
+          m_logfile << "\tAdaptive refinement-" << adp_refine_iteration << ": "
+                    << std::endl;
 
-        bool mesh_is_same = false;
+        BVector solution_delta(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
+        solution_delta.initialize();
 
-        // initial guess for the resolve on the refined mesh
-	BVector LBFGS_update_refine(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
-          LBFGS_update_refine.initialize();
+        if (m_parameters.m_type_nonlinear_solver == "LBFGS")
+          solve_nonlinear_timestep_LBFGS(solution_delta, LBFGS_update_refine);
+        else
+          AssertThrow(false, ExcMessage("Nonlinear solver type not implemented"));
 
+        solution_delta.updateRelevance();
+        LBFGS_update_refine.updateRelevance();
 
-        // local adaptive mesh refinement loop
-	unsigned int adp_refine_iteration = 0;
-        for (; adp_refine_iteration < m_parameters.m_max_adaptive_refine_times + 1; ++adp_refine_iteration)
+        if (m_parameters.m_refinement_strategy == "adaptive-refine")
+        {
+
+          if (adp_refine_iteration == m_parameters.m_max_adaptive_refine_times)
           {
-	    if (m_parameters.m_refinement_strategy == "adaptive-refine")
-	      m_logfile << "\tAdaptive refinement-"<< adp_refine_iteration << ": " << std::endl;
+            m_solution += solution_delta;
+            m_solution.updateRelevance();
+            break;
+          }
 
-	    BVector solution_delta(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
-              solution_delta.initialize();
+          mesh_is_same = local_refine_and_solution_transfer(solution_delta,
+                                                            LBFGS_update_refine);
 
+          solution_delta.updateRelevance();
+          LBFGS_update_refine.updateRelevance();
 
-	    if (m_parameters.m_type_nonlinear_solver == "LBFGS")
-	      solve_nonlinear_timestep_LBFGS(solution_delta, LBFGS_update_refine);
-	    else
-	      AssertThrow(false, ExcMessage("Nonlinear solver type not implemented"));
+          if (mesh_is_same)
+          {
+            m_solution += solution_delta;
+            m_solution.updateRelevance();
+            break;
+          }
+        }
+        else if (m_parameters.m_refinement_strategy == "pre-refine")
+        {
+          m_solution += solution_delta;
+          m_solution.updateRelevance();
 
-            solution_delta.updateRelevance();
-            LBFGS_update_refine.updateRelevance();
-              
-	    if (m_parameters.m_refinement_strategy == "adaptive-refine")
-	      {
+          break;
+        }
+        else
+        {
+          AssertThrow(
+              false,
+              ExcMessage("Selected mesh refinement strategy not implemented!"));
+        }
+      } // for (; adp_refine_iteration < m_parameters.m_max_adaptive_refine_times;
+        // ++adp_refine_iteration)
 
-		if (adp_refine_iteration == m_parameters.m_max_adaptive_refine_times)
-		  {
-		    m_solution += solution_delta;
-                    m_solution.updateRelevance();
-		    break;
-		  }
-              
-		mesh_is_same = local_refine_and_solution_transfer(solution_delta,
-								  LBFGS_update_refine);
-              
-                solution_delta.updateRelevance();
-                LBFGS_update_refine.updateRelevance();
-              
-	        if (mesh_is_same)
-		  {
-		    m_solution += solution_delta;
-                    m_solution.updateRelevance();
-		    break;
-		  }
-	      }
-	    else if (m_parameters.m_refinement_strategy == "pre-refine")
-	      {
-		m_solution += solution_delta;
-                m_solution.updateRelevance();
-              
-	        break;
-	      }
-	    else
-	      {
-		AssertThrow(false,
-		            ExcMessage("Selected mesh refinement strategy not implemented!"));
-	      }
-          } // for (; adp_refine_iteration < m_parameters.m_max_adaptive_refine_times; ++adp_refine_iteration)
+      // AssertThrow(adp_refine_iteration <
+      // m_parameters.m_max_adaptive_refine_times,
+      //             ExcMessage("Number of local adaptive mesh refinement exceeds
+      //             allowed maximum times!"));
 
-        //AssertThrow(adp_refine_iteration < m_parameters.m_max_adaptive_refine_times,
-        //            ExcMessage("Number of local adaptive mesh refinement exceeds allowed maximum times!"));
+      update_history_field_step();
+      // output vtk files every 10 steps if there are too
+      // many time steps
+      // if (m_time.get_timestep() % 10 == 0)
+      output_results();
 
-	update_history_field_step();
-	// output vtk files every 10 steps if there are too
-	// many time steps
-	//if (m_time.get_timestep() % 10 == 0)
-        output_results();
+      double energy_functional_current = calculate_energy_functional();
+      m_logfile << "\t\tEnergy functional (J) = " << std::fixed
+                << std::setprecision(10) << std::scientific
+                << energy_functional_current << std::endl;
 
-	double energy_functional_current = calculate_energy_functional();
-	m_logfile << "\t\tEnergy functional (J) = " << std::fixed << std::setprecision(10) << std::scientific
-	          << energy_functional_current << std::endl;
+      std::pair<double, double> energy_pair =
+          calculate_total_strain_energy_and_crack_energy_dissipation();
+      m_logfile << "\t\tTotal strain energy (J) = " << std::fixed
+                << std::setprecision(10) << std::scientific << energy_pair.first
+                << std::endl;
+      m_logfile << "\t\tCrack energy dissipation (J) = " << std::fixed
+                << std::setprecision(10) << std::scientific << energy_pair.second
+                << std::endl;
 
-	std::pair<double, double> energy_pair = calculate_total_strain_energy_and_crack_energy_dissipation();
-	m_logfile << "\t\tTotal strain energy (J) = " << std::fixed << std::setprecision(10) << std::scientific
-		  << energy_pair.first << std::endl;
-	m_logfile << "\t\tCrack energy dissipation (J) = " << std::fixed << std::setprecision(10) << std::scientific
-		  << energy_pair.second << std::endl;
-        
+      std::pair<double, std::array<double, 3>> time_energy;
+      time_energy.first = m_time.current();
+      time_energy.second[0] = energy_pair.first;
+      time_energy.second[1] = energy_pair.second;
+      time_energy.second[2] = energy_pair.first + energy_pair.second;
+      m_history_energy.push_back(time_energy);
 
-	std::pair<double, std::array<double, 3>> time_energy;
-	time_energy.first = m_time.current();
-	time_energy.second[0] = energy_pair.first;
-	time_energy.second[1] = energy_pair.second;
-	time_energy.second[2] = energy_pair.first + energy_pair.second;
-	m_history_energy.push_back(time_energy);
+      int face_ID = m_parameters.m_reaction_force_face_id;
+      if (face_ID >= 0)
+        calculate_reaction_force(face_ID);
 
-	int face_ID = m_parameters.m_reaction_force_face_id;
-	if (face_ID >= 0)
-	  calculate_reaction_force(face_ID);
+      write_history_data();
 
-        write_history_data();
-
-	m_time.increment(time_table);
-      } // while(m_time.current() < m_time.end() + m_time.get_delta_t()*1.0e-6)
+      m_time.increment(time_table);
+    } // while(m_time.current() < m_time.end() + m_time.get_delta_t()*1.0e-6)
   }
 } // namespace PhaseField_monolithic
 
-
-
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
 
   using namespace ::dealii;
   using namespace PhaseField_monolithic;
-    using namespace la;
-    
+  using namespace la;
+
   if (argc < 2)
-    AssertThrow(false,
-    		ExcMessage("Usage: ./main [options] <input.prm>"));
-  
-    // read prm by input command
-  Parameters::AllParameters parameters(argv[argc-1]);
+    AssertThrow(false, ExcMessage("Usage: ./main [options] <input.prm>"));
 
-    // initialize MPI by prm settings
-    MPIInfo mpiInfo(parameters.m_mpi_type == "PETSc" ||
-                    parameters.m_mpi_type == "Trilinos",
-                    argc-1, argv);
+  // read prm by input command
+  Parameters::AllParameters parameters(argv[argc - 1]);
 
-    /**
-     *
-     * Print MPI / non-MPI runtime information at rank 0.
-     *
-     * In serial mode, only non-MPI information is printed to the terminal.
-     * In MPI mode, runtime MPI configuration information is printed.
-     *
-     * [ Warning ]
-     * Whether the MPI functionality is initialized, the mode is only determined by the settings in `.prm` via `MPIInfo`.
-     * If `Serial` is specified in the `.prm` file but the executable is launched via `mpiexec` or `mpirun`, MPI will NOT be initialized inside the program.
-     * In this case, the launcher will start multiple independent instances of the same executable.
-     *
-     * As a consequence, the program is executed repeatedly for `n` times,
-     * where `n` is the number of processes requested by `mpiexec` or `mpirun`.
-     * The program does not automatically detect or prevent this situation.
-     * If this is unintended, please terminate the job immediately.
-     *
-     */
-    if(mpiInfo.rank() == 0)
-        mpiInfo.summary(std::cout);
-    
-    // create dirctories with sub-directories in the case folder
+  // initialize MPI by prm settings
+  MPIInfo mpiInfo(parameters.m_mpi_type == "PETSc" ||
+                      parameters.m_mpi_type == "Trilinos",
+                  argc - 1, argv);
+
+  /**
+   *
+   * Print MPI / non-MPI runtime information at rank 0.
+   *
+   * In serial mode, only non-MPI information is printed to the terminal.
+   * In MPI mode, runtime MPI configuration information is printed.
+   *
+   * [ Warning ]
+   * Whether the MPI functionality is initialized, the mode is only determined
+   * by the settings in `.prm` via `MPIInfo`. If `Serial` is specified in the
+   * `.prm` file but the executable is launched via `mpiexec` or `mpirun`, MPI
+   * will NOT be initialized inside the program. In this case, the launcher will
+   * start multiple independent instances of the same executable.
+   *
+   * As a consequence, the program is executed repeatedly for `n` times,
+   * where `n` is the number of processes requested by `mpiexec` or `mpirun`.
+   * The program does not automatically detect or prevent this situation.
+   * If this is unintended, please terminate the job immediately.
+   *
+   */
+  if (mpiInfo.rank() == 0)
+    mpiInfo.summary(std::cout);
+
+  // create dirctories with sub-directories in the case folder
+  {
+
+    std::vector<::FileSystem::SubDir> subDirs = {
+        ::FileSystem::SubDir("ori", parameters.oriDir),
+        ::FileSystem::SubDir("hist", parameters.histDir),
+        ::FileSystem::SubDir("results", parameters.resultsDir),
+    };
+
+    ::FileSystem::outputDirSystem(mpiInfo, parameters.m_output_dir,
+                                  parameters.subDir, subDirs);
+  }
+
+  std::ofstream log_fstream;
+
+  // output the directory inforamtion
+  if (mpiInfo.isRankEqualsTo(0))
+  {
+    std::cout << "\nDir: \t" << parameters.m_output_dir << std::endl
+              << "Type: \t" << parameters.m_mpi_type << std::endl
+              << "Log: \t" << parameters.m_logfile_name << std::endl
+              << std::endl;
+
+    // only rank 0 creates logfile to avoid overriding in MPI mode
+    log_fstream.open(parameters.m_output_dir + parameters.m_logfile_name + "_" +
+                     parameters.m_mpi_type + "_" +
+                     std::to_string(mpiInfo.nRanks()) + "_" +
+                     parameters.m_type_linear_solver + ".log");
+  }
+
+  ConditionalOStream logfile(log_fstream, mpiInfo.rank() == 0);
+
+  // dimension by prm setting
+  const unsigned int dim = parameters.m_dim;
+  AssertThrow(dim == 2 || dim == 3,
+              ExcMessage("Dimension has to be either 2 or 3"));
+
+  if (dim == 2)
+  {
+#if ENABLE_REPARTITION == 1
+    const auto setting = DTria<2>::no_automatic_repartitioning;
+#else
+    const auto setting = DTria<2>::default_setting;
+#endif
+    const auto smooth = RTria<2>::MeshSmoothing(
+        RTria<2>::smoothing_on_refinement | RTria<2>::smoothing_on_coarsening);
+
+    if (parameters.m_mpi_type == "PETSc")
     {
-        
-        std::vector<::FileSystem::SubDir> subDirs =
-        {
-            ::FileSystem::SubDir("ori",     parameters.oriDir),
-            ::FileSystem::SubDir("hist",    parameters.histDir),
-            ::FileSystem::SubDir("results", parameters.resultsDir),
-        };
-        
-        ::FileSystem::outputDirSystem(mpiInfo,
-                                      parameters.m_output_dir,
-                                      parameters.subDir,
-                                      subDirs);
-    }
-    
-    std::ofstream log_fstream;
-    
-    // output the directory inforamtion
-    if(mpiInfo.isRankEqualsTo(0))
-    {
-        std::cout << "\nDir: \t" << parameters.m_output_dir << std::endl
-        << "Type: \t" << parameters.m_mpi_type << std::endl
-        << "Log: \t" << parameters.m_logfile_name << std::endl << std::endl;
-        
-        // only rank 0 creates logfile to avoid overriding in MPI mode
-        log_fstream.open(parameters.m_output_dir
-                         + parameters.m_logfile_name
-                         + "_" + parameters.m_mpi_type
-                         + "_" + std::to_string(mpiInfo.nRanks())
-                         + "_" + parameters.m_type_linear_solver + ".log");
-    }
-        
-    ConditionalOStream logfile(log_fstream, mpiInfo.rank() == 0);
-    
-    
-    // dimension by prm setting
-    const unsigned int dim = parameters.m_dim;
-    AssertThrow(dim == 2 || dim == 3,
-                ExcMessage("Dimension has to be either 2 or 3"));
-    
-    
-    
-    if (dim == 2 ){
-#if ENABLE_REPARTITION==1
-        const auto setting = DTria<2>::no_automatic_repartitioning;
-#else
-        const auto setting = DTria<2>::default_setting;
-#endif
-        const auto smooth = RTria<2>::MeshSmoothing(
-                                                    RTria<2>::smoothing_on_refinement
-                                                    |RTria<2>::smoothing_on_coarsening);
+#ifdef HAVE_PETSC
+      DTria<2> tria(*mpiInfo.mpiCommPtr(), smooth, setting);
 
-        if(parameters.m_mpi_type == "PETSc") {
-#ifdef HAVE_PETSC
-            DTria<2> tria(*mpiInfo.mpiCommPtr(), smooth, setting);
-            
-            PhaseFieldMonolithicSolve<Traits<TagPETSc>, DTria<2>> Phasefield2D(parameters, mpiInfo, logfile, tria);
-            Phasefield2D.run();
+      PhaseFieldMonolithicSolve<Traits<TagPETSc>, DTria<2>> Phasefield2D(
+          parameters, mpiInfo, logfile, tria);
+      Phasefield2D.run();
 #else
 #endif
-        } else if(parameters.m_mpi_type == "Trilinos") {
-#ifdef HAVE_TRILINOS
-            DTria<2> tria(*mpiInfo.mpiCommPtr(), smooth, setting);
-            
-            PhaseFieldMonolithicSolve<Traits<TagTrilinos>, DTria<2>> Phasefield2D(parameters, mpiInfo, logfile, tria);
-            Phasefield2D.run();
-#else
-            std::cout << "[ ERROR ] The selected mpi mode (" << parameters.m_mpi_type << ") is not installed." << std::endl;
-#endif
-        } else if(parameters.m_mpi_type == "Serial") {
-            RTria<2> tria(Triangulation<2>::maximum_smoothing);
-            
-            PhaseFieldMonolithicSolve<Traits<TagSerial>, RTria<2>> Phasefield2D(parameters, mpiInfo, logfile, tria);
-            Phasefield2D.run();
-        }
-        
-    } else if (dim == 3) {
-        
-#if ENABLE_REPARTITION==1
-        const auto setting = DTria<3>::no_automatic_repartitioning;
-#else
-        const auto setting = DTria<3>::default_setting;
-#endif
-        const auto smooth = RTria<3>::MeshSmoothing(
-                                                    RTria<2>::smoothing_on_refinement
-                                                    |RTria<2>::smoothing_on_coarsening);
-        if(parameters.m_mpi_type == "PETSc") {
-#ifdef HAVE_PETSC
-            DTria<3> tria(*mpiInfo.mpiCommPtr(), smooth, setting);
-            
-            PhaseFieldMonolithicSolve<Traits<TagPETSc>, DTria<3>> Phasefield3D(parameters, mpiInfo, logfile, tria);
-            Phasefield3D.run();
-#else
-            std::cout << "[ ERROR ] The selected mpi mode (" << parameters.m_mpi_type << ") is not installed." << std::endl;
-#endif
-        } else if(parameters.m_mpi_type == "Trilinos") {
-#ifdef HAVE_TRILINOS
-            DTria<3> tria(*mpiInfo.mpiCommPtr(), smooth, setting);
-            
-            PhaseFieldMonolithicSolve<Traits<TagTrilinos>, DTria<3>> Phasefield3D(parameters, mpiInfo, logfile, tria);
-            Phasefield3D.run();
-#else
-            std::cout << "[ ERROR ] The selected mpi mode (" << parameters.m_mpi_type << ") is not installed." << std::endl;
-#endif
-        } else if(parameters.m_mpi_type == "Serial") {
-            RTria<3> tria(Triangulation<3>::maximum_smoothing);
-            
-            PhaseFieldMonolithicSolve<Traits<TagSerial>, RTria<3>> Phasefield3D(parameters, mpiInfo, logfile, tria);
-            Phasefield3D.run();
-        }
     }
-    
+    else if (parameters.m_mpi_type == "Trilinos")
+    {
+#ifdef HAVE_TRILINOS
+      DTria<2> tria(*mpiInfo.mpiCommPtr(), smooth, setting);
+
+      PhaseFieldMonolithicSolve<Traits<TagTrilinos>, DTria<2>> Phasefield2D(
+          parameters, mpiInfo, logfile, tria);
+      Phasefield2D.run();
+#else
+      std::cout << "[ ERROR ] The selected mpi mode (" << parameters.m_mpi_type
+                << ") is not installed." << std::endl;
+#endif
+    }
+    else if (parameters.m_mpi_type == "Serial")
+    {
+      RTria<2> tria(Triangulation<2>::maximum_smoothing);
+
+      PhaseFieldMonolithicSolve<Traits<TagSerial>, RTria<2>> Phasefield2D(
+          parameters, mpiInfo, logfile, tria);
+      Phasefield2D.run();
+    }
+  }
+  else if (dim == 3)
+  {
+
+#if ENABLE_REPARTITION == 1
+    const auto setting = DTria<3>::no_automatic_repartitioning;
+#else
+    const auto setting = DTria<3>::default_setting;
+#endif
+    const auto smooth = RTria<3>::MeshSmoothing(
+        RTria<2>::smoothing_on_refinement | RTria<2>::smoothing_on_coarsening);
+    if (parameters.m_mpi_type == "PETSc")
+    {
+#ifdef HAVE_PETSC
+      DTria<3> tria(*mpiInfo.mpiCommPtr(), smooth, setting);
+
+      PhaseFieldMonolithicSolve<Traits<TagPETSc>, DTria<3>> Phasefield3D(
+          parameters, mpiInfo, logfile, tria);
+      Phasefield3D.run();
+#else
+      std::cout << "[ ERROR ] The selected mpi mode (" << parameters.m_mpi_type
+                << ") is not installed." << std::endl;
+#endif
+    }
+    else if (parameters.m_mpi_type == "Trilinos")
+    {
+#ifdef HAVE_TRILINOS
+      DTria<3> tria(*mpiInfo.mpiCommPtr(), smooth, setting);
+
+      PhaseFieldMonolithicSolve<Traits<TagTrilinos>, DTria<3>> Phasefield3D(
+          parameters, mpiInfo, logfile, tria);
+      Phasefield3D.run();
+#else
+      std::cout << "[ ERROR ] The selected mpi mode (" << parameters.m_mpi_type
+                << ") is not installed." << std::endl;
+#endif
+    }
+    else if (parameters.m_mpi_type == "Serial")
+    {
+      RTria<3> tria(Triangulation<3>::maximum_smoothing);
+
+      PhaseFieldMonolithicSolve<Traits<TagSerial>, RTria<3>> Phasefield3D(
+          parameters, mpiInfo, logfile, tria);
+      Phasefield3D.run();
+    }
+  }
+
   return 0;
 }
