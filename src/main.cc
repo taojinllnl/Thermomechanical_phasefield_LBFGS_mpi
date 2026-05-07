@@ -4564,8 +4564,11 @@ namespace PhaseField_monolithic
         if constexpr (is_mpi)
         {
           std::vector<IndexSet::size_type> indices;
-          m_dof_handler.locally_owned_dofs().fill_index_vector(indices);
-
+#if DEAL_II_VERSION_GTE(9, 4, 0)
+            indices = m_dof_handler.locally_owned_dofs().get_index_vector();
+#else
+            m_dof_handler.locally_owned_dofs().fill_index_vector(indices);
+#endif
           for (unsigned int dof : indices)
             if (homoCst.is_inhomogeneously_constrained(dof))
               homoCst.set_inhomogeneity(dof, 0.0);
