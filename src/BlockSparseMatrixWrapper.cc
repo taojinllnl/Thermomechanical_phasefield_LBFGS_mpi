@@ -100,7 +100,8 @@ std::string BlockSparseMatrixWrapper<TraitsType>
     return content;
 }
 
-
 template class la::BlockSparseMatrixWrapper<la::Traits<TagSerial>>;
 template class la::BlockSparseMatrixWrapper<la::Traits<TagPETSc>>;
-template class la::BlockSparseMatrixWrapper<la::Traits<TagTrilinos>>;
+#if HAVE_TRILINOS == 1
+  template class la::BlockSparseMatrixWrapper<la::Traits<TagTrilinos>>;
+#endif

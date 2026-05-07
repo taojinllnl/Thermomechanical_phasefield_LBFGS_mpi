@@ -193,7 +193,7 @@ LASolver<LATraits>::__cgSolve(BVector & LBFGS_r_vector,
         
     } else if constexpr (std::is_same_v<typename LATraits::TMTag, ::la::TagTrilinos>) {
         
-#ifdef HAVE_TRILINOS
+#if HAVE_TRILINOS == 1
         using PrecJacobi = dealii::TrilinosWrappers::PreconditionBlockJacobi;
         using PrecILU    = dealii::TrilinosWrappers::PreconditionILU;
         using PrecIC     = dealii::TrilinosWrappers::PreconditionIC;
@@ -222,8 +222,8 @@ LASolver<LATraits>::__cgSolve(BVector & LBFGS_r_vector,
                      LBFGS_q_vector.block(ithGroup),
                      prec);
         }
-    }
 #endif
+    }
 }
 
 
@@ -231,4 +231,34 @@ LASolver<LATraits>::__cgSolve(BVector & LBFGS_r_vector,
 
 template class PhaseField_monolithic::LASolver<la::Traits<la::TagSerial>>;
 template class PhaseField_monolithic::LASolver<la::Traits<la::TagPETSc>>;
-template class PhaseField_monolithic::LASolver<la::Traits<la::TagTrilinos>>;
+#if HAVE_TRILINOS == 1
+  template class PhaseField_monolithic::LASolver<la::Traits<la::TagTrilinos>>;
+#endif
+
+/*
+ * [  9%] Building CXX object CMakeFiles/main.dir/src/BlockDesc.cc.o
+[ 18%] Building CXX object CMakeFiles/main.dir/src/BlockSparseMatrixWrapper.cc.o
+[ 27%] Building CXX object CMakeFiles/main.dir/src/BlockVectorWrapper.cc.o
+[ 36%] Building CXX object CMakeFiles/main.dir/src/FileSystem.cc.o
+[ 45%] Building CXX object CMakeFiles/main.dir/src/LASolver.cc.o
+/home/taojin/Dropbox/dealII_Code/PhaseField/PhasefieldThermalMechanical_LBFGS_mpi/Thermomechanical_phasefield_LBFGS_mpi/src/LASolver.cc: In member function ‘void PhaseField_monolithic::LASolver<LATraits>::__directSolve(BVector&, const BVector&, const BSMatrix&)’:
+/home/taojin/Dropbox/dealII_Code/PhaseField/PhasefieldThermalMechanical_LBFGS_mpi/Thermomechanical_phasefield_LBFGS_mpi/src/LASolver.cc:137:1: error: a template declaration cannot appear at block scope
+  137 | template <typename LATraits>
+      | ^~~~~~~~
+/home/taojin/Dropbox/dealII_Code/PhaseField/PhasefieldThermalMechanical_LBFGS_mpi/Thermomechanical_phasefield_LBFGS_mpi/src/LASolver.cc:233:1: error: expected primary-expression before ‘template’
+  233 | template class PhaseField_monolithic::LASolver<la::Traits<la::TagPETSc>>;
+      | ^~~~~~~~
+/home/taojin/Dropbox/dealII_Code/PhaseField/PhasefieldThermalMechanical_LBFGS_mpi/Thermomechanical_phasefield_LBFGS_mpi/src/LASolver.cc:233:74: error: expected ‘}’ at end of input
+  233 | template class PhaseField_monolithic::LASolver<la::Traits<la::TagPETSc>>;
+      |                                                                          ^
+/home/taojin/Dropbox/dealII_Code/PhaseField/PhasefieldThermalMechanical_LBFGS_mpi/Thermomechanical_phasefield_LBFGS_mpi/src/LASolver.cc:73:1: note: to match this ‘{’
+   73 | {
+      | ^
+gmake[2]: *** [CMakeFiles/main.dir/build.make:132: CMakeFiles/main.dir/src/LASolver.cc.o] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:93: CMakeFiles/main.dir/all] Error 2
+gmake: *** [Makefile:91: all] Error 2
+ *
+ */
+
+
+

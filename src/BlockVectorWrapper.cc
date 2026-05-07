@@ -271,7 +271,8 @@ std::string BlockVectorWrapper<TraitsType>
     return content;
 }
 
-
 template class la::BlockVectorWrapper<la::Traits<TagSerial>>;
 template class la::BlockVectorWrapper<la::Traits<TagPETSc>>;
-template class la::BlockVectorWrapper<la::Traits<TagTrilinos>>;
+#if HAVE_TRILINOS == 1
+  template class la::BlockVectorWrapper<la::Traits<TagTrilinos>>;
+#endif

@@ -143,4 +143,6 @@ TimerOutputWrapper<LATraits>
 
 template class TimerOutputWrapper<la::Traits<la::TagSerial>>;
 template class TimerOutputWrapper<la::Traits<la::TagPETSc>>;
-template class TimerOutputWrapper<la::Traits<la::TagTrilinos>>;
+#if HAVE_TRILINOS == 1
+  template class TimerOutputWrapper<la::Traits<la::TagTrilinos>>;
+#endif
