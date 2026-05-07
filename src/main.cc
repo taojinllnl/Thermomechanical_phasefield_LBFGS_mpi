@@ -1919,16 +1919,16 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::get_total_solution(
 							 const BVector &solution_old,
 							 const bool is_print)
   {
-      const std::string sectionName = "Update QPH data";
+    const std::string sectionName = "Update QPH data";
     m_timer.enter_subsection(sectionName);
+
     if (is_print && m_parameters.m_output_iteration_history)
       m_logfile << " UQPH " << std::flush;
 
-      BVector solution_total(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
-      solution_total.initialize();
-      solution_total.base() =  m_solution.base() + solution_delta.base();
-        solution_total.updateRelevance();
-
+    BVector solution_total(m_mpiInfo, m_blocks_desc, /*relevance=*/true);
+    solution_total.initialize();
+    solution_total.base() =  m_solution.base() + solution_delta.base();
+    solution_total.updateRelevance();
       
     const UpdateFlags uf_UQPH(update_values | update_gradients);
     PerTaskData_UQPH  per_task_data_UQPH;
@@ -7482,8 +7482,8 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
 	    else
 	      AssertThrow(false, ExcMessage("Nonlinear solver type not implemented"));
 
-              solution_delta.updateRelevance();
-              LBFGS_update_refine.updateRelevance();
+            solution_delta.updateRelevance();
+            LBFGS_update_refine.updateRelevance();
               
 	    if (m_parameters.m_refinement_strategy == "adaptive-refine")
 	      {
@@ -7491,27 +7491,27 @@ bool PhaseFieldMonolithicSolve<LATraits, Tria>::local_refine_and_solution_transf
 		if (adp_refine_iteration == m_parameters.m_max_adaptive_refine_times)
 		  {
 		    m_solution += solution_delta;
-              m_solution.updateRelevance();
+                    m_solution.updateRelevance();
 		    break;
 		  }
               
 		mesh_is_same = local_refine_and_solution_transfer(solution_delta,
 								  LBFGS_update_refine);
               
-              solution_delta.updateRelevance();
-              LBFGS_update_refine.updateRelevance();
+                solution_delta.updateRelevance();
+                LBFGS_update_refine.updateRelevance();
               
-		if (mesh_is_same)
+	        if (mesh_is_same)
 		  {
 		    m_solution += solution_delta;
-              m_solution.updateRelevance();
+                    m_solution.updateRelevance();
 		    break;
 		  }
 	      }
 	    else if (m_parameters.m_refinement_strategy == "pre-refine")
 	      {
 		m_solution += solution_delta;
-              m_solution.updateRelevance();
+                m_solution.updateRelevance();
               
 	        break;
 	      }
