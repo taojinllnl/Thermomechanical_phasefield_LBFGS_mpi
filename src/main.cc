@@ -4514,6 +4514,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
                   m_constraints.add_line(node_xy[1]);
                   m_constraints.set_inhomogeneity(node_xy[1], 0.0);
               }
+/*
               // Remember, the essential B.C. is applied incrementally during each time step.
               // If a constant temperature is needed through time, the B.C should be set as zero.
               const int boundary_id_mid_surface_x = 3;
@@ -4522,9 +4523,9 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
                                                        Functions::ZeroFunction<dim>(m_n_components),
                                                        m_constraints,
                                                        m_fe.component_mask(x_displacement));
+ */
               
-              
-              
+/*
               // TODO: add_line
               for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
               {
@@ -4550,7 +4551,7 @@ void PhaseFieldMonolithicSolve<LATraits, Tria>::addSupportTemperature(const std:
               }
               m_constraints.add_line(node_xy[1]);
               m_constraints.set_inhomogeneity(node_xy[1], 0.0);
-
+*/
               // Remember, the essential B.C. is applied incrementally during each time step.
               // If a constant temperature is needed through time, the B.C should be set as zero.
               double delta_temperature = 0.0; // temperature change per load step
