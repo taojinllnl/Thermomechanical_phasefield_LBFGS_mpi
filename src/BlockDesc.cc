@@ -37,7 +37,7 @@ BlockDesc::__dimRangeInit(const std::vector<Block>& blocks)
     for (const Block& b : blocks)
     {
         lastIndex += b.dim;
-        ranges.push_back({firstIndex, lastIndex});
+        ranges.push_back({{firstIndex, lastIndex}});
         firstIndex = lastIndex;
     }
     return ranges;
