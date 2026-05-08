@@ -103,6 +103,11 @@ struct Traits<TagTrilinos>
 
 // add alias to simplify the code
 # if defined(HAVE_TRILINOS) || defined(HAVE_PETSC)
+
+#if !defined(DEAL_II_WITH_P4EST)
+#  error "parallel::distributed::Triangulation requires deal.II to be built with p4est support."
+#endif
+
 #ifndef DISTRIBUTED_TRIA
 #   define DISTRIBUTED_TRIA 1
 template <int dim, int spacedim = dim>
@@ -128,15 +133,16 @@ struct SolutionTransferSelector<dim, VectorType, /*is_mpi=*/false, spacedim>
 // specification for SolutionTransferSelector in mpi mode
 # if defined(HAVE_TRILINOS) || defined(HAVE_PETSC)
 #include <deal.II/distributed/solution_transfer.h>
-#   if !DEAL_II_VERSION_GTE(9, 7, 0)
 template <int dim, typename VectorType, int spacedim>
 struct SolutionTransferSelector<dim, VectorType, /*is_mpi=*/true, spacedim>
 {
+#if DEAL_II_VERSION_GTE(9, 7, 0)
+    using type = dealii::SolutionTransfer<dim, VectorType, spacedim>;
+#else
     using type = dealii::parallel::distributed::SolutionTransfer<
-    dim, VectorType, spacedim>;
+        dim, VectorType, spacedim>;
+#endif
 };
-
-#   endif
 # endif // #if defined(HAVE_TRILINOS) || defined(HAVE_PETSC)
 
 

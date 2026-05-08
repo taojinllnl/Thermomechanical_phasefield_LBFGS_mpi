@@ -408,8 +408,8 @@ namespace PhaseField_monolithic
     {
       prm.enter_subsection("Scenario");
       {
-        m_dim = prm.get_integer("dimension");
-        m_scenario = prm.get_integer("Scenario number");
+        m_dim = static_cast<unsigned int>(prm.get_integer("dimension"));
+        m_scenario = static_cast<unsigned int>(prm.get_integer("Scenario number"));
         m_logfile_name = prm.get("Log file name");
         m_output_iteration_history = prm.get_bool("Output iteration history");
         m_phasefield_name = prm.get("Phase-field model type");
@@ -423,19 +423,19 @@ namespace PhaseField_monolithic
         m_cg_t_tol = prm.get_double("CG T tolerance");
         m_refinement_strategy = prm.get("Mesh refinement strategy");
         m_repartition_ratio = prm.get_double("Repartitioning ratio");
-        m_LBFGS_m = prm.get_integer("LBFGS m");
-        m_global_refine_times = prm.get_integer("Global refinement times");
-        m_local_prerefine_times = prm.get_integer("Local prerefinement times");
+        m_LBFGS_m = static_cast<unsigned int>(prm.get_integer("LBFGS m"));
+        m_global_refine_times = static_cast<unsigned int>(prm.get_integer("Global refinement times"));
+        m_local_prerefine_times = static_cast<unsigned int>(prm.get_integer("Local prerefinement times"));
         m_max_adaptive_refine_times =
-            prm.get_integer("Max adaptive refinement times");
+          static_cast<unsigned int>(prm.get_integer("Max adaptive refinement times"));
         m_max_allowed_refinement_level =
-            prm.get_integer("Max allowed refinement level");
+          static_cast<unsigned int>(prm.get_integer("Max allowed refinement level"));
         m_phasefield_refine_threshold =
             prm.get_double("Phasefield refine threshold");
         m_allowed_max_h_l_ratio = prm.get_double("Allowed max hl ratio");
-        m_total_material_regions = prm.get_integer("Material regions");
+        m_total_material_regions = static_cast<unsigned int>(prm.get_integer("Material regions"));
         m_material_file_name = prm.get("Material data file");
-        m_reaction_force_face_id = prm.get_integer("Reaction force face ID");
+        m_reaction_force_face_id = static_cast<unsigned int>(prm.get_integer("Reaction force face ID"));
 
         m_mpi_type = prm.get("mpi type");
 
@@ -472,8 +472,8 @@ namespace PhaseField_monolithic
     {
       prm.enter_subsection("Finite element system");
       {
-        m_poly_degree = prm.get_integer("Polynomial degree");
-        m_quad_order = prm.get_integer("Quadrature order");
+        m_poly_degree = static_cast<unsigned int>(prm.get_integer("Polynomial degree"));
+        m_quad_order = static_cast<unsigned int>(prm.get_integer("Quadrature order"));
       }
       prm.leave_subsection();
     }
@@ -605,7 +605,7 @@ namespace PhaseField_monolithic
     {
       prm.enter_subsection("Nonlinear solver");
       {
-        m_max_iterations_LBFGS = prm.get_integer("Max iterations LBFGS");
+        m_max_iterations_LBFGS = static_cast<unsigned int>(prm.get_integer("Max iterations LBFGS"));
         m_relative_residual = prm.get_bool("Relative residual");
 
         m_tol_u_residual = prm.get_double("Tolerance displacement residual");
@@ -1821,7 +1821,7 @@ namespace PhaseField_monolithic
 
     void reset()
     {
-      const unsigned int n_q_points = m_solution_symm_grads_u_cell.size();
+      const std::size_t n_q_points = m_solution_symm_grads_u_cell.size();
       for (unsigned int q = 0; q < n_q_points; ++q)
       {
         m_solution_symm_grads_u_cell[q] = 0.0;
@@ -2037,8 +2037,8 @@ namespace PhaseField_monolithic
 
     void reset()
     {
-      const unsigned int n_q_points = m_Nx_phasefield.size();
-      const unsigned int n_dofs_per_cell = m_Nx_phasefield[0].size();
+      const std::size_t n_q_points = m_Nx_phasefield.size();
+      const std::size_t  n_dofs_per_cell = m_Nx_phasefield[0].size();
       for (unsigned int q_point = 0; q_point < n_q_points; ++q_point)
       {
         Assert(m_Nx_phasefield[q_point].size() == n_dofs_per_cell,
@@ -2156,8 +2156,8 @@ namespace PhaseField_monolithic
 
     void reset()
     {
-      const unsigned int n_q_points = m_Nx_phasefield.size();
-      const unsigned int n_dofs_per_cell = m_Nx_phasefield[0].size();
+      const std::size_t n_q_points = m_Nx_phasefield.size();
+      const std::size_t n_dofs_per_cell = m_Nx_phasefield[0].size();
       for (unsigned int q_point = 0; q_point < n_q_points; ++q_point)
       {
         Assert(m_Nx_phasefield[q_point].size() == n_dofs_per_cell,
@@ -4564,8 +4564,11 @@ namespace PhaseField_monolithic
         if constexpr (is_mpi)
         {
           std::vector<IndexSet::size_type> indices;
-          m_dof_handler.locally_owned_dofs().fill_index_vector(indices);
-
+#if DEAL_II_VERSION_GTE(9, 4, 0)
+            indices = m_dof_handler.locally_owned_dofs().get_index_vector();
+#else
+            m_dof_handler.locally_owned_dofs().fill_index_vector(indices);
+#endif
           for (unsigned int dof : indices)
             if (homoCst.is_inhomogeneously_constrained(dof))
               homoCst.set_inhomogeneity(dof, 0.0);
@@ -4866,7 +4869,7 @@ namespace PhaseField_monolithic
           phasefield_geometry_function_derivative(phasefield_value,
                                                   m_parameters.m_phasefield_name);
 
-      SymmetricTensor<2, dim> symm_grad_Nx_i_x_C;
+//      SymmetricTensor<2, dim> symm_grad_Nx_i_x_C;
 
       for (const unsigned int i : scratch.m_fe_values.dof_indices())
       {
@@ -7405,28 +7408,34 @@ int main(int argc, char *argv[])
 
   if (dim == 2)
   {
+#if (defined(HAVE_PETSC) && HAVE_PETSC) || (defined(HAVE_TRILINOS) && HAVE_TRILINOS)
 #if ENABLE_REPARTITION == 1
     const auto setting = DTria<2>::no_automatic_repartitioning;
 #else
     const auto setting = DTria<2>::default_setting;
 #endif
-    const auto smooth = RTria<2>::MeshSmoothing(
-        RTria<2>::smoothing_on_refinement | RTria<2>::smoothing_on_coarsening);
+      const auto smooth = RTria<2>::MeshSmoothing(
+          RTria<2>::smoothing_on_refinement | RTria<2>::smoothing_on_coarsening);
+#endif
+    
 
     if (parameters.m_mpi_type == "PETSc")
     {
-#ifdef HAVE_PETSC
+#if defined(HAVE_PETSC) && HAVE_PETSC
       DTria<2> tria(*mpiInfo.mpiCommPtr(), smooth, setting);
 
       PhaseFieldMonolithicSolve<Traits<TagPETSc>, DTria<2>> Phasefield2D(
           parameters, mpiInfo, logfile, tria);
       Phasefield2D.run();
 #else
+        std::cout << "[ ERROR ] The selected mpi mode (" << parameters.m_mpi_type
+                  << ") is not installed." << std::endl;
+        AssertThrow(false, ExcMessage("PETSc is not available on current machine."));
 #endif
     }
     else if (parameters.m_mpi_type == "Trilinos")
     {
-#ifdef HAVE_TRILINOS
+#if defined(HAVE_TRILINOS) && HAVE_TRILINOS
       DTria<2> tria(*mpiInfo.mpiCommPtr(), smooth, setting);
 
       PhaseFieldMonolithicSolve<Traits<TagTrilinos>, DTria<2>> Phasefield2D(
@@ -7435,6 +7444,7 @@ int main(int argc, char *argv[])
 #else
       std::cout << "[ ERROR ] The selected mpi mode (" << parameters.m_mpi_type
                 << ") is not installed." << std::endl;
+        AssertThrow(false, ExcMessage("Trilinos is not available on current machine."));
 #endif
     }
     else if (parameters.m_mpi_type == "Serial")
@@ -7449,29 +7459,34 @@ int main(int argc, char *argv[])
   else if (dim == 3)
   {
 
+#if (defined(HAVE_PETSC) && HAVE_PETSC) || (defined(HAVE_TRILINOS) && HAVE_TRILINOS)
 #if ENABLE_REPARTITION == 1
     const auto setting = DTria<3>::no_automatic_repartitioning;
 #else
     const auto setting = DTria<3>::default_setting;
 #endif
-    const auto smooth = RTria<3>::MeshSmoothing(
-        RTria<2>::smoothing_on_refinement | RTria<2>::smoothing_on_coarsening);
+      const auto smooth = RTria<3>::MeshSmoothing(
+          RTria<2>::smoothing_on_refinement | RTria<2>::smoothing_on_coarsening);
+#else
+#endif
+    
     if (parameters.m_mpi_type == "PETSc")
     {
-#ifdef HAVE_PETSC
+#if defined(HAVE_PETSC) && HAVE_PETSC
       DTria<3> tria(*mpiInfo.mpiCommPtr(), smooth, setting);
 
       PhaseFieldMonolithicSolve<Traits<TagPETSc>, DTria<3>> Phasefield3D(
           parameters, mpiInfo, logfile, tria);
       Phasefield3D.run();
 #else
-      std::cout << "[ ERROR ] The selected mpi mode (" << parameters.m_mpi_type
-                << ") is not installed." << std::endl;
+        std::cout << "[ ERROR ] The selected mpi mode (" << parameters.m_mpi_type
+                  << ") is not installed." << std::endl;
+        AssertThrow(false, ExcMessage("PETSc is not available on current machine."));
 #endif
     }
     else if (parameters.m_mpi_type == "Trilinos")
     {
-#ifdef HAVE_TRILINOS
+#if defined(HAVE_TRILINOS) && HAVE_TRILINOS
       DTria<3> tria(*mpiInfo.mpiCommPtr(), smooth, setting);
 
       PhaseFieldMonolithicSolve<Traits<TagTrilinos>, DTria<3>> Phasefield3D(
@@ -7480,6 +7495,7 @@ int main(int argc, char *argv[])
 #else
       std::cout << "[ ERROR ] The selected mpi mode (" << parameters.m_mpi_type
                 << ") is not installed." << std::endl;
+        AssertThrow(false, ExcMessage("Trilinos is not available on current machine."));
 #endif
     }
     else if (parameters.m_mpi_type == "Serial")

@@ -142,7 +142,11 @@ TimerOutputWrapper<LATraits>
 
 
 template class TimerOutputWrapper<la::Traits<la::TagSerial>>;
+
+#if defined(HAVE_PETSC) && HAVE_PETSC
 template class TimerOutputWrapper<la::Traits<la::TagPETSc>>;
-#if HAVE_TRILINOS == 1
+#endif
+
+#if defined(HAVE_TRILINOS) && HAVE_TRILINOS
   template class TimerOutputWrapper<la::Traits<la::TagTrilinos>>;
 #endif
