@@ -5243,8 +5243,8 @@ namespace PhaseField_monolithic
         alpha = 1.0;
         iSmallSteps = 0;
       }
-      m_logfile  << " ¬ " << std::fixed << std::setprecision(2)
-          << std::setw(6) << std::scientific << alpha_tmp << std::flush;
+      m_logfile  << " ¬ " << std::fixed << std::setprecision(3)
+          << std::setw(7) << std::scientific << alpha_tmp << std::flush;
     }
     else
     {
@@ -5756,7 +5756,7 @@ namespace PhaseField_monolithic
         {
           m_logfile << "                | ";
           m_logfile << " CONVERGED! " << std::fixed << std::setprecision(3)
-                    << std::setw(7) << std::scientific << "    ----    " << "   "
+                    << std::setw(7) << std::scientific << "   ----   " << "   "
                     << m_error_residual_norm.m_norm << "  "
                     << m_error_residual_norm.m_u << "  "
                     << m_error_residual_norm.m_d << "  "
