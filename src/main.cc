@@ -5243,7 +5243,8 @@ namespace PhaseField_monolithic
         alpha = 1.0;
         iSmallSteps = 0;
       }
-      m_logfile  << " ¬ " << std::fixed << std::setprecision(3) << std::setw(7) << std::scientific << alpha_tmp << std::flush;
+      m_logfile  << " ¬ " << std::fixed << std::setprecision(2)
+          << std::setw(6) << std::scientific << alpha_tmp << std::flush;
     }
     else
     {
@@ -5611,18 +5612,18 @@ namespace PhaseField_monolithic
   template <typename LATraits, typename Tria>
   void PhaseFieldMonolithicSolve<LATraits, Tria>::print_conv_header_LBFGS()
   {
-    static const unsigned int l_width = 160;
-    m_logfile << '\t' << '\t';
+    static const unsigned int l_width = 148;
+    m_logfile << '\t';
     for (unsigned int i = 0; i < l_width; ++i)
       m_logfile << '_';
     m_logfile << std::endl;
 
-    m_logfile << "    \t\t\t\t  SOLVER STEP (LBFGS) "
-              << "   |  LS-alpha     Energy      Res_Norm    "
+    m_logfile << "  \t\t SOLVER STEP (LBFGS) "
+              << "  |  LS-alpha     Energy     Res_Norm   "
               << " Res_u      Res_d      Res_t    Inc_Norm   "
               << " Inc_u      Inc_d      Inc_t" << std::endl;
 
-    m_logfile << '\t' << '\t';
+    m_logfile  << '\t';
     for (unsigned int i = 0; i < l_width; ++i)
       m_logfile << '_';
     m_logfile << std::endl;
@@ -5670,7 +5671,7 @@ namespace PhaseField_monolithic
          ++LBFGS_iteration)
     {
       if (m_parameters.m_output_iteration_history)
-        m_logfile << '\t' << '\t' << std::setw(4) << LBFGS_iteration << ' '
+        m_logfile << '\t' << std::setw(4) << LBFGS_iteration << ' '
                   << std::flush;
 
       make_constraints(LBFGS_iteration);
@@ -5687,13 +5688,13 @@ namespace PhaseField_monolithic
         LBFGS_update.distributeCst(m_constraints);
         solution_delta += LBFGS_update;
         solution_delta.updateRelevance();
-
+/*
         if (m_parameters.m_output_iteration_history)
         {
           m_logfile << " --- " << std::flush;
           m_logfile << " --- " << std::flush;
         }
-
+*/
         m_solution.updateRelevance();
         update_qph_incremental(solution_delta, m_solution, false);
         if (m_parameters.m_output_iteration_history)
@@ -5728,8 +5729,8 @@ namespace PhaseField_monolithic
       }
       if (m_parameters.m_output_iteration_history)
       {
-        m_logfile << " --- " << std::flush;
-        m_logfile << " --- " << std::flush;
+        //m_logfile << " --- " << std::flush;
+        //m_logfile << " --- " << std::flush;
         m_logfile << " --- " << std::flush;
       }
 
@@ -5764,12 +5765,16 @@ namespace PhaseField_monolithic
                     << m_error_update_norm.m_u << "  " << m_error_update_norm.m_d
                     << "  " << m_error_update_norm.m_t << "  " << std::endl;
 
-          m_logfile << '\t' << '\t';
-          for (unsigned int i = 0; i < 160; ++i)
+          m_logfile << '\t';
+          for (unsigned int i = 0; i < 148; ++i)
             m_logfile << '_';
           m_logfile << std::endl;
             
-          m_logfile << "\t\tNote: \n\t\t\t¬: the computed step length was smaller than the threshold; the value after this symbol is the original computed step length before correction.\n\t\t\t«: a previously detected sequence of small steps has ended.\n\t\t\t•: the maximum number of line-search iterations was reached." << std::endl;
+          m_logfile << "\t\tNote: \n"
+              "\t\t\t¬: the computed step length was smaller than the assigned threshold. \n"
+              "\t\t\t   the value after this symbol is the originally computed step length before correction.\n"
+              "\t\t\t«: a previously detected sequence of small steps has ended.\n"
+              "\t\t\t•: the maximum number of line-search iterations was reached." << std::endl;
         }
 
         m_logfile << "\t\tConvergence is reached after " << LBFGS_iteration
@@ -6002,7 +6007,7 @@ namespace PhaseField_monolithic
       {
         const double energy_functional = calculate_energy_functional();
 
-        m_logfile << " | " << std::fixed << std::setprecision(4) << std::setw(1)
+        m_logfile << " | " << std::fixed << std::setprecision(2) << std::setw(1)
                   << std::scientific << "" << line_search_parameter << std::fixed
                   << std::setprecision(6) << std::setw(1) << std::scientific
                   << "  " << energy_functional << std::fixed
