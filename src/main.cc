@@ -5193,6 +5193,7 @@ namespace PhaseField_monolithic
 
     unsigned int i = 1;
 
+    bool reached_ls_max = false;
     for (; i <= ls_max; ++i)
     {
       delta_alpha_new =
@@ -5205,6 +5206,7 @@ namespace PhaseField_monolithic
       if (i == ls_max)
       {
         alpha = 1.0;
+        reached_ls_max = true;
         break;
       }
 
@@ -5223,14 +5225,16 @@ namespace PhaseField_monolithic
 
       delta_alpha_old = delta_alpha_new;
     }
+      
+    m_logfile << std::setw(3) << i << std::flush;
 
     const double smallStepThreshold = 1.0e-3;
-    const unsigned int allowedAtempts = 3;
-
+    const unsigned int allowedAttempts = 3;
+    
     if (alpha < smallStepThreshold)
     {
       const double alpha_tmp = alpha;
-      if (iSmallSteps++ < allowedAtempts)
+      if (iSmallSteps++ < allowedAttempts)
       {
         alpha = smallStepThreshold;
       }
@@ -5239,16 +5243,19 @@ namespace PhaseField_monolithic
         alpha = 1.0;
         iSmallSteps = 0;
       }
-      m_logfile << i << "¬" << alpha_tmp << std::flush;
+      m_logfile  << " ¬ " << std::fixed << std::setprecision(3) << std::setw(7) << std::scientific << alpha_tmp << std::flush;
     }
     else
     {
       if (iSmallSteps)
       {
-        m_logfile << "«" << std::flush;
+        m_logfile  << " « " << (reached_ls_max ? " • " : "   ") <<  "      " <<  std::flush;
         iSmallSteps = 0;
       }
-      m_logfile << i << (i == ls_max ? "•" : "") << std::flush;
+      else 
+      {
+        m_logfile << (reached_ls_max ? " • " : "   ") << "         " << std::flush;
+      }
     }
 
     return alpha;
@@ -5604,14 +5611,14 @@ namespace PhaseField_monolithic
   template <typename LATraits, typename Tria>
   void PhaseFieldMonolithicSolve<LATraits, Tria>::print_conv_header_LBFGS()
   {
-    static const unsigned int l_width = 140;
+    static const unsigned int l_width = 160;
     m_logfile << '\t' << '\t';
     for (unsigned int i = 0; i < l_width; ++i)
       m_logfile << '_';
     m_logfile << std::endl;
 
-    m_logfile << "                  SOLVER STEP (LBFGS)  "
-              << " |  LS-alpha     Energy      Res_Norm    "
+    m_logfile << "    \t\t\t\t  SOLVER STEP (LBFGS) "
+              << "   |  LS-alpha     Energy      Res_Norm    "
               << " Res_u      Res_d      Res_t    Inc_Norm   "
               << " Inc_u      Inc_d      Inc_t" << std::endl;
 
@@ -5663,7 +5670,7 @@ namespace PhaseField_monolithic
          ++LBFGS_iteration)
     {
       if (m_parameters.m_output_iteration_history)
-        m_logfile << '\t' << '\t' << std::setw(2) << LBFGS_iteration << ' '
+        m_logfile << '\t' << '\t' << std::setw(4) << LBFGS_iteration << ' '
                   << std::flush;
 
       make_constraints(LBFGS_iteration);
@@ -5691,7 +5698,7 @@ namespace PhaseField_monolithic
         update_qph_incremental(solution_delta, m_solution, false);
         if (m_parameters.m_output_iteration_history)
         {
-          m_logfile << " ---  |" << std::flush;
+          m_logfile << " ---                 |" << std::flush;
           m_logfile << std::endl;
         }
         continue;
@@ -5746,9 +5753,9 @@ namespace PhaseField_monolithic
       {
         if (m_parameters.m_output_iteration_history)
         {
-          m_logfile << " | ";
+          m_logfile << "                | ";
           m_logfile << " CONVERGED! " << std::fixed << std::setprecision(3)
-                    << std::setw(7) << std::scientific << "    ----    " << "  "
+                    << std::setw(7) << std::scientific << "    ----    " << "   "
                     << m_error_residual_norm.m_norm << "  "
                     << m_error_residual_norm.m_u << "  "
                     << m_error_residual_norm.m_d << "  "
@@ -5758,9 +5765,11 @@ namespace PhaseField_monolithic
                     << "  " << m_error_update_norm.m_t << "  " << std::endl;
 
           m_logfile << '\t' << '\t';
-          for (unsigned int i = 0; i < 140; ++i)
+          for (unsigned int i = 0; i < 160; ++i)
             m_logfile << '_';
           m_logfile << std::endl;
+            
+          m_logfile << "\t\tNote: \n\t\t\t¬: the computed step length was smaller than the threshold; the value after this symbol is the original computed step length before correction.\n\t\t\t«: a previously detected sequence of small steps has ended.\n\t\t\t•: the maximum number of line-search iterations was reached." << std::endl;
         }
 
         m_logfile << "\t\tConvergence is reached after " << LBFGS_iteration
@@ -5993,7 +6002,7 @@ namespace PhaseField_monolithic
       {
         const double energy_functional = calculate_energy_functional();
 
-        m_logfile << " | " << std::fixed << std::setprecision(3) << std::setw(1)
+        m_logfile << " | " << std::fixed << std::setprecision(4) << std::setw(1)
                   << std::scientific << "" << line_search_parameter << std::fixed
                   << std::setprecision(6) << std::setw(1) << std::scientific
                   << "  " << energy_functional << std::fixed
