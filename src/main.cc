@@ -1524,10 +1524,9 @@ namespace PhaseField_monolithic
         Assert((poisson_ratio <= 0.5) & (poisson_ratio >= -1.0),
                ExcInternalError());
 
-        if (reference_temperature != m_parameters.m_ref_temperature)
-          Assert(false,
-                 ExcMessage("Reference temperature inconsistent "
-                            "in the parameters.prm file and materialDataFile"));
+        AssertThrow(reference_temperature == m_parameters.m_ref_temperature,
+                    ExcMessage("Reference temperature inconsistent "
+                               "in the parameters.prm file and materialDataFile"));
 
         m_logfile << "\tRegion " << material_region << " : " << std::endl;
         m_logfile << "\t\tLame lambda = " << lame_lambda << std::endl;
@@ -3149,7 +3148,7 @@ namespace PhaseField_monolithic
     for (unsigned int i = 0; i < 80; ++i)
       m_logfile << "*";
     m_logfile << std::endl;
-    m_logfile << "\t\t\t\tQuenching test (3D, half size, 1mm thickness)"
+    m_logfile << "\t\t\t\tQuenching test (3D, one side shock)"
               << std::endl;
     for (unsigned int i = 0; i < 80; ++i)
       m_logfile << "*";
@@ -3157,13 +3156,13 @@ namespace PhaseField_monolithic
 
     AssertThrow(dim == 3, ExcMessage("The dimension has to be 3D!"));
 
-    double const length = 25.0;   // mm
-    double const width = 10.0;    // mm
-    double const thickness = 1.0; // mm
+    double const length = 5.0;   // mm
+    double const width = 1.0;    // mm
+    double const thickness = 0.4; // mm
 
     std::vector<unsigned int> repetitions(dim, 1);
-    repetitions[0] = 100;
-    repetitions[1] = 40;
+    repetitions[0] = 50;
+    repetitions[1] = 10;
     repetitions[2] = 4;
 
     GridGenerator::subdivided_hyper_rectangle(
@@ -3172,8 +3171,7 @@ namespace PhaseField_monolithic
 
     if (m_parameters.m_refinement_strategy == "pre-refine")
     {
-      AssertThrow(false,
-                  ExcMessage("3D problem cannot afford a pre-refined mesh!"));
+      m_triangulation.refine_global(m_parameters.m_global_refine_times);
     }
     else if (m_parameters.m_refinement_strategy == "adaptive-refine")
     {
@@ -3190,12 +3188,7 @@ namespace PhaseField_monolithic
             if (!cell->is_locally_owned())
               continue;
           }
-          if ((cell->center()[0] > 0.0 && cell->center()[0] < 0.13) ||
-              (cell->center()[1] > 0.0 && cell->center()[1] < 0.13) ||
-              (cell->center()[1] > (width - 0.13) && cell->center()[1] < width) ||
-              (cell->center()[2] > 0.0 && cell->center()[2] < 0.13) ||
-              (cell->center()[2] > (thickness - 0.13) &&
-               cell->center()[2] < thickness))
+          if (cell->center()[1] < 0.2)
           {
             // Because the mesh is not imported from gmsh, there is no
             // material ID associated with each cell. We need to manually
@@ -3771,11 +3764,7 @@ namespace PhaseField_monolithic
       addSupportTemperature(
           [](const Point<dim> &pnt) -> bool
           {
-            return (std::fabs(pnt[0] - 0.0) < 1.0e-9) ||
-                   (std::fabs(pnt[1] - 0.0) < 1.0e-9) ||
-                   (std::fabs(pnt[1] - 10.0) < 1.0e-9) ||
-                   (std::fabs(pnt[2] - 0.0) < 1.0e-9) ||
-                   (std::fabs(pnt[2] - 1.0) < 1.0e-9);
+            return (std::fabs(pnt[1] - 0.0) < 1.0e-9);
           });
     }
     else if (m_parameters.m_scenario == 8)
@@ -4129,7 +4118,7 @@ namespace PhaseField_monolithic
       }
       else if (m_parameters.m_scenario == 7)
       {
-        if constexpr (is_mpi)
+/*        if constexpr (is_mpi)
         {
 
           // the constrainted points
@@ -4301,44 +4290,45 @@ namespace PhaseField_monolithic
           m_constraints.add_line(node_xy[1]);
           m_constraints.set_inhomogeneity(node_xy[1], 0.0);
         }
+*/
 
-        const int boundary_id_mid_surface_x = 3;
+        const int boundary_id_left_surface_x = 0;
         VectorTools::interpolate_boundary_values(
-            m_dof_handler, boundary_id_mid_surface_x,
+            m_dof_handler, boundary_id_left_surface_x,
             Functions::ZeroFunction<dim>(m_n_components), m_constraints,
             m_fe.component_mask(x_displacement));
+
+        const int boundary_id_right_surface_x = 3;
+        VectorTools::interpolate_boundary_values(
+            m_dof_handler, boundary_id_right_surface_x,
+            Functions::ZeroFunction<dim>(m_n_components), m_constraints,
+            m_fe.component_mask(x_displacement));
+
+        const int boundary_id_front_surface_z = 2;
+        VectorTools::interpolate_boundary_values(
+            m_dof_handler, boundary_id_front_surface_z,
+            Functions::ZeroFunction<dim>(m_n_components), m_constraints,
+            m_fe.component_mask(z_displacement));
+
+        const int boundary_id_back_surface_z = 5;
+        VectorTools::interpolate_boundary_values(
+            m_dof_handler, boundary_id_back_surface_z,
+            Functions::ZeroFunction<dim>(m_n_components), m_constraints,
+            m_fe.component_mask(z_displacement));
+
+        const int boundary_id_top_surface_y = 4;
+        VectorTools::interpolate_boundary_values(
+            m_dof_handler, boundary_id_top_surface_y,
+            Functions::ZeroFunction<dim>(m_n_components), m_constraints,
+            m_fe.component_mask(y_displacement));
 
         // Remember, the essential B.C. is applied incrementally during each time
         // step. If a constant temperature is needed through time, the B.C should
         // be set as zero.
         double delta_temperature = 0.0; // temperature change per load step
-        const int boundary_id_left_surface = 0;
+        const int boundary_id_bottom_surface_y = 1;
         VectorTools::interpolate_boundary_values(
-            m_dof_handler, boundary_id_left_surface,
-            Functions::ConstantFunction<dim>(delta_temperature, m_n_components),
-            m_constraints, m_fe.component_mask(temperature));
-
-        const int boundary_id_front_surface = 1;
-        VectorTools::interpolate_boundary_values(
-            m_dof_handler, boundary_id_front_surface,
-            Functions::ConstantFunction<dim>(delta_temperature, m_n_components),
-            m_constraints, m_fe.component_mask(temperature));
-
-        const int boundary_id_bottom_surface = 2;
-        VectorTools::interpolate_boundary_values(
-            m_dof_handler, boundary_id_bottom_surface,
-            Functions::ConstantFunction<dim>(delta_temperature, m_n_components),
-            m_constraints, m_fe.component_mask(temperature));
-
-        const int boundary_id_back_surface = 4;
-        VectorTools::interpolate_boundary_values(
-            m_dof_handler, boundary_id_back_surface,
-            Functions::ConstantFunction<dim>(delta_temperature, m_n_components),
-            m_constraints, m_fe.component_mask(temperature));
-
-        const int boundary_id_top_surface = 5;
-        VectorTools::interpolate_boundary_values(
-            m_dof_handler, boundary_id_top_surface,
+            m_dof_handler, boundary_id_bottom_surface_y,
             Functions::ConstantFunction<dim>(delta_temperature, m_n_components),
             m_constraints, m_fe.component_mask(temperature));
       }

@@ -12,15 +12,18 @@ subsection Scenario
   # 4 - square shear   (2D structured mesh)
   # 5 - quenching test (2D structured mesh, quarter size)
   # 6 - quenching test (2D structured mesh, half size)
-  # 7 - quenching test (3D half size, 1mm thickness)
+  # 7 - quenching test (3D structured mesh, one side shock)
   set Scenario number = 7
   
   # Name of the log file
-  set Log file name = quenching_structured
+  set Log file name = quenching_structured_3D.log
   
   # Shall we write the iteration history to the log file? (yes or no)
   set Output iteration history = yes
   
+  # Choose phase-field model type (AT1 or AT2)
+  set Phase-field model type = AT2
+
   # Does the heat conduciton equaiton contains the mechanical coupling term? (yes or no)
   set Coupling on heat equation = no
 
@@ -34,10 +37,10 @@ subsection Scenario
   set Linear solver type = CG
   
   # If the linear solver is CG, set the CG converge tolerance of inverse K_uu
-  set CG u tolerance = 1.0e-9  
+  set CG u tolerance = 1.0e-6
 
   # If the linear solver is CG, set the CG converge tolerance of inverse K_dd
-  set CG d tolerance = 1.0e-9  
+  set CG d tolerance = 1.0e-9
 
   # If the linear solver is CG, set the CG converge tolerance of inverse K_TT
   set CG T tolerance = 1.0e-9
@@ -45,11 +48,11 @@ subsection Scenario
   # Mesh refinement strategy (pre-refine or adaptive-refine)
   set Mesh refinement strategy = pre-refine
  
-   # The threshold for repartitioning
+  # The threshold for repartitioning
   set Repartitioning ratio = 1.5
 
   # Number of vectors used in LBFGS
-  set LBFGS m = 40
+  set LBFGS m = 20
 
   # Global refinement times across the entire domain
   set Global refinement times = 2
@@ -83,7 +86,7 @@ subsection Scenario
   set Reaction force face ID = 0
   
   # underlying mpi type: (PETSc|Trilinos|Serial)
-  set mpi type = Trilinos
+  set mpi type = PETSc
   
   # Configuration directory
   set Config dir = ./Case_7/pre_refine/
@@ -131,7 +134,7 @@ subsection Nonlinear solver
   set Relative residual = no
 
   # Displacement residual tolerance
-  set Tolerance displacement residual       = 1.0e-6
+  set Tolerance displacement residual       = 1.0e-4
 
   # Phasefield residual tolerance
   set Tolerance phasefield residual         = 1.0e-6
@@ -140,13 +143,13 @@ subsection Nonlinear solver
   set Tolerance temperature residual        = 1.0e-6
   
   # Displacement increment tolerance
-  set Tolerance displacement increment      = 1.0e-3
+  set Tolerance displacement increment      = 1.0e-1
   
   # Phasefield increment tolerance
-  set Tolerance phasefield increment        = 1.0e-3
+  set Tolerance phasefield increment        = 1.0e-1
   
   # Temperature increment tolerance
-  set Tolerance temperature increment       = 1.0e-3
+  set Tolerance temperature increment       = 1.0e-1
 end
 
 subsection Time
