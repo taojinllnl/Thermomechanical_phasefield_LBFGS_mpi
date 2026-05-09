@@ -55,7 +55,7 @@ subsection Scenario
   set LBFGS m = 20
 
   # Global refinement times across the entire domain
-  set Global refinement times = 2
+  set Global refinement times = 3
   
   # Local pre-refinement times along the crack path that is known a priori
   set Local prerefinement times = 4
