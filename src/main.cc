@@ -5193,6 +5193,9 @@ namespace PhaseField_monolithic
 
     unsigned int i = 1;
 
+    const double smallStepThreshold = 1.0e-3;
+    const unsigned int allowedAttempts = 3;
+
     bool reached_ls_max = false;
     for (; i <= ls_max; ++i)
     {
@@ -5205,7 +5208,10 @@ namespace PhaseField_monolithic
 
       if (i == ls_max)
       {
-        alpha = 1.0;
+        //alpha = 1.0;
+        // We want to avoid taking too large line search step
+        // since this might derail the convergence
+        alpha = smallStepThreshold;
         reached_ls_max = true;
         break;
       }
@@ -5227,9 +5233,6 @@ namespace PhaseField_monolithic
     }
       
     m_logfile << std::setw(3) << i << std::flush;
-
-    const double smallStepThreshold = 1.0e-3;
-    const unsigned int allowedAttempts = 3;
     
     if (alpha < smallStepThreshold)
     {
@@ -5240,7 +5243,10 @@ namespace PhaseField_monolithic
       }
       else
       {
-        alpha = 1.0;
+        //alpha = 1.0;
+        // We want to avoid taking too large line search step
+        // since this might derail the convergence
+        alpha = smallStepThreshold;
         iSmallSteps = 0;
       }
       m_logfile  << " ¬ " << std::fixed << std::setprecision(3)
