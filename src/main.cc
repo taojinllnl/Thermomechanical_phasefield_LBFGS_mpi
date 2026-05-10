@@ -46,7 +46,58 @@
  *refinement. Int J Numer Methods Eng. 2024;e7572. doi: 10.1002/nme.7572.
  */
 
-#define ENABLE_REPARTITION 0
+
+/*
+ * Repartitioning mode
+ *
+ * If this compile-time macro is set to 0, the customized repartitioning
+ * strategy is disabled. In this case, the default repartitioning behavior
+ * of deal.II is used, and the parameter `Repartitioning ratio` in the .prm
+ * file is ignored.
+ *
+ * In the default repartitioning mode, repartitioning is performed whenever
+ * mesh refinement is executed. Therefore, even if only a small number of
+ * cells are refined or coarsened, the mesh may still be repartitioned.
+ *
+ * Pros:
+ *   1. The default repartitioning strategy is provided by deal.II and may be
+ *      more robust across different mesh-adaptation cases.
+ *   2. The solution and history variables are consistently transferred,
+ *      projected, and recovered during refinement and repartitioning 
+ *      simultaneously.
+ *
+ * Cons:
+ *   1. Repartitioning may be triggered even when the mesh change is very small.
+ *      This can introduce unnecessary communication overhead, especially for
+ *      large-scale MPI simulations.
+ *   2. The user-defined `Repartitioning ratio` is ignored in this mode.
+ *
+ *
+ * If the customized repartitioning mode is enabled, the program first evaluates
+ * the workload distribution among MPI ranks. The workload imbalance is measured
+ * by
+ *
+ *     ratio = max number of locally owned active cells among all ranks
+ *           / min number of locally owned active cells among all ranks.
+ *
+ * Repartitioning is triggered only when this ratio exceeds the prescribed
+ * threshold defined by `Repartitioning ratio` in the .prm file.
+ *
+ * Pros:
+ *   1. Repartitioning is performed less frequently, which can reduce
+ *      communication overhead.
+ *   2. The repartitioning tolerance can be adjusted for different problems.
+ *
+ * Cons:
+ *   1. When repartitioning is eventually triggered, the solution and history
+ *      variables still need to be transferred, projected, and recovered one
+ *      more time.
+ *   2. This customized strategy may not work with some versions of deal.II.
+ *      In particular, some versions may throw an exception related to uncleared
+ *      refinement flags, even though these flags cannot be cleared automatically
+ *      or manually in the current workflow.
+ */
+#define ENABLE_CUSTOMIZED_REPARTITION_MODE 0
 
 #include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/grid_in.h>
@@ -1184,7 +1235,7 @@ namespace PhaseField_monolithic
   public:
     constexpr static int dim = Tria::dimension;
 
-  #if ENABLE_REPARTITION == 1
+  #if ENABLE_CUSTOMIZED_REPARTITION_MODE == 1
     constexpr static bool supportRepartioning = true;
   #else
     constexpr static bool supportRepartioning = false;
@@ -6375,7 +6426,7 @@ namespace PhaseField_monolithic
     return std::make_pair(total_strain_energy, crack_energy_dissipation);
   }
 
-  #if ENABLE_REPARTITION == 0
+  #if ENABLE_CUSTOMIZED_REPARTITION_MODE == 0
   template <typename LATraits, typename Tria>
   void PhaseFieldMonolithicSolve<LATraits, Tria>::repartition(
       BVector &/*solution_next_step*/,
@@ -7419,7 +7470,7 @@ int main(int argc, char *argv[])
   if (dim == 2)
   {
 #if (defined(HAVE_PETSC) && HAVE_PETSC) || (defined(HAVE_TRILINOS) && HAVE_TRILINOS)
-#if ENABLE_REPARTITION == 1
+#if ENABLE_CUSTOMIZED_REPARTITION_MODE == 1
     const auto setting = DTria<2>::no_automatic_repartitioning;
 #else
     const auto setting = DTria<2>::default_setting;
@@ -7470,7 +7521,7 @@ int main(int argc, char *argv[])
   {
 
 #if (defined(HAVE_PETSC) && HAVE_PETSC) || (defined(HAVE_TRILINOS) && HAVE_TRILINOS)
-#if ENABLE_REPARTITION == 1
+#if ENABLE_CUSTOMIZED_REPARTITION_MODE == 1
     const auto setting = DTria<3>::no_automatic_repartitioning;
 #else
     const auto setting = DTria<3>::default_setting;
