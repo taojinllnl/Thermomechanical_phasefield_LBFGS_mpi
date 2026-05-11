@@ -62,7 +62,28 @@ public:
     void summary(std::ostream& stream);
     
     
+    template <bool is_mpi>
+    static bool
+    syncBool(const bool localFlag, const MPI_Comm &mpiComm);
+    
 };
 
+
+template <bool is_mpi>
+bool
+MPIInfo::syncBool(const bool localFlag, const MPI_Comm &mpiComm)
+{
+  if constexpr (is_mpi)
+    {
+      // accumulate local flag over all ranks
+      const unsigned int localFlagInt = localFlag ? 1u : 0u;
+      const unsigned int globalFlagInt =
+        dealii::Utilities::MPI::sum(localFlagInt, mpiComm);
+      return (globalFlagInt > 0u);
+    }
+}
+
+
+} //namespace common
 
 #endif /* MPIInfo_h */
