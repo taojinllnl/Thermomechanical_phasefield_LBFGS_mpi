@@ -3047,9 +3047,9 @@ namespace PhaseField_monolithic
               Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
           initiation_point_refine_unfinished = (global_flag > 0u);
         }
+        if (initiation_point_refine_unfinished)
+          m_triangulation.execute_coarsening_and_refinement();
       }
-      if (initiation_point_refine_unfinished)
-        m_triangulation.execute_coarsening_and_refinement();
     }
     else
     {
