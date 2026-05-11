@@ -1262,7 +1262,6 @@ namespace PhaseField_monolithic
     void run();
 
   private:
-    struct CstPnt;
 
     struct PerTaskData_ASM;
     struct ScratchData_ASM;
@@ -1934,65 +1933,6 @@ namespace PhaseField_monolithic
           scratch.m_degrade_conductivity_or_not);
   }
 
-  template <typename LATraits, typename Tria>
-  struct PhaseFieldMonolithicSolve<LATraits, Tria>::CstPnt
-  {
-    const Point<dim> pnt;
-    const std::vector<unsigned int> localDoFs;
-    const std::size_t nCsts;
-    bool found;
-    std::vector<types::global_dof_index> globalDoFs;
-    std::vector<double> cstValues;
-
-    CstPnt(const Point<dim> &pnt, const std::vector<unsigned int> &localDoFs,
-           const std::vector<double> &cstValues)
-        : pnt(std::move(pnt)), localDoFs(std::move(localDoFs)),
-          nCsts(localDoFs.size()), found(false),
-          globalDoFs(nCsts, numbers::invalid_dof_index),
-          cstValues(std::move(cstValues))
-    {
-      Assert(localDoFs.size() == cstValues.size(),
-             ExcMessage("The number of the constrained dofs should equal to the "
-                        "one in constrained values."));
-    }
-
-    template <typename CellIter>
-    void extractDoFs(const CellIter &cell, const unsigned int ithVertexInCell)
-    {
-      // loop over constrained dofs
-      for (unsigned int k = 0; k < nCsts; ++k)
-      {
-        globalDoFs[k] = cell->vertex_dof_index(ithVertexInCell, localDoFs[k]);
-      }
-    }
-
-    bool applyCsts(const IndexSet &localDoFs,
-                   AffineConstraints<double> &constraints) const
-    {
-      // skip non-found points
-      if (!found)
-        return false;
-
-      // loop over constrained dofs
-      for (unsigned int j = 0; j < nCsts; ++j)
-      {
-        const types::global_dof_index dof = globalDoFs[j];
-        const double value = cstValues[j];
-
-        // verify the DoF is locally owned
-        if (localDoFs.is_element(dof))
-        {
-          // add constraint on unconstrained dofs to avoid repeaded csts
-          if (!constraints.is_constrained(dof))
-          {
-            constraints.add_line(dof);
-            constraints.set_inhomogeneity(dof, value);
-          }
-        }
-      }
-      return true;
-    }
-  };
 
   template <typename LATraits, typename Tria>
   struct PhaseFieldMonolithicSolve<LATraits, Tria>::PerTaskData_ASM
