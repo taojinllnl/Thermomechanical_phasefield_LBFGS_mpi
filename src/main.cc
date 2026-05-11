@@ -4154,23 +4154,20 @@ namespace PhaseField_monolithic
             m_dof_handler, boundary_id_mid_surface_y,
             Functions::ZeroFunction<dim>(m_n_components), m_constraints,
             m_fe.component_mask(y_displacement));
-        // TODO: add_line
-        typename Triangulation<dim>::active_vertex_iterator vertex_itr;
-        vertex_itr = m_triangulation.begin_active_vertex();
-        std::vector<types::global_dof_index> node_xy(m_fe.dofs_per_vertex);
-
-        for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
+          
+        if (!m_cst_maker.isAddedSelectors())
         {
-          if ((std::fabs(vertex_itr->vertex()[0] - 5.0) < 1.0e-9) &&
-              (std::fabs(vertex_itr->vertex()[1] - 2.0) < 1.0e-9) &&
-              (std::fabs(vertex_itr->vertex()[2] - 0.5) < 1.0e-9))
-          {
-            node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
-          }
+          const CstPnt<Tria> fixedZ({{5.0, 2.0, 0.5}},  // point (5.0, 2.0, 0.5)
+                                       CstEntry<Tria>(2)); // fixed: z
+              
+          m_cst_maker.addCstSelector(fixedZ);
         }
-        m_constraints.add_line(node_xy[2]);
-        m_constraints.set_inhomogeneity(node_xy[2], 0.0);
-
+        m_cst_maker.makeCstIfPrepareNeeded(m_update_dofs_for_cst,
+                                                     m_constraints,
+                                                     m_triangulation,
+                                                     m_dof_handler);
+          
+       
         // Remember, the essential B.C. is applied incrementally during each time
         // step. If a constant temperature is needed through time, the B.C should
         // be set as zero.
