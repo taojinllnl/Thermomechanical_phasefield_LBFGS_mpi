@@ -3870,8 +3870,6 @@ namespace PhaseField_monolithic
             Functions::ConstantFunction<dim>(delta_temperature, m_n_components),
             m_constraints, m_fe.component_mask(temperature));
 
-        std::vector<types::global_dof_index> node_xy(m_fe.dofs_per_vertex);
-
         const int boundary_id_top_surface = 1;
         /*
          VectorTools::interpolate_boundary_values(m_dof_handler,
