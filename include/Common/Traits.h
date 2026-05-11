@@ -12,7 +12,8 @@
 #include <deal.II/grid/tria.h>
 #include <deal.II/numerics/solution_transfer.h>
 
-namespace la {
+namespace common
+{
 
 struct TagSerial    {};
 struct TagPETSc     {};
@@ -38,7 +39,7 @@ struct Traits<TagSerial>
     
     static constexpr bool IS_MPI = false;
 };
-}
+} // namespace common
 
 // alias for serial Triangulation
 template <int dim, int spacedim = dim>
@@ -53,7 +54,8 @@ using RTria = ::dealii::Triangulation<dim, spacedim>;
 #include <deal.II/lac/petsc_solver.h>
 #include <deal.II/lac/petsc_precondition.h>
 #include <deal.II/distributed/tria.h>
-namespace la {
+namespace common
+{
 template <>
 struct Traits<TagPETSc>
 {
@@ -67,7 +69,7 @@ struct Traits<TagPETSc>
     
     static constexpr bool IS_MPI = true;
 };
-}
+} // namespace common
 
 
 #endif
@@ -80,7 +82,8 @@ struct Traits<TagPETSc>
 #include <deal.II/lac/trilinos_solver.h>
 #include <deal.II/lac/trilinos_precondition.h>
 #include <deal.II/distributed/tria.h>
-namespace la {
+namespace common
+{
 template <>
 struct Traits<TagTrilinos>
 {
@@ -94,7 +97,7 @@ struct Traits<TagTrilinos>
     
     static constexpr bool IS_MPI = true;
 };
-}
+} // namespace common
 
 #endif
 

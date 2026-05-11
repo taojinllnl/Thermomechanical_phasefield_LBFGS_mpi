@@ -12,6 +12,9 @@
 #include <memory>
 #include <ostream>
 
+namespace common
+{
+
 /**
  * MPIInfo is a small wrapper that provides a unified interface for
  * serial execution and MPI-parallel execution.
@@ -25,7 +28,7 @@
  * - If MPI support is enabled (MPI mode), this class initializes MPI
  *   (via `dealii::Utilities::MPI::MPI_InitFinalize`) during construction and
  *   provides access to the communicator `MPI_Comm`.
- *   This class must be initialized before calling any MPI-related functions and keep alive during entire executable running. 
+ *   This class must be initialized before calling any MPI-related functions and keep alive during entire executable running.
  */
 
 

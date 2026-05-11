@@ -56,8 +56,8 @@ template <typename LATraits>
 class LASolver
 {
 public:
-    using BSMatrix  = ::la::BlockSparseMatrixWrapper<LATraits>;
-    using BVector   = ::la::BlockVectorWrapper<LATraits>;
+    using BSMatrix  = ::common::BlockSparseMatrixWrapper<LATraits>;
+    using BVector   = ::common::BlockVectorWrapper<LATraits>;
     
 private:
     const SolverType        __type;
@@ -71,8 +71,8 @@ private:
     
     const std::array<Tol, 3> __tolList;
     
-    const BlockDesc&        __blockDesc;
-    const MPIInfo&          __mpiInfo;
+    const ::common::BlockDesc&        __blockDesc;
+    const ::common::MPIInfo&          __mpiInfo;
     
     void __directSolve(BVector & LBFGS_r_vector,
                        const BVector & LBFGS_q_vector,
@@ -90,8 +90,8 @@ public:
              const double        cg_u_tol,
              const double        cg_d_tol,
              const double        cg_T_tol,
-             const BlockDesc&    blockDesc,
-             const MPIInfo&      mpiInfo);
+             const ::common::BlockDesc&    blockDesc,
+             const ::common::MPIInfo&      mpiInfo);
     
     void solve(BVector & LBFGS_r_vector,
                const BVector & LBFGS_q_vector,

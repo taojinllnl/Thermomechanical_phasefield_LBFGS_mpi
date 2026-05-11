@@ -1241,18 +1241,19 @@ namespace PhaseField_monolithic
     constexpr static bool supportRepartioning = false;
   #endif
 
-    using BSMatrix = ::la::BlockSparseMatrixWrapper<LATraits>;
-    using BVector = ::la::BlockVectorWrapper<LATraits>;
+    using BSMatrix = ::common::BlockSparseMatrixWrapper<LATraits>;
+    using BVector = ::common::BlockVectorWrapper<LATraits>;
 
     using CellDataStorageT =
         CellDataStorage<typename Tria::cell_iterator, PointHistory<dim>>;
 
     // variable to tell if this is class is for mpi mode
     static constexpr bool is_mpi =
-        !std::is_same_v<typename LATraits::TMTag, ::la::TagSerial>;
+        !std::is_same_v<typename LATraits::TMTag, ::common::TagSerial>;
 
     PhaseFieldMonolithicSolve(const Parameters::AllParameters &parameters,
-                              const MPIInfo &mpiInfo, ConditionalOStream &logfile,
+                              const ::common::MPIInfo &mpiInfo,
+                              ConditionalOStream &logfile,
                               Tria &triangulation);
 
     virtual ~PhaseFieldMonolithicSolve() = default;
@@ -1277,15 +1278,15 @@ namespace PhaseField_monolithic
 
     Time m_time;
 
-    const MPIInfo &m_mpiInfo;
+    const ::common::MPIInfo &m_mpiInfo;
 
     // use ConditionalOStream as logfile stream to allow only on rank to do so
     ConditionalOStream &m_logfile;
 
     //    use TimerOutputWrapper to support both MPI and serial modes
-    mutable TimerOutputWrapper<LATraits> m_timer;
+    mutable ::common::TimerOutputWrapper<LATraits> m_timer;
 
-    BlockDesc m_blocks_desc;
+    ::common::BlockDesc m_blocks_desc;
 
     DoFHandler<dim> m_dof_handler;
     FESystem<dim> m_fe;
@@ -2251,7 +2252,7 @@ namespace PhaseField_monolithic
   // constructor has no return type
   template <typename LATraits, typename Tria>
   PhaseFieldMonolithicSolve<LATraits, Tria>::PhaseFieldMonolithicSolve(
-      const Parameters::AllParameters &parameters, const MPIInfo &mpiInfo,
+      const Parameters::AllParameters &parameters, const ::common::MPIInfo &mpiInfo,
       ConditionalOStream &logfile, Tria &triangulation)
       : m_parameters(parameters), m_triangulation(triangulation),
         m_time(m_parameters.m_end_time), m_mpiInfo(mpiInfo), m_logfile(logfile),
@@ -3679,7 +3680,7 @@ namespace PhaseField_monolithic
     m_constraints.clear();
     if constexpr (is_mpi)
     {
-      VersionAdapter::cstReinit(m_constraints, m_dof_handler.locally_owned_dofs(),
+      ::common::VersionAdapter::cstReinit(m_constraints, m_dof_handler.locally_owned_dofs(),
                                 *m_blocks_desc.localRelevantPartition());
     }
     DoFTools::make_hanging_node_constraints(m_dof_handler, m_constraints);
@@ -3885,7 +3886,7 @@ namespace PhaseField_monolithic
       m_constraints.clear();
       if constexpr (is_mpi)
       {
-        VersionAdapter::cstReinit(
+        ::common::VersionAdapter::cstReinit(
             m_constraints, m_dof_handler.locally_owned_dofs(),
             DoFTools::extract_locally_relevant_dofs(m_dof_handler));
       }
@@ -4626,7 +4627,7 @@ namespace PhaseField_monolithic
 
         if constexpr (is_mpi)
         {
-          VersionAdapter::cstReinit(
+          ::common::VersionAdapter::cstReinit(
               m_constraints, m_dof_handler.locally_owned_dofs(),
               DoFTools::extract_locally_relevant_dofs(m_dof_handler));
         }
@@ -7394,7 +7395,7 @@ int main(int argc, char *argv[])
 
   using namespace ::dealii;
   using namespace PhaseField_monolithic;
-  using namespace la;
+  using namespace ::common;
 
   if (argc < 2)
     AssertThrow(false, ExcMessage("Usage: ./main [options] <input.prm>"));
@@ -7433,13 +7434,13 @@ int main(int argc, char *argv[])
   // create dirctories with sub-directories in the case folder
   {
 
-    std::vector<::FileSystem::SubDir> subDirs = {
-        ::FileSystem::SubDir("ori", parameters.oriDir),
-        ::FileSystem::SubDir("hist", parameters.histDir),
-        ::FileSystem::SubDir("results", parameters.resultsDir),
+    std::vector<FileSystem::SubDir> subDirs = {
+        FileSystem::SubDir("ori", parameters.oriDir),
+        FileSystem::SubDir("hist", parameters.histDir),
+        FileSystem::SubDir("results", parameters.resultsDir),
     };
 
-    ::FileSystem::outputDirSystem(mpiInfo, parameters.m_output_dir,
+    FileSystem::outputDirSystem(mpiInfo, parameters.m_output_dir,
                                   parameters.subDir, subDirs);
   }
 

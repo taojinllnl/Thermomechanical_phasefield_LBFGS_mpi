@@ -12,6 +12,9 @@
 
 #include "BlockDesc.h"
 
+namespace common
+{
+
 class VersionAdapter
 {
 public:
@@ -21,5 +24,6 @@ public:
 };
 
 
+}
 
 #endif /* VersionAdapter_h */

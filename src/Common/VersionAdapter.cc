@@ -7,7 +7,8 @@
 #include "../../include/Common/VersionAdapter.h"
 
 
-using namespace dealii;
+using namespace ::dealii;
+using namespace ::common;
 
 
 void VersionAdapter

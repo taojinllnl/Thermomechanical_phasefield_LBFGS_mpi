@@ -16,6 +16,9 @@
 
 #include "MPIInfo.h"
 
+
+namespace common
+{
 /**
  * This class creates folders for output by a relative path.
  *
@@ -31,8 +34,8 @@ public:
         SubDir(const std::string& subDir,
                std::string&      prmDir);
         
-        };
-        
+    };
+    
     
     // return present working directory
     static std::string pwd();
@@ -78,7 +81,7 @@ private:
     
 };
 
-
+} // namespace common
 
 
 #endif /* FileSystem_h */

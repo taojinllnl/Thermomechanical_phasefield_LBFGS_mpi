@@ -27,8 +27,8 @@ LASolver<LATraits>
            const double        cg_u_tol,
            const double        cg_d_tol,
            const double        cg_T_tol,
-           const BlockDesc&    blockDesc,
-           const MPIInfo&      mpiInfo)
+           const ::common::BlockDesc&    blockDesc,
+           const ::common::MPIInfo&      mpiInfo)
 : __type(type)
 , __cg_u_tol(cg_u_tol)
 , __cg_d_tol(cg_d_tol)
@@ -72,7 +72,7 @@ LASolver<LATraits>::__directSolve(BVector & LBFGS_r_vector,
                                   const BSMatrix& tangent_matrix)
 {
     using namespace dealii;
-    if constexpr (std::is_same_v<typename LATraits::TMTag, ::la::TagSerial>) {
+    if constexpr (std::is_same_v<typename LATraits::TMTag, ::common::TagSerial>) {
         for (unsigned int ithGroup = 0; ithGroup < __blockDesc.nBlocks(); ++ithGroup)
         {
             SparseDirectUMFPACK A_direct;
@@ -80,7 +80,7 @@ LASolver<LATraits>::__directSolve(BVector & LBFGS_r_vector,
             A_direct.vmult(LBFGS_r_vector.block(ithGroup),
                            LBFGS_q_vector.block(ithGroup));
         }
-    } else if constexpr (std::is_same_v<typename LATraits::TMTag, ::la::TagPETSc>) {
+    } else if constexpr (std::is_same_v<typename LATraits::TMTag, ::common::TagPETSc>) {
         // https://dealii.org/current/doxygen/deal.II/classPETScWrappers_1_1SparseDirectMUMPS.html
         
 #if defined(HAVE_PETSC) && HAVE_PETSC
@@ -120,7 +120,7 @@ LASolver<LATraits>::__directSolve(BVector & LBFGS_r_vector,
 #else
         AssertThrow(false, ExcMessage("PETSc is not available on current machine."));
 #endif
-    } else if constexpr (std::is_same_v<typename LATraits::TMTag, ::la::TagTrilinos>) {
+    } else if constexpr (std::is_same_v<typename LATraits::TMTag, ::common::TagTrilinos>) {
         // https://dealii.org/current/doxygen/deal.II/classTrilinosWrappers_1_1SolverDirect.html
         
 #if defined(HAVE_TRILINOS) && HAVE_TRILINOS
@@ -149,7 +149,7 @@ LASolver<LATraits>::__cgSolve(BVector & LBFGS_r_vector,
                               const BSMatrix& tangent_matrix)
 {
     using namespace dealii;
-    if constexpr (std::is_same_v<typename LATraits::TMTag, ::la::TagSerial>) {
+    if constexpr (std::is_same_v<typename LATraits::TMTag, ::common::TagSerial>) {
         for (unsigned int ithGroup = 0; ithGroup < __blockDesc.nBlocks(); ++ithGroup)
         {
             SolverControl            solver_control(__tolList[ithGroup].nIters,
@@ -166,7 +166,7 @@ LASolver<LATraits>::__cgSolve(BVector & LBFGS_r_vector,
                      preconditioner);
         }
         
-    } else if constexpr (std::is_same_v<typename LATraits::TMTag, ::la::TagPETSc>) {
+    } else if constexpr (std::is_same_v<typename LATraits::TMTag, ::common::TagPETSc>) {
 #if defined(HAVE_PETSC) && HAVE_PETSC
         using PrecJacobi = dealii::PETScWrappers::PreconditionBlockJacobi;
         using PrecILU    = dealii::PETScWrappers::PreconditionILU;
@@ -182,7 +182,7 @@ LASolver<LATraits>::__cgSolve(BVector & LBFGS_r_vector,
         
         
         using PrecType = PrecNone;
-        using CGSolver = MPICGSolver<MatBlock, PETScWrappers::SolverCG>;
+        using CGSolver = ::common::MPICGSolver<MatBlock, PETScWrappers::SolverCG>;
         
         for (unsigned int ithGroup = 0; ithGroup < __blockDesc.nBlocks(); ++ithGroup)
         {
@@ -201,7 +201,7 @@ LASolver<LATraits>::__cgSolve(BVector & LBFGS_r_vector,
         AssertThrow(false, ExcMessage("PETSc is not available on current machine."));
 #endif
         
-    } else if constexpr (std::is_same_v<typename LATraits::TMTag, ::la::TagTrilinos>) {
+    } else if constexpr (std::is_same_v<typename LATraits::TMTag, ::common::TagTrilinos>) {
         
 #if defined(HAVE_TRILINOS) && HAVE_TRILINOS
         using PrecJacobi = dealii::TrilinosWrappers::PreconditionBlockJacobi;
@@ -217,7 +217,7 @@ LASolver<LATraits>::__cgSolve(BVector & LBFGS_r_vector,
         
         
         using PrecType = PrecI;
-        using CGSolver   =  MPICGSolver<MatBlock, TrilinosWrappers::SolverCG>;
+        using CGSolver   =  ::common::MPICGSolver<MatBlock, TrilinosWrappers::SolverCG>;
 
         for (unsigned int ithGroup = 0; ithGroup < __blockDesc.nBlocks(); ++ithGroup)
         {
@@ -241,12 +241,12 @@ LASolver<LATraits>::__cgSolve(BVector & LBFGS_r_vector,
 
 
 
-template class PhaseField_monolithic::LASolver<la::Traits<la::TagSerial>>;
+template class PhaseField_monolithic::LASolver<::common::Traits<::common::TagSerial>>;
 
 #if defined(HAVE_PETSC) && HAVE_PETSC
-template class PhaseField_monolithic::LASolver<la::Traits<la::TagPETSc>>;
+template class PhaseField_monolithic::LASolver<::common::Traits<::common::TagPETSc>>;
 #endif
 
 #if defined(HAVE_TRILINOS) && HAVE_TRILINOS
-  template class PhaseField_monolithic::LASolver<la::Traits<la::TagTrilinos>>;
+  template class PhaseField_monolithic::LASolver<::common::Traits<::common::TagTrilinos>>;
 #endif

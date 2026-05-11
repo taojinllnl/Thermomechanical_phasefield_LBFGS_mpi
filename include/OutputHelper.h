@@ -48,15 +48,15 @@ class OutputHelper
 public:
     static constexpr int  dim       = Tria::dimension;
     static constexpr bool is_mpi    =
-        !std::is_same_v<typename LATraits::TMTag, ::la::TagSerial>;
+        !std::is_same_v<typename LATraits::TMTag, ::common::TagSerial>;
 
-    using BVector  = ::la::BlockVectorWrapper<LATraits>;
+    using BVector  = ::common::BlockVectorWrapper<LATraits>;
     
     using CellDataStorage = dealii::CellDataStorage<typename Tria::cell_iterator, PointHistory>;
     
     using DataComponentInterpretationList = std::vector<dealii::DataComponentInterpretation::DataComponentInterpretation>;
 private:
-    const MPIInfo&                      __mpiInfo;
+    const ::common::MPIInfo&                      __mpiInfo;
                 
     Tria&                               __tria;
     
@@ -102,7 +102,7 @@ private:
     void __partitioning(dealii::DataOut<dim>& data_out) const;
     
 public:
-    OutputHelper(const MPIInfo&                   mpiInfo,
+    OutputHelper(const ::common::MPIInfo&                   mpiInfo,
                  Tria&                            tria,
                  const dealii::DoFHandler<dim>&   dof_handler,
                  const dealii::QGauss<dim>&       qf_cell,
@@ -167,7 +167,7 @@ OutputHelper<LATraits, Tria, PointHistory>
 
 template <typename LATraits, typename Tria, typename PointHistory>
 OutputHelper<LATraits, Tria, PointHistory>
-::OutputHelper(const MPIInfo&                   mpiInfo,
+::OutputHelper(const ::common::MPIInfo&                   mpiInfo,
                Tria&                            tria,
                const dealii::DoFHandler<dim>&   dof_handler,
                const dealii::QGauss<dim>&       qf_cell,
@@ -613,7 +613,7 @@ void OutputHelper<LATraits, Tria, PointHistory>
         const IndexSet locally_relevant_dofs =
             DoFTools::extract_locally_relevant_dofs(dof_handler_L2);
         
-        VersionAdapter::cstReinit(constraints, locally_owned_dofs, locally_relevant_dofs);
+        ::common::VersionAdapter::cstReinit(constraints, locally_owned_dofs, locally_relevant_dofs);
 //        constraints.reinit(locally_owned_dofs, locally_relevant_dofs);
     }
     DoFTools::make_hanging_node_constraints(dof_handler_L2, constraints);

@@ -24,7 +24,7 @@
 
 
 
-namespace la
+namespace common
 {
 
 
@@ -181,7 +181,7 @@ BlockVectorWrapper<TraitsType>
 
 
 
-}
+} // namespace common
 
 
 

@@ -6,8 +6,8 @@
 
 #include "../../include/Common/BlockVectorWrapper.h"
 
-using namespace la;
-using namespace dealii;
+using namespace ::dealii;
+using namespace ::common;
 
 template <typename TraitsType>
 BlockVectorWrapper<TraitsType>
@@ -246,7 +246,7 @@ std::string BlockVectorWrapper<TraitsType>
         content += "\t\tmean: " + std::to_string(block.mean_value()) + "\n";
         content += "\t\tdot: " + std::to_string(block * block) + "\n";
     }
-    if constexpr (std::is_same_v<typename TraitsType::TMTag, ::la::TagPETSc>) {
+    if constexpr (std::is_same_v<typename TraitsType::TMTag, ::common::TagPETSc>) {
         if(__relevancePtr) {
             content += "__relevancePtr: \n";
             content += "l1_norm: " + std::to_string(__relevancePtr->l1_norm()) + "\n";
@@ -271,10 +271,10 @@ std::string BlockVectorWrapper<TraitsType>
     return content;
 }
 
-template class la::BlockVectorWrapper<la::Traits<TagSerial>>;
+template class ::common::BlockVectorWrapper<::common::Traits<::common::TagSerial>>;
 #if defined(HAVE_PETSC) && HAVE_PETSC
-template class la::BlockVectorWrapper<la::Traits<TagPETSc>>;
+template class ::common::BlockVectorWrapper<::common::Traits<::common::TagPETSc>>;
 #endif
 #if defined(HAVE_TRILINOS) && HAVE_TRILINOS
-  template class la::BlockVectorWrapper<la::Traits<TagTrilinos>>;
+  template class ::common::BlockVectorWrapper<::common::Traits<::common::TagTrilinos>>;
 #endif
