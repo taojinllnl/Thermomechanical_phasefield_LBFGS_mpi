@@ -102,18 +102,20 @@ struct Traits<TagTrilinos>
 
 
 // add alias to simplify the code
-# if defined(HAVE_TRILINOS) || defined(HAVE_PETSC)
 
-#if !defined(DEAL_II_WITH_P4EST)
-#  error "parallel::distributed::Triangulation requires deal.II to be built with p4est support."
-#endif
-
-#ifndef DISTRIBUTED_TRIA
-#   define DISTRIBUTED_TRIA 1
+// add alias to simplify the code
+#if defined(HAVE_TRILINOS) || defined(HAVE_PETSC)
+#  if defined(DEAL_II_WITH_P4EST)
+#    ifndef DISTRIBUTED_TRIA
+#      define DISTRIBUTED_TRIA 1
 template <int dim, int spacedim = dim>
 using DTria = ::dealii::parallel::distributed::Triangulation<dim, spacedim>;
-#   endif
-# endif
+#    endif
+#  else
+#    warning \
+      "Distributed triangulation is not supported because the current deal.II library was built without P4EST."
+#  endif
+#endif
 
 
 // templated SolutionTransferSelector
