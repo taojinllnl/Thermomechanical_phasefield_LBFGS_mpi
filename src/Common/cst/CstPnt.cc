@@ -28,6 +28,17 @@ CstPnt<Tria>::CstPnt(const CstPnt &cstPnt)
   , tol(cstPnt.tol)
 {}
 
+
+template <typename Tria>
+CstPnt<Tria>::CstPnt(const std::array<double, 3> &pntCoorinates,
+                     const CstEntry<Tria>        &csts,
+                     const double                 tol)
+  : CstSelectorBase<Tria>({{csts}})
+  , pntCoorinates(std::array<double, 3>(pntCoorinates))
+  , tol(tol)
+{}
+
+
 template <typename Tria>
 std::size_t
 CstPnt<Tria>::expectedNumberOfCstPoints() const

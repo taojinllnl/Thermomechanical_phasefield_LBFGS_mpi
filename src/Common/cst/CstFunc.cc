@@ -33,6 +33,24 @@ CstFunc<Tria>::CstFunc(const SelFunc                     &selectorFunc,
 
 
 template <typename Tria>
+CstFunc<Tria>::CstFunc(const SelFunc &selectorFunc, const CstEntry<Tria> &csts)
+  : CstSelectorBase<Tria>({{csts}})
+  , selectorFunc(std::make_shared<SelFunc>(selectorFunc))
+  , valuesFunc(nullptr)
+{}
+
+
+template <typename Tria>
+CstFunc<Tria>::CstFunc(const SelFunc         &selectorFunc,
+                       const CstEntry<Tria>  &csts,
+                       const ValuesAtPntFunc &valuesFunc)
+  : CstSelectorBase<Tria>({{csts}})
+  , selectorFunc(std::make_shared<SelFunc>(selectorFunc))
+  , valuesFunc(std::make_shared<ValuesAtPntFunc>(valuesFunc))
+{}
+
+
+template <typename Tria>
 CstFunc<Tria>::CstFunc(const CstFunc &cstFunc)
   : CstSelectorBase<Tria>(cstFunc)
   , selectorFunc(cstFunc.selectorFunc)

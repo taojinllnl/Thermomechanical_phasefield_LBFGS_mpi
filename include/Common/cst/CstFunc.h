@@ -47,6 +47,13 @@ namespace bcs
             const std::vector<CstEntry<Tria>> &csts,
             const ValuesAtPntFunc             &valuesFunc);
 
+
+    CstFunc(const SelFunc &selectorFunc, const CstEntry<Tria> &csts);
+
+    CstFunc(const SelFunc         &selectorFunc,
+            const CstEntry<Tria>  &csts,
+            const ValuesAtPntFunc &valuesFunc);
+
     CstFunc(const CstFunc &cstFunc);
 
 

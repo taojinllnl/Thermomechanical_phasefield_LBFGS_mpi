@@ -31,6 +31,10 @@ namespace bcs
            const std::vector<CstEntry<Tria>> &csts,
            const double                       tol = 1e-9);
 
+    CstPnt(const std::array<double, 3> &point,
+           const CstEntry<Tria>        &csts,
+           const double                 tol = 1e-9);
+
     CstPnt(const CstPnt &cstPnt);
 
 
