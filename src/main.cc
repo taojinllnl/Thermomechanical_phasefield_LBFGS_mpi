@@ -175,6 +175,8 @@
 
 #include "../include/Common/VersionAdapter.h"
 
+#include "../include/Common/cst/CstMaker.h"
+
 namespace PhaseField_monolithic
 {
   using namespace dealii;
@@ -1333,6 +1335,8 @@ namespace PhaseField_monolithic
     LASolver<LATraits> m_solver;
 
     OutputHelper<LATraits, Tria, PointHistory<dim>> m_output;
+      
+    ::bcs::CstMaker<Tria> m_cst_maker;
 
     struct Errors
     {
@@ -2284,7 +2288,8 @@ namespace PhaseField_monolithic
                  m_parameters.m_cg_u_tol, m_parameters.m_cg_d_tol,
                  m_parameters.m_cg_t_tol, m_blocks_desc, m_mpiInfo),
         m_output(m_mpiInfo, m_triangulation, m_dof_handler, m_qf_cell,
-                 m_parameters.m_scenario, m_parameters.m_mpi_type)
+                 m_parameters.m_scenario, m_parameters.m_mpi_type),
+        m_cst_maker(m_mpiInfo)
   {
   }
 
