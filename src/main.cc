@@ -157,23 +157,23 @@
 #include <iostream>
 #include <vector>
 
-#include "../include/FileSystem.h"
+#include "../include/Common/FileSystem.h"
 #include "../include/SpectrumDecomposition.h"
 #include "../include/Utilities.h"
 
-#include "../include/MPIInfo.h"
+#include "../include/Common/MPIInfo.h"
 
-#include "../include/TimerOutputWrapper.h"
+#include "../include/Common/TimerOutputWrapper.h"
 
-#include "../include/BlockDesc.h"
-#include "../include/BlockSparseMatrixWrapper.h"
-#include "../include/BlockVectorWrapper.h"
+#include "../include/Common/BlockDesc.h"
+#include "../include/Common/BlockSparseMatrixWrapper.h"
+#include "../include/Common/BlockVectorWrapper.h"
 
 #include "../include/LASolver.h"
 
 #include "../include/OutputHelper.h"
 
-#include "../include/VersionAdapter.h"
+#include "../include/Common/VersionAdapter.h"
 
 namespace PhaseField_monolithic
 {

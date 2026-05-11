@@ -7,10 +7,10 @@
 #ifndef OutputHelper_hpp
 #define OutputHelper_hpp
 
-#include "Traits.h"
-#include "BlockVectorWrapper.h"
-#include "MPIInfo.h"
-#include "VersionAdapter.h"
+#include "Common/Traits.h"
+#include "Common/BlockVectorWrapper.h"
+#include "Common/MPIInfo.h"
+#include "Common/VersionAdapter.h"
 
 #include <memory>
 #include <array>
