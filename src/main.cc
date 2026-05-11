@@ -3827,8 +3827,16 @@ namespace PhaseField_monolithic
     }
 
     if (m_parameters.m_output_iteration_history)
-      m_logfile << " CST " << std::flush;
-
+    {
+      if (!m_update_dofs_for_cst)
+      {
+        m_logfile << " CST " << std::flush;
+      }
+      else
+      {
+      m_logfile << "[CST]" << std::flush;
+      }
+    }
     set_bcs_id();
 
     if (apply_dirichlet_bc)
