@@ -4,7 +4,7 @@
 //
 //
 
-#include "../include/BlockSparseMatrixWrapper.h"
+#include "../../include/Common/BlockSparseMatrixWrapper.h"
 using namespace la;
 
 template <typename TraitsType>

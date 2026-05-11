@@ -4,7 +4,7 @@
 //
 //
 
-#include "../include/MPIInfo.h"
+#include "../../include/Common/MPIInfo.h"
 
 using namespace dealii;
 using MPIInit = Utilities::MPI::MPI_InitFinalize;

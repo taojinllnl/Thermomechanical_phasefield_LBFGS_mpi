@@ -13,15 +13,15 @@
 #include <deal.II/lac/sparse_direct.h>
 #include <deal.II/lac/precondition.h>
 
-#include "Traits.h"
+#include "Common/Traits.h"
 
-#include "BlockVectorWrapper.h"
-#include "BlockSparseMatrixWrapper.h"
+#include "Common/BlockVectorWrapper.h"
+#include "Common/BlockSparseMatrixWrapper.h"
 
-#include "BlockDesc.h"
-#include "MPIInfo.h"
+#include "Common/BlockDesc.h"
+#include "Common/MPIInfo.h"
 
-#include "MPICGSolver.h"
+#include "Common/MPICGSolver.h"
 
 namespace PhaseField_monolithic {
 

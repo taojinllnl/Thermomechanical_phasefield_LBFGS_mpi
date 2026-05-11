@@ -4,7 +4,7 @@
 //
 //
 
-#include "../include/BlockVectorWrapper.h"
+#include "../../include/Common/BlockVectorWrapper.h"
 
 using namespace la;
 using namespace dealii;
