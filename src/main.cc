@@ -1336,6 +1336,7 @@ namespace PhaseField_monolithic
 
     OutputHelper<LATraits, Tria, PointHistory<dim>> m_output;
       
+    bool m_update_dofs_for_cst;
     ::bcs::CstMaker<Tria> m_cst_maker;
 
     struct Errors
@@ -2289,6 +2290,7 @@ namespace PhaseField_monolithic
                  m_parameters.m_cg_t_tol, m_blocks_desc, m_mpiInfo),
         m_output(m_mpiInfo, m_triangulation, m_dof_handler, m_qf_cell,
                  m_parameters.m_scenario, m_parameters.m_mpi_type),
+        m_update_dofs_for_cst(false)
         m_cst_maker(m_mpiInfo)
   {
   }
@@ -3729,7 +3731,9 @@ namespace PhaseField_monolithic
     m_solution.initialize();
 
     setup_qph();
-
+      
+    m_update_dofs_for_cst = true;
+      
     m_timer.leave_subsection(sectionName);
   }
 
