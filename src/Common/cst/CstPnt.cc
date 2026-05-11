@@ -40,6 +40,29 @@ CstPnt<Tria>::CstPnt(const std::array<double, 3> &pntCoorinates,
 
 
 template <typename Tria>
+CstPnt<Tria>::CstPnt(const std::array<double, 3>       &pntCoorinates,
+                     const std::vector<CstEntry<Tria>> &csts,
+                     const ValuesAtPntFunc             &valuesFunc,
+                     const double                       tol)
+  : CstSelectorBase<Tria>(csts)
+  , pntCoorinates(std::array<double, 3>(pntCoorinates))
+  , valuesFunc(std::make_shared<ValuesAtPntFunc>(valuesFunc))
+  , tol(tol)
+{}
+
+
+template <typename Tria>
+CstPnt<Tria>::CstPnt(const std::array<double, 3> &pntCoorinates,
+                     const CstEntry<Tria>        &csts,
+                     const ValuesAtPntFunc       &valuesFunc,
+                     const double                 tol)
+  : CstSelectorBase<Tria>({{csts}})
+  , pntCoorinates(std::array<double, 3>(pntCoorinates))
+  , valuesFunc(std::make_shared<ValuesAtPntFunc>(valuesFunc))
+  , tol(tol)
+{}
+
+template <typename Tria>
 std::size_t
 CstPnt<Tria>::expectedNumberOfCstPoints() const
 {
@@ -55,6 +78,22 @@ CstPnt<Tria>::expectedNumberOfCstEntries() const
 }
 
 
+template <typename Tria>
+void
+CstPnt<Tria>::assignValues(const double         x,
+                           const double         y,
+                           const double         z,
+                           std::vector<double> &values)
+{
+  if (valuesFunc)
+    {
+      (*valuesFunc)(x, y, z, values);
+    }
+  else
+    {
+      CstSelectorBase<Tria>::assignValues(x, y, z, values);
+    }
+}
 
 template <typename Tria>
 bool
