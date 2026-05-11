@@ -4090,16 +4090,16 @@ namespace PhaseField_monolithic
 
         if (!m_cst_maker.isAddedSelectors())
         {
-          const CstEntry<Tria> fixedZCst(2);
+          const CstEntry<Tria> fixedZ(2);
             
           const CstPnt<Tria> fixedZ1({{0.0, 0.0, 0.5}},  // point (0, 0, 0.5)
-                                     fixedZCst);         // fixed: z
+                                     fixedZ);         // fixed: z
           
           const CstPnt<Tria> fixedZ2({{5.0, 0.0, 0.5}},  // point (5.0, 0.0, 0.5)
-                                     fixedZCst);         // fixed: z
+                                     fixedZ);         // fixed: z
             
           const CstPnt<Tria> fixedZ3({{0.0, 2.0, 0.5}},  // point (0.0, 2.0, 0.5)
-                                     fixedZCst);         // fixed: z
+                                     fixedZ);         // fixed: z
             
           m_cst_maker.addCstSelector(fixedZ1);
           m_cst_maker.addCstSelector(fixedZ2);
