@@ -150,6 +150,13 @@ namespace bcs
     std::array<double, 3>            pntCoorinates{};
     std::shared_ptr<ValuesAtPntFunc> valuesFunc{};
 
+  protected:
+    virtual void
+    assignValues(const double         x,
+                 const double         y,
+                 const double         z,
+                 std::vector<double> &values) override;
+
   public:
     const double tol;
 
@@ -183,12 +190,6 @@ namespace bcs
     expectedNumberOfCstPoints() const override;
     virtual std::size_t
     expectedNumberOfCstEntries() const override;
-
-    virtual void
-    assignValues(const double         x,
-                 const double         y,
-                 const double         z,
-                 std::vector<double> &values) override;
 
     virtual bool
     isSelectedPnt(const ::dealii::Point<spacedim> &point) override;
