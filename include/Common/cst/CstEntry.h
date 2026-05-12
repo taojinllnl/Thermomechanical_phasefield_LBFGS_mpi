@@ -30,6 +30,40 @@
 namespace bcs
 {
 
+
+  /**
+   The class is used as a standard input argument to describe and record the
+   boundary conditions on points, including ith-dof *at the point*, and the
+   prescribed value for this dof. This class is *node-independent* and only
+   categorizes the boundary condition by both **ith dofs and values**.
+
+   For example:
+
+    A system has 5 primary known at nodes: (u_x, u_y, u_z, T, d).
+    The ith dofs at node:                  [0,   1,   2,   3, 4].
+
+    2 nodes [120.0, 105.5, -32.5] and [-25.0, 15.0, 12.5] have 3 constraints:
+        - fixed displacement along y,
+        - constantly constrained displacement 1.5 long z
+        - constantly constrained temperature = 20.0 for T
+   The CstEntry<Tria> is node-independent, and these three constraints can be
+   described as:
+
+   ```cpp
+    // u_y = 0
+    const CstEntry<Tria>  u_y(1); // or const CstEntry<Tria>  fixeX(1, 0.0);
+    // u_z = 1.5
+    const CstEntry<Tria>  u_z(2, 1.5);
+    // T = 20.0
+    const CstEntry<Tria>  T(3, 20.0);
+   ```
+
+
+   For more complex boundary conditions, such as a constrained value is
+   *function-dependent*, the given value in the constructor is not important in
+   the declaration and will be updated by a specific lambda expression passed
+   into the constructor of CstPnt<Tria> or CstFunc<Tria>.
+  */
   template <typename Tria>
   struct CstEntry
   {
@@ -61,6 +95,10 @@ namespace bcs
 
 
 
+  /**
+   This class is an *internal* interface for the resolved constraint as an
+   output.
+   */
   template <typename Tria>
   struct CstEntryResult : public CstEntry<Tria>
   {
