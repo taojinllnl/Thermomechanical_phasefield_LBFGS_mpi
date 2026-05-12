@@ -17,6 +17,7 @@ CstPnt<Tria>::CstPnt(const std::array<double, 3>       &pntCoorinates,
                      const double                       tol)
   : CstSelectorBase<Tria>(csts)
   , pntCoorinates(std::array<double, 3>(pntCoorinates))
+  , valuesFunc(nullptr)
   , tol(tol)
 {}
 
@@ -25,6 +26,7 @@ template <typename Tria>
 CstPnt<Tria>::CstPnt(const CstPnt &cstPnt)
   : CstSelectorBase<Tria>(cstPnt)
   , pntCoorinates(cstPnt.pntCoorinates)
+  , valuesFunc(nullptr)
   , tol(cstPnt.tol)
 {}
 
@@ -35,6 +37,7 @@ CstPnt<Tria>::CstPnt(const std::array<double, 3> &pntCoorinates,
                      const double                 tol)
   : CstSelectorBase<Tria>({{csts}})
   , pntCoorinates(std::array<double, 3>(pntCoorinates))
+  , valuesFunc(nullptr)
   , tol(tol)
 {}
 
