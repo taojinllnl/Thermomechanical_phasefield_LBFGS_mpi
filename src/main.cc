@@ -2402,7 +2402,7 @@ namespace PhaseField_monolithic
     {
       double const length = 5.0;   // mm
       double const width = 1.0;    // mm
-      double const thickness = 0.4; // mm
+      double const thickness = 1.0; // mm
 
       if constexpr (dim == 3)
       {
