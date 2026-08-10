@@ -3546,11 +3546,11 @@ namespace PhaseField_monolithic
 
     AssertThrow(dim == 3, ExcMessage("The dimension has to be 3D!"));
 
-    const double radius = 5.0;
+    const double radius = 3.2;
     GridGenerator::quarter_hyper_ball(m_triangulation, Point<dim>(), radius);
 
     m_triangulation.refine_global(m_parameters.m_global_refine_times);
-
+/*
     if (m_parameters.m_refinement_strategy == "pre-refine")
     {
       // m_triangulation.refine_global(m_parameters.m_global_refine_times);
@@ -3657,6 +3657,7 @@ namespace PhaseField_monolithic
           false,
           ExcMessage("Selected mesh refinement strategy not implemented!"));
     }
+    */
   }
 
   template <typename LATraits, typename Tria>
@@ -3852,7 +3853,7 @@ namespace PhaseField_monolithic
       addSupportTemperature(
           [](const Point<dim> &pnt) -> bool
           {
-            const double radius = 5.0;
+            const double radius = 3.2;
             return std::fabs(pnt.distance(Point<dim>()) - radius) < 1.0e-6;
           });
     }
