@@ -11,6 +11,9 @@
 #include <deal.II/base/mpi.h>
 
 
+namespace common
+{
+
 /**
  *
  * This class wraps a CG solver for MPI/distributed runs to enforce a global iteration budget.
@@ -49,8 +52,8 @@ private:
     //                       const unsigned int  maxRetryTimes,
     //                       SolverControl::NoConvergence noConv);
     
-//    void __noConvLog(const std::string& name,
-//                     const SolverControl& solverControl);
+    //    void __noConvLog(const std::string& name,
+    //                     const SolverControl& solverControl);
     
     template <typename VectorxType, typename PrecType>
     bool __solve(const MatrixType& A,
@@ -132,7 +135,7 @@ bool MPICGSolver<MatrixType, CGType>
     } catch (SolverControl::NoConvergence& noConv) {
         // update the total iteration number
         __total_iters += noConv.last_step;
-//        __noConvLog(name, solverControl);
+        //        __noConvLog(name, solverControl);
         return false;
     }
     __total_iters += solverControl.last_step();
@@ -165,5 +168,7 @@ unsigned int MPICGSolver<MatrixType, CGType>
     AssertThrow(false, *__noConv);
 }
 
+
+} // namespace common
 
 #endif /* MPICGSolver_h */

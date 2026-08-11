@@ -157,23 +157,25 @@
 #include <iostream>
 #include <vector>
 
-#include "../include/FileSystem.h"
+#include "../include/Common/FileSystem.h"
 #include "../include/SpectrumDecomposition.h"
 #include "../include/Utilities.h"
 
-#include "../include/MPIInfo.h"
+#include "../include/Common/MPIInfo.h"
 
-#include "../include/TimerOutputWrapper.h"
+#include "../include/Common/TimerOutputWrapper.h"
 
-#include "../include/BlockDesc.h"
-#include "../include/BlockSparseMatrixWrapper.h"
-#include "../include/BlockVectorWrapper.h"
+#include "../include/Common/BlockDesc.h"
+#include "../include/Common/BlockSparseMatrixWrapper.h"
+#include "../include/Common/BlockVectorWrapper.h"
 
 #include "../include/LASolver.h"
 
 #include "../include/OutputHelper.h"
 
-#include "../include/VersionAdapter.h"
+#include "../include/Common/VersionAdapter.h"
+
+#include "../include/Common/cst/CstMaker.h"
 
 namespace PhaseField_monolithic
 {
@@ -1241,25 +1243,25 @@ namespace PhaseField_monolithic
     constexpr static bool supportRepartioning = false;
   #endif
 
-    using BSMatrix = ::la::BlockSparseMatrixWrapper<LATraits>;
-    using BVector = ::la::BlockVectorWrapper<LATraits>;
+    using BSMatrix = ::common::BlockSparseMatrixWrapper<LATraits>;
+    using BVector = ::common::BlockVectorWrapper<LATraits>;
 
     using CellDataStorageT =
         CellDataStorage<typename Tria::cell_iterator, PointHistory<dim>>;
 
     // variable to tell if this is class is for mpi mode
     static constexpr bool is_mpi =
-        !std::is_same_v<typename LATraits::TMTag, ::la::TagSerial>;
+        !std::is_same_v<typename LATraits::TMTag, ::common::TagSerial>;
 
     PhaseFieldMonolithicSolve(const Parameters::AllParameters &parameters,
-                              const MPIInfo &mpiInfo, ConditionalOStream &logfile,
+                              const ::common::MPIInfo &mpiInfo,
+                              ConditionalOStream &logfile,
                               Tria &triangulation);
 
     virtual ~PhaseFieldMonolithicSolve() = default;
     void run();
 
   private:
-    struct CstPnt;
 
     struct PerTaskData_ASM;
     struct ScratchData_ASM;
@@ -1277,15 +1279,15 @@ namespace PhaseField_monolithic
 
     Time m_time;
 
-    const MPIInfo &m_mpiInfo;
+    const ::common::MPIInfo &m_mpiInfo;
 
     // use ConditionalOStream as logfile stream to allow only on rank to do so
     ConditionalOStream &m_logfile;
 
     //    use TimerOutputWrapper to support both MPI and serial modes
-    mutable TimerOutputWrapper<LATraits> m_timer;
+    mutable ::common::TimerOutputWrapper<LATraits> m_timer;
 
-    BlockDesc m_blocks_desc;
+    ::common::BlockDesc m_blocks_desc;
 
     DoFHandler<dim> m_dof_handler;
     FESystem<dim> m_fe;
@@ -1332,6 +1334,9 @@ namespace PhaseField_monolithic
     LASolver<LATraits> m_solver;
 
     OutputHelper<LATraits, Tria, PointHistory<dim>> m_output;
+      
+    bool m_update_dofs_for_cst;
+    ::bcs::CstMaker<Tria> m_cst_maker;
 
     struct Errors
     {
@@ -1928,65 +1933,6 @@ namespace PhaseField_monolithic
           scratch.m_degrade_conductivity_or_not);
   }
 
-  template <typename LATraits, typename Tria>
-  struct PhaseFieldMonolithicSolve<LATraits, Tria>::CstPnt
-  {
-    const Point<dim> pnt;
-    const std::vector<unsigned int> localDoFs;
-    const std::size_t nCsts;
-    bool found;
-    std::vector<types::global_dof_index> globalDoFs;
-    std::vector<double> cstValues;
-
-    CstPnt(const Point<dim> &pnt, const std::vector<unsigned int> &localDoFs,
-           const std::vector<double> &cstValues)
-        : pnt(std::move(pnt)), localDoFs(std::move(localDoFs)),
-          nCsts(localDoFs.size()), found(false),
-          globalDoFs(nCsts, numbers::invalid_dof_index),
-          cstValues(std::move(cstValues))
-    {
-      Assert(localDoFs.size() == cstValues.size(),
-             ExcMessage("The number of the constrained dofs should equal to the "
-                        "one in constrained values."));
-    }
-
-    template <typename CellIter>
-    void extractDoFs(const CellIter &cell, const unsigned int ithVertexInCell)
-    {
-      // loop over constrained dofs
-      for (unsigned int k = 0; k < nCsts; ++k)
-      {
-        globalDoFs[k] = cell->vertex_dof_index(ithVertexInCell, localDoFs[k]);
-      }
-    }
-
-    bool applyCsts(const IndexSet &localDoFs,
-                   AffineConstraints<double> &constraints) const
-    {
-      // skip non-found points
-      if (!found)
-        return false;
-
-      // loop over constrained dofs
-      for (unsigned int j = 0; j < nCsts; ++j)
-      {
-        const types::global_dof_index dof = globalDoFs[j];
-        const double value = cstValues[j];
-
-        // verify the DoF is locally owned
-        if (localDoFs.is_element(dof))
-        {
-          // add constraint on unconstrained dofs to avoid repeaded csts
-          if (!constraints.is_constrained(dof))
-          {
-            constraints.add_line(dof);
-            constraints.set_inhomogeneity(dof, value);
-          }
-        }
-      }
-      return true;
-    }
-  };
 
   template <typename LATraits, typename Tria>
   struct PhaseFieldMonolithicSolve<LATraits, Tria>::PerTaskData_ASM
@@ -2251,7 +2197,7 @@ namespace PhaseField_monolithic
   // constructor has no return type
   template <typename LATraits, typename Tria>
   PhaseFieldMonolithicSolve<LATraits, Tria>::PhaseFieldMonolithicSolve(
-      const Parameters::AllParameters &parameters, const MPIInfo &mpiInfo,
+      const Parameters::AllParameters &parameters, const ::common::MPIInfo &mpiInfo,
       ConditionalOStream &logfile, Tria &triangulation)
       : m_parameters(parameters), m_triangulation(triangulation),
         m_time(m_parameters.m_end_time), m_mpiInfo(mpiInfo), m_logfile(logfile),
@@ -2283,7 +2229,9 @@ namespace PhaseField_monolithic
                  m_parameters.m_cg_u_tol, m_parameters.m_cg_d_tol,
                  m_parameters.m_cg_t_tol, m_blocks_desc, m_mpiInfo),
         m_output(m_mpiInfo, m_triangulation, m_dof_handler, m_qf_cell,
-                 m_parameters.m_scenario, m_parameters.m_mpi_type)
+                 m_parameters.m_scenario, m_parameters.m_mpi_type),
+        m_update_dofs_for_cst(false),
+        m_cst_maker(m_mpiInfo)
   {
   }
 
@@ -3099,9 +3047,9 @@ namespace PhaseField_monolithic
               Utilities::MPI::sum(local_flag, *m_mpiInfo.mpiCommPtr());
           initiation_point_refine_unfinished = (global_flag > 0u);
         }
+        if (initiation_point_refine_unfinished)
+          m_triangulation.execute_coarsening_and_refinement();
       }
-      if (initiation_point_refine_unfinished)
-        m_triangulation.execute_coarsening_and_refinement();
     }
     else
     {
@@ -3533,24 +3481,79 @@ namespace PhaseField_monolithic
     }
   }
 
-  template <typename LATraits, typename Tria>
-  void PhaseFieldMonolithicSolve<LATraits, Tria>::make_grid_case_11()
-  {
-    for (unsigned int i = 0; i < 80; ++i)
-      m_logfile << "*";
-    m_logfile << std::endl;
-    m_logfile << "\t\t\t\tQuenching test (3D, quarter ball)" << std::endl;
-    for (unsigned int i = 0; i < 80; ++i)
-      m_logfile << "*";
-    m_logfile << std::endl;
+template <typename LATraits, typename Tria>
+void
+PhaseFieldMonolithicSolve<LATraits, Tria>::make_grid_case_11()
+{
+  for (unsigned int i = 0; i < 80; ++i)
+    m_logfile << "*";
+  m_logfile << std::endl;
+  m_logfile << "\t\t\t\tQuenching test (3D, quarter ball)" << std::endl;
+  for (unsigned int i = 0; i < 80; ++i)
+    m_logfile << "*";
+  m_logfile << std::endl;
 
-    AssertThrow(dim == 3, ExcMessage("The dimension has to be 3D!"));
+  AssertThrow(dim == 3, ExcMessage("The dimension has to be 3D!"));
 
-    const double radius = 3.2;
-    GridGenerator::quarter_hyper_ball(m_triangulation, Point<dim>(), radius);
+  //    const double radius = 3.2;
+  //    GridGenerator::quarter_hyper_ball(m_triangulation, Point<dim>(),
+  //    radius);
+  //
+  //    m_triangulation.refine_global(m_parameters.m_global_refine_times);
 
-    m_triangulation.refine_global(m_parameters.m_global_refine_times);
-/*
+  const double radius = 3.2;
+
+  if constexpr (is_mpi)
+    {
+      Triangulation<dim> serial_tria;
+
+      GridGenerator::quarter_hyper_ball(serial_tria, Point<dim>(), radius);
+
+      unsigned int pre_refinement =
+        (m_parameters.m_global_refine_times > 0 ? 1u : 0u);
+
+      const unsigned int n_ranks = m_mpiInfo.nRanks();
+
+      while (4u * Utilities::pow(8u, pre_refinement) < n_ranks &&
+             pre_refinement < m_parameters.m_global_refine_times)
+        {
+          ++pre_refinement;
+        }
+
+
+      if (pre_refinement > 0)
+        {
+          serial_tria.refine_global(pre_refinement);
+        }
+
+      Triangulation<dim> coarse_tria;
+
+      GridGenerator::flatten_triangulation(serial_tria, coarse_tria);
+
+      const SphericalManifold<dim> spherical_manifold{Point<dim>{}};
+      coarse_tria.set_manifold(0, spherical_manifold);
+
+      m_triangulation.copy_triangulation(coarse_tria);
+
+      m_triangulation.set_manifold(0, spherical_manifold);
+
+      const unsigned int remaining_refinement =
+        m_parameters.m_global_refine_times - pre_refinement;
+
+      if (remaining_refinement > 0)
+        {
+          m_triangulation.refine_global(remaining_refinement);
+        }
+    }
+  else
+    {
+      GridGenerator::quarter_hyper_ball(m_triangulation,
+                                        Point<dim>(),
+                                        radius);
+
+      m_triangulation.refine_global(m_parameters.m_global_refine_times);
+    }
+  /*
     if (m_parameters.m_refinement_strategy == "pre-refine")
     {
       // m_triangulation.refine_global(m_parameters.m_global_refine_times);
@@ -3680,7 +3683,7 @@ namespace PhaseField_monolithic
     m_constraints.clear();
     if constexpr (is_mpi)
     {
-      VersionAdapter::cstReinit(m_constraints, m_dof_handler.locally_owned_dofs(),
+      ::common::VersionAdapter::cstReinit(m_constraints, m_dof_handler.locally_owned_dofs(),
                                 *m_blocks_desc.localRelevantPartition());
     }
     DoFTools::make_hanging_node_constraints(m_dof_handler, m_constraints);
@@ -3724,7 +3727,9 @@ namespace PhaseField_monolithic
     m_solution.initialize();
 
     setup_qph();
-
+      
+    m_update_dofs_for_cst = true;
+      
     m_timer.leave_subsection(sectionName);
   }
 
@@ -3867,6 +3872,7 @@ namespace PhaseField_monolithic
   void PhaseFieldMonolithicSolve<LATraits, Tria>::make_constraints(
       const unsigned int it_nr)
   {
+    using namespace ::bcs;
     const bool apply_dirichlet_bc = (it_nr == 0);
 
     if (it_nr > 1)
@@ -3877,8 +3883,16 @@ namespace PhaseField_monolithic
     }
 
     if (m_parameters.m_output_iteration_history)
-      m_logfile << " CST " << std::flush;
-
+    {
+      if (!m_update_dofs_for_cst)
+      {
+        m_logfile << " CST " << std::flush;
+      }
+      else
+      {
+      m_logfile << "[CST]" << std::flush;
+      }
+    }
     set_bcs_id();
 
     if (apply_dirichlet_bc)
@@ -3886,7 +3900,7 @@ namespace PhaseField_monolithic
       m_constraints.clear();
       if constexpr (is_mpi)
       {
-        VersionAdapter::cstReinit(
+        ::common::VersionAdapter::cstReinit(
             m_constraints, m_dof_handler.locally_owned_dofs(),
             DoFTools::extract_locally_relevant_dofs(m_dof_handler));
       }
@@ -3920,58 +3934,6 @@ namespace PhaseField_monolithic
             Functions::ConstantFunction<dim>(delta_temperature, m_n_components),
             m_constraints, m_fe.component_mask(temperature));
 
-        std::vector<types::global_dof_index> node_xy(m_fe.dofs_per_vertex);
-
-        if constexpr (is_mpi)
-        {
-          const unsigned int n_dofs = m_fe.dofs_per_vertex;
-          std::vector<bool> locally_owned_vertices =
-              GridTools::get_locally_owned_vertices(
-                  m_dof_handler.get_triangulation());
-          for (auto const &cell : m_dof_handler.active_cell_iterators())
-          {
-            if (!cell->is_locally_owned() || !cell->at_boundary())
-              continue;
-
-            for (const auto vertex : cell->vertex_indices())
-            {
-              // skip ghost cells
-              if (!locally_owned_vertices[cell->vertex_index(vertex)])
-                continue;
-
-              const Point<dim> point = cell->vertex(vertex);
-
-              if ((std::fabs(point[0] - 0.0) < 1.0e-9) &&
-                  (std::fabs(point[1] - 0.0) < 1.0e-9))
-              {
-                for (unsigned int i = 0; i < n_dofs; ++i)
-                  node_xy[i] = cell->vertex_dof_index(vertex, i);
-              }
-            }
-          }
-        }
-        else
-        {
-
-          typename Triangulation<dim>::active_vertex_iterator vertex_itr;
-          vertex_itr = m_triangulation.begin_active_vertex();
-
-          for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
-          {
-            if ((std::fabs(vertex_itr->vertex()[0] - 0.0) < 1.0e-9) &&
-                (std::fabs(vertex_itr->vertex()[1] - 0.0) < 1.0e-9))
-            {
-              node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
-            }
-          }
-        }
-
-        m_constraints.add_line(node_xy[0]);
-        m_constraints.set_inhomogeneity(node_xy[0], 0.0);
-
-        m_constraints.add_line(node_xy[1]);
-        m_constraints.set_inhomogeneity(node_xy[1], 0.0);
-
         const int boundary_id_top_surface = 1;
         /*
          VectorTools::interpolate_boundary_values(m_dof_handler,
@@ -3998,6 +3960,20 @@ namespace PhaseField_monolithic
             m_dof_handler, boundary_id_top_surface,
             Functions::ConstantFunction<dim>(delta_temperature, m_n_components),
             m_constraints, m_fe.component_mask(temperature));
+          
+        if (!m_cst_maker.isAddedSelectors())
+        {
+            
+          const CstPnt<Tria> fixedXY({{0.0, 0.0, 0.0}},         // point (0, 0)
+                                          {{CstEntry<Tria>(0),     // fixed: x
+                                          CstEntry<Tria>(1)}});    // fixed: y
+          m_cst_maker.addCstSelector(fixedXY);
+        }
+        m_cst_maker.makeCstIfPrepareNeeded(m_update_dofs_for_cst,
+                                               m_constraints,
+                                               m_triangulation,
+                                               m_dof_handler);
+            
       }
       else if (m_parameters.m_scenario == 2 || m_parameters.m_scenario == 4)
       {
@@ -4087,64 +4063,16 @@ namespace PhaseField_monolithic
             Functions::ZeroFunction<dim>(m_n_components), m_constraints,
             m_fe.component_mask(x_displacement));
 
-        std::vector<types::global_dof_index> node_xy(m_fe.dofs_per_vertex);
-        bool hasCst = false;
-        if constexpr (is_mpi)
+        if (!m_cst_maker.isAddedSelectors())
         {
-          const unsigned int n_dofs = m_fe.dofs_per_vertex;
-          std::vector<bool> locally_owned_vertices =
-              GridTools::get_locally_owned_vertices(m_triangulation);
-          for (auto const &cell : m_dof_handler.active_cell_iterators())
-          {
-            // skip ghost cells
-            if (!cell->is_locally_owned() || !cell->at_boundary())
-              continue;
-
-            for (const auto vertex : cell->vertex_indices())
-            {
-              // skip dofs that not owned by current rank
-              if (!locally_owned_vertices[cell->vertex_index(vertex)])
-                continue;
-
-              const Point<dim> point = cell->vertex(vertex);
-
-              if ((std::fabs(point[0] - 25.0) < 1.0e-9) &&
-                  (std::fabs(point[1] - 5.0) < 1.0e-9))
-              {
-                for (unsigned int i = 0; i < n_dofs; ++i)
-                {
-                  node_xy[i] = cell->vertex_dof_index(vertex, i);
-                }
-                hasCst = true;
-                break; // break, only single cst pnt
-              }
-            }
-            if (hasCst)
-              break;
-          }
+          const CstPnt<Tria> fixedY({{25.0, 5.0, 0.0}},         // point (25, 5)
+                                            CstEntry<Tria>(1));    // fixed: y
+          m_cst_maker.addCstSelector(fixedY);
         }
-        else
-        {
-          typename Triangulation<dim>::active_vertex_iterator vertex_itr;
-          vertex_itr = m_triangulation.begin_active_vertex();
-
-          for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
-          {
-            if ((std::fabs(vertex_itr->vertex()[0] - 25.0) < 1.0e-9) &&
-                (std::fabs(vertex_itr->vertex()[1] - 5.0) < 1.0e-9))
-            {
-              node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
-              hasCst = true;
-              break;
-            }
-          }
-        }
-
-        if (hasCst && m_dof_handler.locally_owned_dofs().is_element(node_xy[1]))
-        {
-          m_constraints.add_line(node_xy[1]);
-          m_constraints.set_inhomogeneity(node_xy[1], 0.0);
-        }
+        m_cst_maker.makeCstIfPrepareNeeded(m_update_dofs_for_cst,
+                                                 m_constraints,
+                                                 m_triangulation,
+                                                 m_dof_handler);
 
         // Remember, the essential B.C. is applied incrementally during each time
         // step. If a constant temperature is needed through time, the B.C should
@@ -4170,180 +4098,6 @@ namespace PhaseField_monolithic
       }
       else if (m_parameters.m_scenario == 7)
       {
-/*        if constexpr (is_mpi)
-        {
-
-          // the constrainted points
-          std::vector<CstPnt> cstPnts({
-              // Points                             cstDoFs cstValues
-              // center pnt
-              CstPnt(Point<dim>(0.0, 5.0, 0.5), {1, 2}, {0.0, 0.0}),
-
-              // center pnt on the symmetric plane
-              CstPnt(Point<dim>(25.0, 5.0, 0.5), {1, 2}, {0.0, 0.0}),
-
-              // pnts on the sides of the symmetric plane
-              CstPnt(Point<dim>(25.0, 0.0, 0.5), {2}, {0.0}),
-              CstPnt(Point<dim>(25.0, 10.0, 0.5), {2}, {0.0}),
-              CstPnt(Point<dim>(25.0, 5.0, 0.0), {1}, {0.0}),
-              CstPnt(Point<dim>(25.0, 5.0, 1.0), {1}, {0.0}),
-          });
-
-          // record if there is a constrained on current rank
-          bool hasCst = false;
-
-          std::vector<bool> locally_owned_vertices =
-              GridTools::get_locally_owned_vertices(m_triangulation);
-          for (auto const &cell : m_dof_handler.active_cell_iterators())
-          {
-            // skip ghost cells or cells that are not at boundary
-            if (!cell->is_locally_owned() || !cell->at_boundary())
-              continue;
-
-            // loop over vertices on the locally owned cells at boundary
-            for (const auto vertex : cell->vertex_indices())
-            {
-              // skip vertices that are not owned by current rank.
-              // This operation is necessary because some vertices are shared by
-              // cells owned by other ranks. Or, it may cause unexpected results.
-              if (!locally_owned_vertices[cell->vertex_index(vertex)])
-                continue;
-
-              // obtain vertex
-              const Point<dim> point = cell->vertex(vertex);
-
-              // loop over prescribed constraints
-              for (unsigned int j = 0; j < cstPnts.size(); ++j)
-              {
-                // j-th prescribed CstPnt
-                CstPnt &cstPoint = cstPnts[j];
-
-                // skip further operations, if this point has been handled.
-                if (cstPoint.found)
-                  continue;
-
-                // the vertex is close enough to the constrained point
-                if (point.distance(cstPoint.pnt) < 1.0e-9)
-                {
-                  cstPoint.found = true;
-                  // The constrained point is owned by current rank.
-                  hasCst = true;
-                  // extract constrained DoFs
-                  cstPoint.extractDoFs(cell, vertex);
-
-                  // no need to look at other constrained points
-                  break;
-                }
-              } // loop over constrainted pnts
-            } // loop over vertices in cell
-          } // loop over cells
-
-          // only the rank with constrained points will apply BCs.
-          if (hasCst)
-          {
-            const IndexSet &localDoFs = m_dof_handler.locally_owned_dofs();
-
-            for (unsigned int i = 0; i < cstPnts.size(); ++i)
-            {
-              const CstPnt &cstPoint = cstPnts[i];
-              if (cstPoint.applyCsts(localDoFs, m_constraints))
-              {
-                // TODO: remve after debugging
-                std::string cstInfo =
-                    "\n\ncstPnt: \nrank: " + std::to_string(m_mpiInfo.rank()) +
-                    "\n";
-                cstInfo += "Pnt: " + std::to_string(cstPoint.pnt[0]) + ", " +
-                           std::to_string(cstPoint.pnt[1]) + ", " +
-                           std::to_string(cstPoint.pnt[2]) + "\n\n\n\n";
-                std::cout << cstInfo << std::endl;
-              }
-            } // loop over constrainted points
-          }
-        }
-        else
-        {
-          typename Triangulation<dim>::active_vertex_iterator vertex_itr;
-          vertex_itr = m_triangulation.begin_active_vertex();
-          std::vector<types::global_dof_index> node_xy(m_fe.dofs_per_vertex);
-
-          for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
-          {
-            if ((std::fabs(vertex_itr->vertex()[0] - 25.0) < 1.0e-9) &&
-                (std::fabs(vertex_itr->vertex()[1] - 5.0) < 1.0e-9) &&
-                (std::fabs(vertex_itr->vertex()[2] - 0.5) < 1.0e-9))
-            {
-              node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
-            }
-          }
-          m_constraints.add_line(node_xy[2]);
-          m_constraints.set_inhomogeneity(node_xy[2], 0.0);
-          m_constraints.add_line(node_xy[1]);
-          m_constraints.set_inhomogeneity(node_xy[1], 0.0);
-
-          for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
-          {
-            if ((std::fabs(vertex_itr->vertex()[0] - 25.0) < 1.0e-9) &&
-                (std::fabs(vertex_itr->vertex()[1] - 0.0) < 1.0e-9) &&
-                (std::fabs(vertex_itr->vertex()[2] - 0.5) < 1.0e-9))
-            {
-              node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
-            }
-          }
-          m_constraints.add_line(node_xy[2]);
-          m_constraints.set_inhomogeneity(node_xy[2], 0.0);
-
-          for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
-          {
-            if ((std::fabs(vertex_itr->vertex()[0] - 25.0) < 1.0e-9) &&
-                (std::fabs(vertex_itr->vertex()[1] - 10.0) < 1.0e-9) &&
-                (std::fabs(vertex_itr->vertex()[2] - 0.5) < 1.0e-9))
-            {
-              node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
-            }
-          }
-          m_constraints.add_line(node_xy[2]);
-          m_constraints.set_inhomogeneity(node_xy[2], 0.0);
-
-          for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
-          {
-            if ((std::fabs(vertex_itr->vertex()[0] - 0.0) < 1.0e-9) &&
-                (std::fabs(vertex_itr->vertex()[1] - 5.0) < 1.0e-9) &&
-                (std::fabs(vertex_itr->vertex()[2] - 0.5) < 1.0e-9))
-            {
-              node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
-            }
-          }
-          m_constraints.add_line(node_xy[2]);
-          m_constraints.set_inhomogeneity(node_xy[2], 0.0);
-          m_constraints.add_line(node_xy[1]);
-          m_constraints.set_inhomogeneity(node_xy[1], 0.0);
-
-          for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
-          {
-            if ((std::fabs(vertex_itr->vertex()[0] - 25.0) < 1.0e-9) &&
-                (std::fabs(vertex_itr->vertex()[1] - 5.0) < 1.0e-9) &&
-                (std::fabs(vertex_itr->vertex()[2] - 0.0) < 1.0e-9))
-            {
-              node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
-            }
-          }
-          m_constraints.add_line(node_xy[1]);
-          m_constraints.set_inhomogeneity(node_xy[1], 0.0);
-
-          for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
-          {
-            if ((std::fabs(vertex_itr->vertex()[0] - 25.0) < 1.0e-9) &&
-                (std::fabs(vertex_itr->vertex()[1] - 5.0) < 1.0e-9) &&
-                (std::fabs(vertex_itr->vertex()[2] - 1.0) < 1.0e-9))
-            {
-              node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
-            }
-          }
-          m_constraints.add_line(node_xy[1]);
-          m_constraints.set_inhomogeneity(node_xy[1], 0.0);
-        }
-*/
-
         const int boundary_id_left_surface_x = 0;
         VectorTools::interpolate_boundary_values(
             m_dof_handler, boundary_id_left_surface_x,
@@ -4402,45 +4156,28 @@ namespace PhaseField_monolithic
             Functions::ZeroFunction<dim>(m_n_components), m_constraints,
             m_fe.component_mask(y_displacement));
 
-        typename Triangulation<dim>::active_vertex_iterator vertex_itr;
-        vertex_itr = m_triangulation.begin_active_vertex();
-        std::vector<types::global_dof_index> node_xy(m_fe.dofs_per_vertex);
-        // TODO: add_line
-        for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
+        if (!m_cst_maker.isAddedSelectors())
         {
-          if ((std::fabs(vertex_itr->vertex()[0] - 0.0) < 1.0e-9) &&
-              (std::fabs(vertex_itr->vertex()[1] - 0.0) < 1.0e-9) &&
-              (std::fabs(vertex_itr->vertex()[2] - 0.5) < 1.0e-9))
-          {
-            node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
-          }
+          const CstEntry<Tria> fixedZ(2);
+            
+          const CstPnt<Tria> fixedZ1({{0.0, 0.0, 0.5}},  // point (0, 0, 0.5)
+                                     fixedZ);         // fixed: z
+          
+          const CstPnt<Tria> fixedZ2({{5.0, 0.0, 0.5}},  // point (5.0, 0.0, 0.5)
+                                     fixedZ);         // fixed: z
+            
+          const CstPnt<Tria> fixedZ3({{0.0, 2.0, 0.5}},  // point (0.0, 2.0, 0.5)
+                                     fixedZ);         // fixed: z
+            
+          m_cst_maker.addCstSelector(fixedZ1);
+          m_cst_maker.addCstSelector(fixedZ2);
+          m_cst_maker.addCstSelector(fixedZ3);
         }
-        m_constraints.add_line(node_xy[2]);
-        m_constraints.set_inhomogeneity(node_xy[2], 0.0);
-        // TODO: add_line
-        for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
-        {
-          if ((std::fabs(vertex_itr->vertex()[0] - 5.0) < 1.0e-9) &&
-              (std::fabs(vertex_itr->vertex()[1] - 0.0) < 1.0e-9) &&
-              (std::fabs(vertex_itr->vertex()[2] - 0.5) < 1.0e-9))
-          {
-            node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
-          }
-        }
-        m_constraints.add_line(node_xy[2]);
-        m_constraints.set_inhomogeneity(node_xy[2], 0.0);
+        m_cst_maker.makeCstIfPrepareNeeded(m_update_dofs_for_cst,
+                                                   m_constraints,
+                                                   m_triangulation,
+                                                   m_dof_handler);
 
-        for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
-        {
-          if ((std::fabs(vertex_itr->vertex()[0] - 0.0) < 1.0e-9) &&
-              (std::fabs(vertex_itr->vertex()[1] - 2.0) < 1.0e-9) &&
-              (std::fabs(vertex_itr->vertex()[2] - 0.5) < 1.0e-9))
-          {
-            node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
-          }
-        }
-        m_constraints.add_line(node_xy[2]);
-        m_constraints.set_inhomogeneity(node_xy[2], 0.0);
 
         // Remember, the essential B.C. is applied incrementally during each time
         // step. If a constant temperature is needed through time, the B.C should
@@ -4483,23 +4220,20 @@ namespace PhaseField_monolithic
             m_dof_handler, boundary_id_mid_surface_y,
             Functions::ZeroFunction<dim>(m_n_components), m_constraints,
             m_fe.component_mask(y_displacement));
-        // TODO: add_line
-        typename Triangulation<dim>::active_vertex_iterator vertex_itr;
-        vertex_itr = m_triangulation.begin_active_vertex();
-        std::vector<types::global_dof_index> node_xy(m_fe.dofs_per_vertex);
-
-        for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
+          
+        if (!m_cst_maker.isAddedSelectors())
         {
-          if ((std::fabs(vertex_itr->vertex()[0] - 5.0) < 1.0e-9) &&
-              (std::fabs(vertex_itr->vertex()[1] - 2.0) < 1.0e-9) &&
-              (std::fabs(vertex_itr->vertex()[2] - 0.5) < 1.0e-9))
-          {
-            node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
-          }
+          const CstPnt<Tria> fixedZ({{5.0, 2.0, 0.5}},  // point (5.0, 2.0, 0.5)
+                                       CstEntry<Tria>(2)); // fixed: z
+              
+          m_cst_maker.addCstSelector(fixedZ);
         }
-        m_constraints.add_line(node_xy[2]);
-        m_constraints.set_inhomogeneity(node_xy[2], 0.0);
-
+        m_cst_maker.makeCstIfPrepareNeeded(m_update_dofs_for_cst,
+                                                     m_constraints,
+                                                     m_triangulation,
+                                                     m_dof_handler);
+          
+       
         // Remember, the essential B.C. is applied incrementally during each time
         // step. If a constant temperature is needed through time, the B.C should
         // be set as zero.
@@ -4523,23 +4257,20 @@ namespace PhaseField_monolithic
             m_dof_handler, boundary_id_mid_surface_y,
             Functions::ZeroFunction<dim>(m_n_components), m_constraints,
             m_fe.component_mask(y_displacement));
-        // TODO: add_line
-        typename Triangulation<dim>::active_vertex_iterator vertex_itr;
-        vertex_itr = m_triangulation.begin_active_vertex();
-        std::vector<types::global_dof_index> node_xy(m_fe.dofs_per_vertex);
-
-        for (; vertex_itr != m_triangulation.end_vertex(); ++vertex_itr)
+          
+        if (!m_cst_maker.isAddedSelectors())
         {
-          if ((std::fabs(vertex_itr->vertex()[0] - 5.0) < 1.0e-9) &&
-              (std::fabs(vertex_itr->vertex()[1] - 2.0) < 1.0e-9) &&
-              (std::fabs(vertex_itr->vertex()[2] - 1.0) < 1.0e-9))
-          {
-            node_xy = usr_utilities::get_vertex_dofs(vertex_itr, m_dof_handler);
-          }
+          const CstEntry<Tria> fixedZCst(2);
+          const CstPnt<Tria> fixedZ({{5.0, 2.0, 1.0}},  // point (5.0, 2.0, 0.5)
+                                       fixedZCst); // fixed: z
+              
+          m_cst_maker.addCstSelector(fixedZ);
         }
-        m_constraints.add_line(node_xy[2]);
-        m_constraints.set_inhomogeneity(node_xy[2], 0.0);
-
+        m_cst_maker.makeCstIfPrepareNeeded(m_update_dofs_for_cst,
+                                                     m_constraints,
+                                                     m_triangulation,
+                                                     m_dof_handler);
+        
         // Remember, the essential B.C. is applied incrementally during each time
         // step. If a constant temperature is needed through time, the B.C should
         // be set as zero.
@@ -4631,7 +4362,7 @@ namespace PhaseField_monolithic
 
         if constexpr (is_mpi)
         {
-          VersionAdapter::cstReinit(
+          ::common::VersionAdapter::cstReinit(
               m_constraints, m_dof_handler.locally_owned_dofs(),
               DoFTools::extract_locally_relevant_dofs(m_dof_handler));
         }
@@ -4640,6 +4371,7 @@ namespace PhaseField_monolithic
       }
     }
     m_constraints.close();
+    m_update_dofs_for_cst = false;
   }
 
   template <typename LATraits, typename Tria>
@@ -7399,7 +7131,7 @@ int main(int argc, char *argv[])
 
   using namespace ::dealii;
   using namespace PhaseField_monolithic;
-  using namespace la;
+  using namespace ::common;
 
   if (argc < 2)
     AssertThrow(false, ExcMessage("Usage: ./main [options] <input.prm>"));
@@ -7438,13 +7170,13 @@ int main(int argc, char *argv[])
   // create dirctories with sub-directories in the case folder
   {
 
-    std::vector<::FileSystem::SubDir> subDirs = {
-        ::FileSystem::SubDir("ori", parameters.oriDir),
-        ::FileSystem::SubDir("hist", parameters.histDir),
-        ::FileSystem::SubDir("results", parameters.resultsDir),
+    std::vector<FileSystem::SubDir> subDirs = {
+        FileSystem::SubDir("ori", parameters.oriDir),
+        FileSystem::SubDir("hist", parameters.histDir),
+        FileSystem::SubDir("results", parameters.resultsDir),
     };
 
-    ::FileSystem::outputDirSystem(mpiInfo, parameters.m_output_dir,
+    FileSystem::outputDirSystem(mpiInfo, parameters.m_output_dir,
                                   parameters.subDir, subDirs);
   }
 

@@ -22,7 +22,7 @@
 
 #include "BlockDesc.h"
 
-namespace la
+namespace common
 {
 
 
@@ -160,6 +160,6 @@ BlockSparseMatrixWrapper<TraitsType>
 
 
 
-}
+} // namespace common
 
 #endif /* BlockSparseMatrixWrapper_hpp */

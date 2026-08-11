@@ -4,9 +4,11 @@
 //
 //
 
-#include "../include/TimerOutputWrapper.h"
+#include "../../include/Common/TimerOutputWrapper.h"
 
-using namespace dealii;
+using namespace ::dealii;
+using namespace ::common;
+
 using OutputFrequency   =  dealii::TimerOutput::OutputFrequency;
 using OutputType        =  dealii::TimerOutput::OutputType;
 using OutputData        =  dealii::TimerOutput::OutputData;
@@ -68,7 +70,7 @@ void
 TimerOutputWrapper<LATraits>
 ::enter_subsection (const std::string& section_name)
 {
-    if constexpr (std::is_same_v<la::Traits<la::TagSerial>, LATraits>) {
+    if constexpr (std::is_same_v<::common::Traits<::common::TagSerial>, LATraits>) {
         __timerPtr->enter_subsection(section_name);
     } else {
         __scopeMap[section_name] = std::make_unique<Scope>(timer(), section_name);
@@ -80,7 +82,7 @@ void
 TimerOutputWrapper<LATraits>
 ::leave_subsection (const std::string& section_name)
 {
-    if constexpr (std::is_same_v<la::Traits<la::TagSerial>, LATraits>) {
+    if constexpr (std::is_same_v<::common::Traits<::common::TagSerial>, LATraits>) {
         __timerPtr->leave_subsection(section_name);
     } else {
         auto it = __scopeMap.find(section_name);
@@ -141,12 +143,12 @@ TimerOutputWrapper<LATraits>
 
 
 
-template class TimerOutputWrapper<la::Traits<la::TagSerial>>;
+template class ::common::TimerOutputWrapper<::common::Traits<::common::TagSerial>>;
 
 #if defined(HAVE_PETSC) && HAVE_PETSC
-template class TimerOutputWrapper<la::Traits<la::TagPETSc>>;
+template class ::common::TimerOutputWrapper<::common::Traits<::common::TagPETSc>>;
 #endif
 
 #if defined(HAVE_TRILINOS) && HAVE_TRILINOS
-  template class TimerOutputWrapper<la::Traits<la::TagTrilinos>>;
+  template class ::common::TimerOutputWrapper<::common::Traits<::common::TagTrilinos>>;
 #endif

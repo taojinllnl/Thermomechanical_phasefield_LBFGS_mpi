@@ -4,8 +4,11 @@
 //
 //
 
-#include "../include/BlockDesc.h"
+#include "../../include/Common/BlockDesc.h"
 
+
+using namespace ::dealii;
+using namespace ::common;
 
 BlockDesc::Block::Block(const unsigned int dim,
                         const unsigned int groupID,

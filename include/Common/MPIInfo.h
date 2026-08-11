@@ -12,6 +12,9 @@
 #include <memory>
 #include <ostream>
 
+namespace common
+{
+
 /**
  * MPIInfo is a small wrapper that provides a unified interface for
  * serial execution and MPI-parallel execution.
@@ -25,7 +28,7 @@
  * - If MPI support is enabled (MPI mode), this class initializes MPI
  *   (via `dealii::Utilities::MPI::MPI_InitFinalize`) during construction and
  *   provides access to the communicator `MPI_Comm`.
- *   This class must be initialized before calling any MPI-related functions and keep alive during entire executable running. 
+ *   This class must be initialized before calling any MPI-related functions and keep alive during entire executable running.
  */
 
 
@@ -59,7 +62,28 @@ public:
     void summary(std::ostream& stream);
     
     
+    template <bool is_mpi>
+    static bool
+    syncBool(const bool localFlag, const MPI_Comm &mpiComm);
+    
 };
 
+
+template <bool is_mpi>
+bool
+MPIInfo::syncBool(const bool localFlag, const MPI_Comm &mpiComm)
+{
+  if constexpr (is_mpi)
+    {
+      // accumulate local flag over all ranks
+      const unsigned int localFlagInt = localFlag ? 1u : 0u;
+      const unsigned int globalFlagInt =
+        dealii::Utilities::MPI::sum(localFlagInt, mpiComm);
+      return (globalFlagInt > 0u);
+    }
+}
+
+
+} //namespace common
 
 #endif /* MPIInfo_h */

@@ -4,9 +4,11 @@
 //
 //
 
-#include "../include/MPIInfo.h"
+#include "../../include/Common/MPIInfo.h"
 
-using namespace dealii;
+using namespace ::dealii;
+using namespace ::common;
+
 using MPIInit = Utilities::MPI::MPI_InitFinalize;
 
 MPIInfo::MPIInfo(const bool mpiSupport,

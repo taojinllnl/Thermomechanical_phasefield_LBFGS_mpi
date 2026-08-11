@@ -4,8 +4,9 @@
 //
 //
 
-#include "../include/BlockSparseMatrixWrapper.h"
-using namespace la;
+#include "../../include/Common/BlockSparseMatrixWrapper.h"
+using namespace ::dealii;
+using namespace ::common;
 
 template <typename TraitsType>
 using BSMatrix = BlockSparseMatrixWrapper<TraitsType>;
@@ -100,12 +101,12 @@ std::string BlockSparseMatrixWrapper<TraitsType>
     return content;
 }
 
-template class la::BlockSparseMatrixWrapper<la::Traits<TagSerial>>;
+template class ::common::BlockSparseMatrixWrapper<::common::Traits<::common::TagSerial>>;
 
 #if defined(HAVE_PETSC) && HAVE_PETSC
-  template class la::BlockSparseMatrixWrapper<la::Traits<TagPETSc>>;
+  template class ::common::BlockSparseMatrixWrapper<::common::Traits<::common::TagPETSc>>;
 #endif
 
 #if defined(HAVE_TRILINOS) && HAVE_TRILINOS
-  template class la::BlockSparseMatrixWrapper<la::Traits<TagTrilinos>>;
+  template class ::common::BlockSparseMatrixWrapper<::common::Traits<::common::TagTrilinos>>;
 #endif

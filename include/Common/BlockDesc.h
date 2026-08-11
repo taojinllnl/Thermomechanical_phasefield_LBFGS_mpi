@@ -46,6 +46,9 @@
  * 3. Getters for DoFs-related data return raw pointers (may be `nullptr`). Call `updateDoFsInfo()` first to update the cached data and check the pointers for `nullptr`.
  */
 
+namespace common
+{
+
 class BlockDesc
 {
 private:
@@ -146,7 +149,7 @@ void BlockDesc::updateDoFsInfo(dealii::DoFHandler<dim, spacedim>& dof_handler)
     
     // the __dofs_per_block is rand-independent 
     (*__dofs_per_block) = DoFTools::count_dofs_per_fe_block(dof_handler, __groupIDs);
-
+    
     
     if (__mpiInfo.isMPI())
     {
@@ -154,7 +157,7 @@ void BlockDesc::updateDoFsInfo(dealii::DoFHandler<dim, spacedim>& dof_handler)
         if (!__owned_partitioning)
         {
             __owned_partitioning =
-                std::make_unique<std::vector<IndexSet>>(__nBlocks);
+            std::make_unique<std::vector<IndexSet>>(__nBlocks);
             __owned_partitioning->resize(__nBlocks);
         }
         else if (__owned_partitioning->size() != __nBlocks)
@@ -199,7 +202,7 @@ void BlockDesc::updateDoFsInfo(dealii::DoFHandler<dim, spacedim>& dof_handler)
                                           dofsOffsets[i+1]);
             (*__relevant_partitioning)[i]
             = __localRelevantDoFs->get_view(dofsOffsets[i],
-                                             dofsOffsets[i+1]);
+                                            dofsOffsets[i+1]);
         }
         /*  *  *  *   *   *   *   *   *  MPI  *   *   *   *   *   *   *   *   */
     }
@@ -207,6 +210,6 @@ void BlockDesc::updateDoFsInfo(dealii::DoFHandler<dim, spacedim>& dof_handler)
     
 }
 
-
+} //namespace common
 
 #endif /* BlockDesc_hpp */
