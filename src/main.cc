@@ -16,7 +16,7 @@
  *
  * Author: Tao Jin
  *         University of Ottawa, Ottawa, Ontario, Canada
- *         April. 2025
+ *         March 2026
  *
  * How to cite:
  *         TBD
@@ -2350,7 +2350,7 @@ namespace PhaseField_monolithic
     {
       double const length = 5.0;   // mm
       double const width = 1.0;    // mm
-      double const thickness = 0.4; // mm
+      double const thickness = 1.0; // mm
 
       if constexpr (dim == 3)
       {
@@ -3157,12 +3157,12 @@ namespace PhaseField_monolithic
 
     double const length = 5.0;   // mm
     double const width = 1.0;    // mm
-    double const thickness = 0.4; // mm
+    double const thickness = 1.0; // mm
 
     std::vector<unsigned int> repetitions(dim, 1);
     repetitions[0] = 50;
     repetitions[1] = 10;
-    repetitions[2] = 4;
+    repetitions[2] = 10;
 
     GridGenerator::subdivided_hyper_rectangle(
         m_triangulation, repetitions, Point<dim>(0.0, 0.0, 0.0),
@@ -3661,7 +3661,7 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::make_grid_case_11()
           ExcMessage("Selected mesh refinement strategy not implemented!"));
     }
     */
-}
+  }
 
   template <typename LATraits, typename Tria>
   void PhaseFieldMonolithicSolve<LATraits, Tria>::setup_system()
@@ -3858,7 +3858,7 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::make_grid_case_11()
       addSupportTemperature(
           [](const Point<dim> &pnt) -> bool
           {
-            const double radius = 5.0;
+            const double radius = 3.2;
             return std::fabs(pnt.distance(Point<dim>()) - radius) < 1.0e-6;
           });
     }
@@ -4109,7 +4109,7 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::make_grid_case_11()
             m_dof_handler, boundary_id_right_surface_x,
             Functions::ZeroFunction<dim>(m_n_components), m_constraints,
             m_fe.component_mask(x_displacement));
-
+/*
         const int boundary_id_front_surface_z = 2;
         VectorTools::interpolate_boundary_values(
             m_dof_handler, boundary_id_front_surface_z,
@@ -4121,12 +4121,16 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::make_grid_case_11()
             m_dof_handler, boundary_id_back_surface_z,
             Functions::ZeroFunction<dim>(m_n_components), m_constraints,
             m_fe.component_mask(z_displacement));
-
+*/
         const int boundary_id_top_surface_y = 4;
         VectorTools::interpolate_boundary_values(
             m_dof_handler, boundary_id_top_surface_y,
             Functions::ZeroFunction<dim>(m_n_components), m_constraints,
             m_fe.component_mask(y_displacement));
+        VectorTools::interpolate_boundary_values(
+            m_dof_handler, boundary_id_top_surface_y,
+            Functions::ZeroFunction<dim>(m_n_components), m_constraints,
+            m_fe.component_mask(z_displacement));
 
         // Remember, the essential B.C. is applied incrementally during each time
         // step. If a constant temperature is needed through time, the B.C should

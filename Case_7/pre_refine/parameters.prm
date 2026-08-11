@@ -121,7 +121,7 @@ subsection Heat supply
   set Heat supply = 0.0
   
   # Reference temperature, unit: K
-  set Reference temperature = 573.15
+  set Reference temperature = 773.15
 end  
 
 subsection Nonlinear solver  
@@ -154,7 +154,7 @@ end
 
 subsection Time
   # End time
-  set End time       = 200.0e-3
+  set End time       = 2.0e-3
   
   # Time data groups
   set Time data file = timeDataFile
