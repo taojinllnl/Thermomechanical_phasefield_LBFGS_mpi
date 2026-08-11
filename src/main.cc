@@ -3481,24 +3481,79 @@ namespace PhaseField_monolithic
     }
   }
 
-  template <typename LATraits, typename Tria>
-  void PhaseFieldMonolithicSolve<LATraits, Tria>::make_grid_case_11()
-  {
-    for (unsigned int i = 0; i < 80; ++i)
-      m_logfile << "*";
-    m_logfile << std::endl;
-    m_logfile << "\t\t\t\tQuenching test (3D, quarter ball)" << std::endl;
-    for (unsigned int i = 0; i < 80; ++i)
-      m_logfile << "*";
-    m_logfile << std::endl;
+template <typename LATraits, typename Tria>
+void
+PhaseFieldMonolithicSolve<LATraits, Tria>::make_grid_case_11()
+{
+  for (unsigned int i = 0; i < 80; ++i)
+    m_logfile << "*";
+  m_logfile << std::endl;
+  m_logfile << "\t\t\t\tQuenching test (3D, quarter ball)" << std::endl;
+  for (unsigned int i = 0; i < 80; ++i)
+    m_logfile << "*";
+  m_logfile << std::endl;
 
-    AssertThrow(dim == 3, ExcMessage("The dimension has to be 3D!"));
+  AssertThrow(dim == 3, ExcMessage("The dimension has to be 3D!"));
 
-    const double radius = 5.0;
-    GridGenerator::quarter_hyper_ball(m_triangulation, Point<dim>(), radius);
+  //    const double radius = 3.2;
+  //    GridGenerator::quarter_hyper_ball(m_triangulation, Point<dim>(),
+  //    radius);
+  //
+  //    m_triangulation.refine_global(m_parameters.m_global_refine_times);
 
-    m_triangulation.refine_global(m_parameters.m_global_refine_times);
+  const double radius = 3.2;
 
+  if constexpr (is_mpi)
+    {
+      Triangulation<dim> serial_tria;
+
+      GridGenerator::quarter_hyper_ball(serial_tria, Point<dim>(), radius);
+
+      unsigned int pre_refinement =
+        (m_parameters.m_global_refine_times > 0 ? 1u : 0u);
+
+      const unsigned int n_ranks = m_mpiInfo.nRanks();
+
+      while (4u * Utilities::pow(8u, pre_refinement) < n_ranks &&
+             pre_refinement < m_parameters.m_global_refine_times)
+        {
+          ++pre_refinement;
+        }
+
+
+      if (pre_refinement > 0)
+        {
+          serial_tria.refine_global(pre_refinement);
+        }
+
+      Triangulation<dim> coarse_tria;
+
+      GridGenerator::flatten_triangulation(serial_tria, coarse_tria);
+
+      const SphericalManifold<dim> spherical_manifold{Point<dim>{}};
+      coarse_tria.set_manifold(0, spherical_manifold);
+
+      m_triangulation.copy_triangulation(coarse_tria);
+
+      m_triangulation.set_manifold(0, spherical_manifold);
+
+      const unsigned int remaining_refinement =
+        m_parameters.m_global_refine_times - pre_refinement;
+
+      if (remaining_refinement > 0)
+        {
+          m_triangulation.refine_global(remaining_refinement);
+        }
+    }
+  else
+    {
+      GridGenerator::quarter_hyper_ball(m_triangulation,
+                                        Point<dim>(),
+                                        radius);
+
+      m_triangulation.refine_global(m_parameters.m_global_refine_times);
+    }
+  /*
     if (m_parameters.m_refinement_strategy == "pre-refine")
     {
       // m_triangulation.refine_global(m_parameters.m_global_refine_times);
@@ -3605,7 +3660,8 @@ namespace PhaseField_monolithic
           false,
           ExcMessage("Selected mesh refinement strategy not implemented!"));
     }
-  }
+    */
+}
 
   template <typename LATraits, typename Tria>
   void PhaseFieldMonolithicSolve<LATraits, Tria>::setup_system()
