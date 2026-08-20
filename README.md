@@ -18,7 +18,20 @@ The main features include:
 - History variable: quadrature-point history field storing the maximum positive strain energy to enforce irreversibility.
 - Dimension-independent implementation: the code works for both 2D and 3D simulations. 
 
+### Representative results
+Scaling analysis of a 3D thermal shock induced phase-field crack example, which is performed on the cluster [Nibi](https://docs.alliancecan.ca/wiki/Nibi) of Digital Research Alliance of Canada.
+
+1. Weak scaling analysis by increasing the problem size and the CPU cores at the same time:
+<p align="center">
+<img src="./doc/3D_thermal_shock_weak_scaling.png" width="900">
+</p>
+2. Strong scaling analysis by keeping the problem size constant (2.56 million hexahedral elements and 13.1 million DoFs) and doubling the CPU cores:
+<p align="center">
+<img src="./doc/3D_thermal_shock_strong_scaling.png" width="900">
+</p>
+
 ---
+
 
 ## How to Build
 
