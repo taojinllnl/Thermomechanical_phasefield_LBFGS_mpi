@@ -46,3 +46,10 @@ output/*
 
 # Mac
 .DS_Store
+
+.cproject
+.project
+.settings/
+Makefile
+compile_commands.json
+mpi_scaling_analysis/
