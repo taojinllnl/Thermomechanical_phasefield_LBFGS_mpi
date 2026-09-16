@@ -21,7 +21,7 @@ subsection Scenario
   # Shall we write the iteration history to the log file? (yes or no)
   set Output iteration history = yes
   
-  # Choose phase-field model type (AT1 or AT2)
+  # Choose phase-field model type (AT1 or AT2 or AT1-Cohesive or PFCZM)
   set Phase-field model type = AT2
 
   # Does the heat conduciton equaiton contains the mechanical coupling term? (yes or no)
