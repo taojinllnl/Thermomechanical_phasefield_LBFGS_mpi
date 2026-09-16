@@ -16,7 +16,8 @@ The main features include:
 - Selectable linear solvers: the *sparse direct* or *iterative* solvers (e.g., Conjugate Gradient (CG)) can be selected for the linear algebra system.
 - Quasi-Newton nonlinear solver: Serial and MPI-enabled monolithic limited-memory BFGS (L-BFGS) method for thermomechanically coupled phase-field fracture problems.
 - History variable: quadrature-point history field storing the maximum positive strain energy to enforce irreversibility.
-- Dimension-independent implementation: the code works for both 2D and 3D simulations. 
+- Dimension-independent implementation: the code works for both 2D and 3D simulations.
+- Various phase-field models, including AT-1, AT-2, AT-1 cohesive, and phase-field regularized cohesive-zone model (PFCZM), can be chosen.
 
 ### Representative results
 Scaling analysis of a 3D thermal shock induced phase-field crack example, which is performed on the cluster [Nibi](https://docs.alliancecan.ca/wiki/Nibi) of Digital Research Alliance of Canada.
