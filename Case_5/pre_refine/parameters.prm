@@ -19,6 +19,9 @@ subsection Scenario
   # Shall we write the iteration history to the log file? (yes or no)
   set Output iteration history = yes
   
+  # Choose phase-field model type (AT1 or AT2 or AT1-Cohesive or PFCZM)
+  set Phase-field model type = AT2
+
   # Does the heat conduciton equaiton contains the mechanical coupling term? (yes or no)
   set Coupling on heat equation = no
 
@@ -31,7 +34,6 @@ subsection Scenario
   # Linear solver type for B0 (Direct or CG)
   set Linear solver type = CG
  
-
   # If the linear solver is CG, set the CG converge tolerance of inverse K_uu
   set CG u tolerance = 1.0e-9
   # If the linear solver is CG, set the CG converge tolerance of inverse K_dd
@@ -39,10 +41,8 @@ subsection Scenario
   # If the linear solver is CG, set the CG converge tolerance of inverse K_TT
   set CG T tolerance = 1.0e-9
 
-
   # Mesh refinement strategy (pre-refine or adaptive-refine)
   set Mesh refinement strategy = pre-refine
-
 
   # The threshold for repartitioning
   set Repartitioning ratio = 1.5
