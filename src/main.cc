@@ -4986,6 +4986,7 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::make_grid_case_11()
     // surface heat flux (Neumann BC)
     const unsigned int face_flux_id = 100;
     const double h0 = 0.0;
+    const double ref_t = m_parameters.m_ref_temperature;
 
     for (const auto &face : cell->face_iterators())
     {
@@ -5007,7 +5008,7 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::make_grid_case_11()
               const double Ni =
                   scratch.m_fe_face_values.shape_value(i, f_q_point);
               const double JxW = scratch.m_fe_face_values.JxW(f_q_point);
-              data.m_cell_rhs(i) -= Ni * flux * JxW;
+              data.m_cell_rhs(i) -= Ni * flux * delta_time / ref_t * JxW;
             }
           }
         }
