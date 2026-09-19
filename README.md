@@ -2,6 +2,8 @@
 
 An MPI-enabled the L-BFGS monolithic solver for phasefield crack modeling under thermomechanically coupled loading. 
 
+## How to cite this work
+https://doi.org/10.1016/j.cma.2026.119419
 
 ## Purpose
 
