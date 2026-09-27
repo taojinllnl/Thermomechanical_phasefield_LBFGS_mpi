@@ -983,156 +983,7 @@ namespace PhaseField_monolithic
                               const double phase_field_value_previous_step,
                               const double delta_time, const double temperature,
                               const Tensor<1, dim> &grad_temperature,
-                              const bool degrade_conductivity_or_not)
-    {
-      // Total strain grad^{(s)}u
-      m_strain = strain;
-      m_phase_field_value = phase_field_value;
-      m_grad_phasefield = grad_phasefield;
-      m_temperature = temperature;
-      m_grad_temperature = grad_temperature;
-
-      // Thermal strain
-      SymmetricTensor<2, dim> strain_t;
-      strain_t = m_alpha * (temperature - m_ref_t) *
-                 Physics::Elasticity::StandardTensors<dim>::I;
-
-      // Effective strain
-      SymmetricTensor<2, dim> strain_e;
-      strain_e = m_strain - strain_t;
-
-      // temperature-dependent gc
-      double term_1 = (temperature - m_ref_t) / m_max_t;
-      double coeff = 1.0 - m_b_1 * term_1 + m_b_2 * term_1 * term_1;
-      m_gc_t = coeff * m_gc_0;
-
-      // For the equivalent of 1D strain energy at fracture ft^2/(2E)
-      // the Young's modulus E is for 3D case
-      const double E0 = m_lame_mu * (3 * m_lame_lambda + 2 * m_lame_mu)
-          / (m_lame_lambda + m_lame_mu);
-
-      const double phase_field_coeff_constant =
-          phasefield_coefficient_constant(m_phasefield_name);
-
-      // Since a1 is temperature dependent, we need to re-evaluate this
-      // coefficient for rational degradation function
-      if (m_phasefield_name == "PFCZM")
-        m_a1 = 4.0 / (phase_field_coeff_constant * m_length_scale)
-             * m_gc_t * E0 / (m_tensile_strength * m_tensile_strength);
-      else if (m_phasefield_name == "AT1-Cohesive")
-        m_a1 = 2.0 / (phase_field_coeff_constant * m_length_scale)
-             * m_gc_t * E0 / (m_tensile_strength * m_tensile_strength);
-      else
-        m_a1 = 0.0;
-
-      // Since strain energy threshold depends on the temperature, we need
-      // to re-evaluate this coefficient for non-AT2 phase-field models
-      if (m_phasefield_name == "AT2")
-        m_history_energy_threshold = 0.0;
-      else if (m_phasefield_name == "AT1")
-        m_history_energy_threshold =
-            m_gc_t / (2 * m_length_scale * phase_field_coeff_constant);
-      else if (m_phasefield_name == "PFCZM" || m_phasefield_name == "AT1-Cohesive")
-        m_history_energy_threshold =
-            m_tensile_strength * m_tensile_strength / (2 * E0);
-      else
-        AssertThrow(false,
-                    ExcMessage(
-                    "The phase-field geometric function has not been implemented!"));
-
-      Vector<double> eigenvalues(dim);
-      std::vector<Tensor<1, dim>> eigenvectors(dim);
-      usr_spectrum_decomposition::spectrum_decomposition<dim>(
-          strain_e, eigenvalues, eigenvectors);
-
-      SymmetricTensor<2, dim> strain_positive, strain_negative;
-      strain_positive =
-          usr_spectrum_decomposition::positive_tensor(eigenvalues, eigenvectors);
-      strain_negative =
-          usr_spectrum_decomposition::negative_tensor(eigenvalues, eigenvectors);
-
-      SymmetricTensor<4, dim> projector_positive, projector_negative;
-      usr_spectrum_decomposition::positive_negative_projectors(
-          eigenvalues, eigenvectors, projector_positive, projector_negative);
-
-      SymmetricTensor<2, dim> stress_positive, stress_negative;
-      const double degradation =
-          degradation_function(m_phase_field_value, m_p, m_a1, m_a2, m_a3,
-                               m_phasefield_name);
-      const double I_1 = trace(strain_e);
-
-      // 2D plane strain and 3D cases
-      double my_lambda = m_lame_lambda;
-
-      // 2D plane stress case
-      if (dim == 2 && m_plane_stress)
-        my_lambda =
-            2 * m_lame_mu * m_lame_lambda / (m_lame_lambda + 2 * m_lame_mu);
-
-      stress_positive =
-          my_lambda * usr_spectrum_decomposition::positive_ramp_function(I_1) *
-              Physics::Elasticity::StandardTensors<dim>::I +
-          2 * m_lame_mu * strain_positive;
-      stress_negative =
-          my_lambda * usr_spectrum_decomposition::negative_ramp_function(I_1) *
-              Physics::Elasticity::StandardTensors<dim>::I +
-          2 * m_lame_mu * strain_negative;
-
-      m_stress = degradation * stress_positive + stress_negative;
-      m_stress_positive = stress_positive;
-
-      SymmetricTensor<4, dim> C_positive, C_negative;
-      C_positive = my_lambda *
-                       usr_spectrum_decomposition::heaviside_function(I_1) *
-                       Physics::Elasticity::StandardTensors<dim>::IxI +
-                   2 * m_lame_mu * projector_positive;
-      C_negative = my_lambda *
-                       usr_spectrum_decomposition::heaviside_function(-I_1) *
-                       Physics::Elasticity::StandardTensors<dim>::IxI +
-                   2 * m_lame_mu * projector_negative;
-      m_mechanical_C = degradation * C_positive + C_negative;
-
-      m_strain_energy_positive =
-          0.5 * my_lambda *
-              usr_spectrum_decomposition::positive_ramp_function(I_1) *
-              usr_spectrum_decomposition::positive_ramp_function(I_1) +
-          m_lame_mu * strain_positive * strain_positive;
-
-      m_strain_energy_negative =
-          0.5 * my_lambda *
-              usr_spectrum_decomposition::negative_ramp_function(I_1) *
-              usr_spectrum_decomposition::negative_ramp_function(I_1) +
-          m_lame_mu * strain_negative * strain_negative;
-
-      m_strain_energy_total =
-          degradation * m_strain_energy_positive + m_strain_energy_negative;
-
-      const double phase_field_geo_value =
-          phasefield_geometry_function(m_phase_field_value, m_phasefield_name);
-
-      // The critical energy release rate m_gc should be temperature-dependent.
-      m_crack_energy_dissipation =
-          m_gc_t * (1.0 / phase_field_coeff_constant / m_length_scale *
-                        phase_field_geo_value +
-                    m_length_scale / phase_field_coeff_constant *
-                        m_grad_phasefield * m_grad_phasefield)
-          // the term due to viscosity regularization
-          + (m_phase_field_value - phase_field_value_previous_step) *
-                (m_phase_field_value - phase_field_value_previous_step) * 0.5 *
-                m_eta / delta_time;
-
-      // degraded thermal conductivity
-      if (degrade_conductivity_or_not)
-        m_kappa_d = (degradation + m_residual_k) * m_kappa_0;
-      else
-        m_kappa_d = 1.0 * m_kappa_0;
-
-      // heat flux
-      m_heat_flux = -m_kappa_d * grad_temperature;
-
-      //(void)delta_time;
-      //(void)phase_field_value_previous_step;
-    }
+                              const bool degrade_conductivity_or_not);
 
   private:
     const double m_lame_lambda;
@@ -1175,6 +1026,165 @@ namespace PhaseField_monolithic
     // For non-AT phase-field models
     double m_history_energy_threshold;
   };
+
+  template <int dim>
+  void LinearIsotropicElasticityAdditiveSplit<dim>::
+  update_material_data(const SymmetricTensor<2, dim> &strain,
+                       const double phase_field_value,
+                       const Tensor<1, dim> &grad_phasefield,
+                       const double phase_field_value_previous_step,
+                       const double delta_time, const double temperature,
+                       const Tensor<1, dim> &grad_temperature,
+                       const bool degrade_conductivity_or_not)
+  {
+    // Total strain grad^{(s)}u
+    m_strain = strain;
+    m_phase_field_value = phase_field_value;
+    m_grad_phasefield = grad_phasefield;
+    m_temperature = temperature;
+    m_grad_temperature = grad_temperature;
+
+    // Thermal strain
+    SymmetricTensor<2, dim> strain_t;
+    strain_t = m_alpha * (temperature - m_ref_t) *
+               Physics::Elasticity::StandardTensors<dim>::I;
+
+    // Effective strain
+    SymmetricTensor<2, dim> strain_e;
+    strain_e = m_strain - strain_t;
+
+    // temperature-dependent gc
+    double term_1 = (temperature - m_ref_t) / m_max_t;
+    double coeff = 1.0 - m_b_1 * term_1 + m_b_2 * term_1 * term_1;
+    m_gc_t = coeff * m_gc_0;
+
+    // For the equivalent of 1D strain energy at fracture ft^2/(2E)
+    // the Young's modulus E is for 3D case
+    const double E0 = m_lame_mu * (3 * m_lame_lambda + 2 * m_lame_mu)
+        / (m_lame_lambda + m_lame_mu);
+
+    const double phase_field_coeff_constant =
+        phasefield_coefficient_constant(m_phasefield_name);
+
+    // Since a1 is temperature dependent, we need to re-evaluate this
+    // coefficient for rational degradation function
+    if (m_phasefield_name == "PFCZM")
+      m_a1 = 4.0 / (phase_field_coeff_constant * m_length_scale)
+           * m_gc_t * E0 / (m_tensile_strength * m_tensile_strength);
+    else if (m_phasefield_name == "AT1-Cohesive")
+      m_a1 = 2.0 / (phase_field_coeff_constant * m_length_scale)
+           * m_gc_t * E0 / (m_tensile_strength * m_tensile_strength);
+    else
+      m_a1 = 0.0;
+
+    // Since strain energy threshold depends on the temperature, we need
+    // to re-evaluate this coefficient for non-AT2 phase-field models
+    if (m_phasefield_name == "AT2")
+      m_history_energy_threshold = 0.0;
+    else if (m_phasefield_name == "AT1")
+      m_history_energy_threshold =
+          m_gc_t / (2 * m_length_scale * phase_field_coeff_constant);
+    else if (m_phasefield_name == "PFCZM" || m_phasefield_name == "AT1-Cohesive")
+      m_history_energy_threshold =
+          m_tensile_strength * m_tensile_strength / (2 * E0);
+    else
+      AssertThrow(false,
+                  ExcMessage(
+                  "The phase-field geometric function has not been implemented!"));
+
+    Vector<double> eigenvalues(dim);
+    std::vector<Tensor<1, dim>> eigenvectors(dim);
+    usr_spectrum_decomposition::spectrum_decomposition<dim>(
+        strain_e, eigenvalues, eigenvectors);
+
+    SymmetricTensor<2, dim> strain_positive, strain_negative;
+    strain_positive =
+        usr_spectrum_decomposition::positive_tensor(eigenvalues, eigenvectors);
+    strain_negative =
+        usr_spectrum_decomposition::negative_tensor(eigenvalues, eigenvectors);
+
+    SymmetricTensor<4, dim> projector_positive, projector_negative;
+    usr_spectrum_decomposition::positive_negative_projectors(
+        eigenvalues, eigenvectors, projector_positive, projector_negative);
+
+    SymmetricTensor<2, dim> stress_positive, stress_negative;
+    const double degradation =
+        degradation_function(m_phase_field_value, m_p, m_a1, m_a2, m_a3,
+                             m_phasefield_name);
+    const double I_1 = trace(strain_e);
+
+    // 2D plane strain and 3D cases
+    double my_lambda = m_lame_lambda;
+
+    // 2D plane stress case
+    if (dim == 2 && m_plane_stress)
+      my_lambda =
+          2 * m_lame_mu * m_lame_lambda / (m_lame_lambda + 2 * m_lame_mu);
+
+    stress_positive =
+        my_lambda * usr_spectrum_decomposition::positive_ramp_function(I_1) *
+            Physics::Elasticity::StandardTensors<dim>::I +
+        2 * m_lame_mu * strain_positive;
+    stress_negative =
+        my_lambda * usr_spectrum_decomposition::negative_ramp_function(I_1) *
+            Physics::Elasticity::StandardTensors<dim>::I +
+        2 * m_lame_mu * strain_negative;
+
+    m_stress = degradation * stress_positive + stress_negative;
+    m_stress_positive = stress_positive;
+
+    SymmetricTensor<4, dim> C_positive, C_negative;
+    C_positive = my_lambda *
+                     usr_spectrum_decomposition::heaviside_function(I_1) *
+                     Physics::Elasticity::StandardTensors<dim>::IxI +
+                 2 * m_lame_mu * projector_positive;
+    C_negative = my_lambda *
+                     usr_spectrum_decomposition::heaviside_function(-I_1) *
+                     Physics::Elasticity::StandardTensors<dim>::IxI +
+                 2 * m_lame_mu * projector_negative;
+    m_mechanical_C = degradation * C_positive + C_negative;
+
+    m_strain_energy_positive =
+        0.5 * my_lambda *
+            usr_spectrum_decomposition::positive_ramp_function(I_1) *
+            usr_spectrum_decomposition::positive_ramp_function(I_1) +
+        m_lame_mu * strain_positive * strain_positive;
+
+    m_strain_energy_negative =
+        0.5 * my_lambda *
+            usr_spectrum_decomposition::negative_ramp_function(I_1) *
+            usr_spectrum_decomposition::negative_ramp_function(I_1) +
+        m_lame_mu * strain_negative * strain_negative;
+
+    m_strain_energy_total =
+        degradation * m_strain_energy_positive + m_strain_energy_negative;
+
+    const double phase_field_geo_value =
+        phasefield_geometry_function(m_phase_field_value, m_phasefield_name);
+
+    // The critical energy release rate m_gc should be temperature-dependent.
+    m_crack_energy_dissipation =
+        m_gc_t * (1.0 / phase_field_coeff_constant / m_length_scale *
+                      phase_field_geo_value +
+                  m_length_scale / phase_field_coeff_constant *
+                      m_grad_phasefield * m_grad_phasefield)
+        // the term due to viscosity regularization
+        + (m_phase_field_value - phase_field_value_previous_step) *
+              (m_phase_field_value - phase_field_value_previous_step) * 0.5 *
+              m_eta / delta_time;
+
+    // degraded thermal conductivity
+    if (degrade_conductivity_or_not)
+      m_kappa_d = (degradation + m_residual_k) * m_kappa_0;
+    else
+      m_kappa_d = 1.0 * m_kappa_0;
+
+    // heat flux
+    m_heat_flux = -m_kappa_d * grad_temperature;
+
+    //(void)delta_time;
+    //(void)phase_field_value_previous_step;
+  }
 
   template <int dim> class PointHistory
   {
