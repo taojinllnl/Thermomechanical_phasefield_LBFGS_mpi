@@ -894,7 +894,8 @@ namespace PhaseField_monolithic
           m_strain_energy_positive(0.0), m_strain_energy_negative(0.0),
           m_strain_energy_total(0.0), m_crack_energy_dissipation(0.0),
           m_gc_t(0.0), m_kappa_d(0.0), m_temperature(0.0),
-          m_grad_temperature(Tensor<1, dim>()), m_heat_flux(Tensor<1, dim>())
+          m_grad_temperature(Tensor<1, dim>()), m_heat_flux(Tensor<1, dim>()),
+          m_history_energy_threshold(0.0)
     {
       Assert((lame_lambda / (2 * (lame_lambda + lame_mu)) <= 0.5) &
                  (lame_lambda / (2 * (lame_lambda + lame_mu)) >= -1.0),
@@ -955,6 +956,27 @@ namespace PhaseField_monolithic
 
     double get_thermal_conductivity_degraded() const { return m_kappa_d; }
 
+    double get_length_scale() const { return m_length_scale; }
+
+    double get_heat_capacity() const { return m_heat_capacity; }
+
+    double get_tensile_strength() const { return m_tensile_strength; }
+
+    double get_viscosity() const { return m_eta; }
+
+    double get_p() const { return m_p; }
+
+    double get_a1() const { return m_a1; }
+
+    double get_a2() const { return m_a2; }
+
+    double get_a3() const { return m_a3; }
+
+    double get_history_energy_threshold() const
+    {
+      return m_history_energy_threshold;
+    }
+
     void update_material_data(const SymmetricTensor<2, dim> &strain,
                               const double phase_field_value,
                               const Tensor<1, dim> &grad_phasefield,
@@ -983,6 +1005,40 @@ namespace PhaseField_monolithic
       double term_1 = (temperature - m_ref_t) / m_max_t;
       double coeff = 1.0 - m_b_1 * term_1 + m_b_2 * term_1 * term_1;
       m_gc_t = coeff * m_gc_0;
+
+      // For the equivalent of 1D strain energy at fracture ft^2/(2E)
+      // the Young's modulus E is for 3D case
+      const double E0 = m_lame_mu * (3 * m_lame_lambda + 2 * m_lame_mu)
+          / (m_lame_lambda + m_lame_mu);
+
+      const double phase_field_coeff_constant =
+          phasefield_coefficient_constant(m_phasefield_name);
+
+      // Since a1 is temperature dependent, we need to re-evaluate this
+      // coefficient for rational degradation function
+      if (m_phasefield_name == "PFCZM")
+        m_a1 = 4.0 / (phase_field_coeff_constant * m_length_scale)
+             * m_gc_t * E0 / (m_tensile_strength * m_tensile_strength);
+      else if (m_phasefield_name == "AT1-Cohesive")
+        m_a1 = 2.0 / (phase_field_coeff_constant * m_length_scale)
+             * m_gc_t * E0 / (m_tensile_strength * m_tensile_strength);
+      else
+        m_a1 = 0.0;
+
+      // Since strain energy threshold depends on the temperature, we need
+      // to re-evaluate this coefficient for non-AT2 phase-field models
+      if (m_phasefield_name == "AT2")
+        m_history_energy_threshold = 0.0;
+      else if (m_phasefield_name == "AT1")
+        m_history_energy_threshold =
+            m_gc_t / (2 * m_length_scale * phase_field_coeff_constant);
+      else if (m_phasefield_name == "PFCZM" || m_phasefield_name == "AT1-Cohesive")
+        m_history_energy_threshold =
+            m_tensile_strength * m_tensile_strength / (2 * E0);
+      else
+        AssertThrow(false,
+                    ExcMessage(
+                    "The phase-field geometric function has not been implemented!"));
 
       Vector<double> eigenvalues(dim);
       std::vector<Tensor<1, dim>> eigenvectors(dim);
@@ -1053,8 +1109,6 @@ namespace PhaseField_monolithic
 
       const double phase_field_geo_value =
           phasefield_geometry_function(m_phase_field_value, m_phasefield_name);
-      const double phase_field_coeff_constant =
-          phasefield_coefficient_constant(m_phasefield_name);
 
       // The critical energy release rate m_gc should be temperature-dependent.
       m_crack_energy_dissipation =
@@ -1094,9 +1148,9 @@ namespace PhaseField_monolithic
     const double m_max_t;
     const double m_b_1;
     const double m_b_2;
-    const double m_tensile_strength;
+    double m_tensile_strength;
     const double m_p;
-    const double m_a1;
+    double m_a1;
     const double m_a2;
     const double m_a3;
     const std::string m_phasefield_name;
@@ -1118,16 +1172,17 @@ namespace PhaseField_monolithic
     double m_temperature;
     Tensor<1, dim> m_grad_temperature;
     Tensor<1, dim> m_heat_flux;
+    // For non-AT phase-field models
+    double m_history_energy_threshold;
   };
 
   template <int dim> class PointHistory
   {
   public:
     PointHistory()
-        : m_length_scale(0.0), m_viscosity(0.0),
-          m_p(0.0), m_a1(0.0), m_a2(0.0), m_a3(0.0),
-          m_history_max_positive_strain_energy(0.0), m_heat_capacity(0.0),
-          m_coupling_on_heat_eq(false)
+        : m_history_max_positive_strain_energy(0.0),
+          m_coupling_on_heat_eq(false),
+          m_degrade_conductivity(false)
     {
     }
 
@@ -1144,25 +1199,12 @@ namespace PhaseField_monolithic
                    const double b_2,
                    const double tensile_strength, const double p, const double a2,
                    const double a3, const std::string &phasefield_name,
-                   const bool coupling_on_heat_eq, const bool plane_stress_flag)
+                   const bool coupling_on_heat_eq, const bool plane_stress_flag,
+                   const bool degrade_conductivity)
     {
-      // For the equivalent of 1D strain energy at fracture ft^2/(2E)
-      // the Young's modulus E is for 3D case
-      const double E0 =
-          lame_mu * (3 * lame_lambda + 2 * lame_mu) / (lame_lambda + lame_mu);
-
-      const double phasefield_geo_constant =
-          phasefield_coefficient_constant(phasefield_name);
-
+      // Since the critical energy release rate is temperature dependent,
+      // the value of a1 needs to be re-evaluated in update_material_date()
       double a1 = 0.0;
-      if (phasefield_name == "PFCZM")
-        a1 = 4.0 / (phasefield_geo_constant * length_scale) * gc_0 * E0 /
-             (tensile_strength * tensile_strength);
-      else if (phasefield_name == "AT1-Cohesive")
-        a1 = 2.0 / (phasefield_geo_constant * length_scale) * gc_0 * E0 /
-             (tensile_strength * tensile_strength);
-      else
-        a1 = 0.0;
 
       m_material = std::make_shared<LinearIsotropicElasticityAdditiveSplit<dim>>(
           lame_lambda, lame_mu, residual_k, length_scale, viscosity, gc_0,
@@ -1170,30 +1212,12 @@ namespace PhaseField_monolithic
           reference_temperature, max_temperature, b_1, b_2,
           tensile_strength, p, a1, a2, a3, phasefield_name, plane_stress_flag);
 
-      if (phasefield_name == "AT2")
-        m_history_max_positive_strain_energy = 0.0;
-      else if (phasefield_name == "AT1")
-        m_history_max_positive_strain_energy =
-            gc_0 / (2 * length_scale * phasefield_geo_constant);
-      else if (phasefield_name == "PFCZM" || phasefield_name == "AT1-Cohesive")
-        m_history_max_positive_strain_energy =
-            tensile_strength * tensile_strength / (2 * E0);
-      else
-        AssertThrow(false,
-                    ExcMessage(
-                    "The phase-field geometric function has not been implemented!"));
-
-      m_length_scale = length_scale;
-      m_viscosity = viscosity;
-      m_p = p;
-      m_a1 = a1;
-      m_a2 = a2;
-      m_a3 = a3;
-      m_heat_capacity = heat_capacity;
       m_coupling_on_heat_eq = coupling_on_heat_eq;
+      m_degrade_conductivity = degrade_conductivity;
 
       update_field_values(SymmetricTensor<2, dim>(), 0.0, Tensor<1, dim>(), 0.0,
-                          1.0, reference_temperature, Tensor<1, dim>(), true);
+                          1.0, reference_temperature, Tensor<1, dim>(),
+                          degrade_conductivity);
     }
 
     void update_field_values(const SymmetricTensor<2, dim> &strain,
@@ -1305,19 +1329,30 @@ namespace PhaseField_monolithic
       return m_history_max_positive_strain_energy;
     }
 
-    double get_length_scale() const { return m_length_scale; }
+    double get_length_scale() const
+    {
+      return m_material->get_length_scale();
+    }
 
-    double get_viscosity() const { return m_viscosity; }
+    double get_viscosity() const { return m_material->get_viscosity(); }
 
-    double get_p() const { return m_p; }
+    double get_p() const { return m_material->get_p(); }
 
-    double get_a1() const { return m_a1; }
+    double get_a1() const { return m_material->get_a1(); }
 
-    double get_a2() const { return m_a2; }
+    double get_a2() const { return m_material->get_a2(); }
 
-    double get_a3() const { return m_a3; }
+    double get_a3() const { return m_material->get_a3(); }
 
-    double get_heat_capacity() const { return m_heat_capacity; }
+    double get_heat_capacity() const
+    {
+      return m_material->get_heat_capacity();
+    }
+
+    bool get_degrade_conductivity_flag() const
+    {
+      return m_degrade_conductivity;
+    }
 
     bool get_heat_coupling_flag() const { return m_coupling_on_heat_eq; }
 
@@ -1330,17 +1365,21 @@ namespace PhaseField_monolithic
 
     double get_lame_mu() const { return m_material->get_lame_mu(); }
 
+    double get_tensile_strenght() const
+    {
+      return m_material->get_tensile_strength();
+    }
+
+    double get_history_energy_threshold() const
+    {
+      return m_material->get_history_energy_threshold();
+    }
+
   private:
     std::shared_ptr<LinearIsotropicElasticityAdditiveSplit<dim>> m_material;
-    double m_length_scale;
-    double m_viscosity;
-    double m_p;
-    double m_a1;
-    double m_a2;
-    double m_a3;
     double m_history_max_positive_strain_energy;
-    double m_heat_capacity;
     bool m_coupling_on_heat_eq;
+    bool m_degrade_conductivity;
   };
 
   template <typename LATraits, typename Tria> class PhaseFieldMonolithicSolve
@@ -1991,7 +2030,8 @@ namespace PhaseField_monolithic
             reference_temperature, max_temperature, b_1, b_2,
             tensile_strength, p, a2, a3,
             m_parameters.m_phasefield_name, m_parameters.m_coupling_on_heat_eq,
-            m_parameters.m_plane_stress);
+            m_parameters.m_plane_stress,
+            m_parameters.m_degrade_conductivity);
     }
   }
 
@@ -4829,6 +4869,10 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::make_grid_case_11()
           lqph[q_point]->get_history_max_positive_strain_energy();
       const double current_positive_strain_energy =
           lqph[q_point]->get_current_positive_strain_energy();
+      // the strain energy threshold
+      const double history_energy_threshold =
+          lqph[q_point]->get_history_energy_threshold();
+
       const double heat_capacity = lqph[q_point]->get_heat_capacity();
       const double ref_t = lqph[q_point]->get_ref_temperature();
       const double thermal_expansion =
@@ -4861,6 +4905,8 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::make_grid_case_11()
       double history_value = history_strain_energy;
       if (current_positive_strain_energy > history_strain_energy)
         history_value = current_positive_strain_energy;
+      if (history_energy_threshold > history_value)
+        history_value = history_energy_threshold;
 
       const double temperature_value = lqph[q_point]->get_temperature_value();
 
@@ -5078,6 +5124,10 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::make_grid_case_11()
           lqph[q_point]->get_history_max_positive_strain_energy();
       const double current_positive_strain_energy =
           lqph[q_point]->get_current_positive_strain_energy();
+      // the strain energy threshold
+      const double history_energy_threshold =
+          lqph[q_point]->get_history_energy_threshold();
+
       // degraded thermal conductivity
       const double kappa_d = lqph[q_point]->get_thermal_conductivity();
       const double heat_capacity = lqph[q_point]->get_heat_capacity();
@@ -5090,6 +5140,8 @@ PhaseFieldMonolithicSolve<LATraits, Tria>::make_grid_case_11()
       double history_value = history_strain_energy;
       if (current_positive_strain_energy > history_strain_energy)
         history_value = current_positive_strain_energy;
+      if (history_energy_threshold > history_value)
+        history_value = history_energy_threshold;
 
       const double phasefield_value = lqph[q_point]->get_phase_field_value();
 
