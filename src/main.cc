@@ -14,7 +14,7 @@
  *         March 2026
  *
  * How to cite:
- *         TBD
+ *         https://doi.org/10.1016/j.cma.2026.119419
  */
 
 /* A fully monolithic scheme based on the L-BFGS method to solve the phase-field
